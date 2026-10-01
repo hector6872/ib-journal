@@ -84,6 +84,10 @@ const App = {
             if (statsContainer) statsContainer.classList.remove('hidden');
             StatsPage.load();
         }
+
+        if (typeof StatsController !== 'undefined' && StatsController.updateScrollDockVisibility) {
+            StatsController.updateScrollDockVisibility();
+        }
     },
 
     setupSyncButton() {

@@ -2,8 +2,13 @@
  * Main Application Orchestrator
  */
 const App = {
+    activeTab: 'calendar', // 'calendar' | 'stats'
+
     async init() {
-        // 1. Fetch backend config
+        // 1. Initialize Theme Manager (Light by default, Dark, System)
+        ThemeManager.init();
+
+        // 2. Fetch runtime backend config
         try {
             const cfg = await API.fetchConfig();
             if (cfg.currency_symbol) {
@@ -14,19 +19,21 @@ const App = {
             console.warn("Could not fetch app config, using defaults:", e);
         }
 
-        // 2. Bind centralized strings into HTML elements
+        // 3. Apply centralized translations to static HTML
         this.applyTranslations();
 
-        // 3. Setup global listeners
-        this.setupNavigation();
+        // 4. Setup Main Tab Navigation (Calendar / Stats)
+        this.setupTabNavigation();
+
+        // 5. Setup Sync Button
         this.setupSyncButton();
 
-        // 4. Initialize Sub-controllers
+        // 6. Initialize Day Modal & Top Stats Polling
         DayModal.init();
         StatsController.startPolling();
 
-        // 5. Render default view
-        this.switchView('year');
+        // 7. Load default tab (Calendar)
+        this.switchTab('calendar');
     },
 
     applyTranslations() {
@@ -43,34 +50,40 @@ const App = {
         return path.split('.').reduce((acc, part) => acc && acc[part], STRINGS);
     },
 
-    setupNavigation() {
-        // Calendar tabs (Year / Month / Week)
-        document.querySelectorAll('.view-tab').forEach(tab => {
+    setupTabNavigation() {
+        document.querySelectorAll('.tab-btn').forEach(tab => {
             tab.addEventListener('click', () => {
-                const targetView = tab.getAttribute('data-view');
-                if (targetView) this.switchView(targetView);
+                const target = tab.getAttribute('data-tab');
+                if (target) this.switchTab(target);
             });
+        });
+    },
+
+    switchTab(tabName) {
+        this.activeTab = tabName;
+
+        // Update active tab buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            if (btn.getAttribute('data-tab') === tabName) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
         });
 
-        // Sidebar calendar sub-items
-        document.querySelectorAll('.nav-sub-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const targetView = item.getAttribute('data-view');
-                if (targetView) this.switchView(targetView);
-            });
-        });
+        // Hide/Show page containers
+        const calContainer = document.getElementById('view-calendar');
+        const statsContainer = document.getElementById('view-stats');
 
-        // Sidebar main items
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const isCalendar = item.getAttribute('data-nav') === 'calendar';
-                if (!isCalendar) {
-                    // For Panel / Trades / Portfolio, set active and show coming soon or default
-                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                    item.classList.add('active');
-                }
-            });
-        });
+        if (tabName === 'calendar') {
+            if (calContainer) calContainer.classList.remove('hidden');
+            if (statsContainer) statsContainer.classList.add('hidden');
+            CalendarPage.loadAll();
+        } else if (tabName === 'stats') {
+            if (calContainer) calContainer.classList.add('hidden');
+            if (statsContainer) statsContainer.classList.remove('hidden');
+            StatsPage.load();
+        }
     },
 
     setupSyncButton() {
@@ -85,56 +98,26 @@ const App = {
                 
                 await API.triggerSync();
                 
-                // Refresh views and stats after sync
+                // Refresh overview stats and current active page
                 await StatsController.updateOverview();
                 await StatsController.updateSyncStatus();
-                this.refreshCurrentView();
+                
+                if (this.activeTab === 'calendar') {
+                    CalendarPage.loadAll();
+                } else {
+                    StatsPage.load();
+                }
             } catch (err) {
                 alert(`Sync failed: ${err.message}`);
                 await StatsController.updateSyncStatus();
             }
         });
-    },
-
-    switchView(viewName) {
-        State.activeView = viewName;
-
-        // Update top tab buttons
-        document.querySelectorAll('.view-tab').forEach(tab => {
-            if (tab.getAttribute('data-view') === viewName) {
-                tab.classList.add('active');
-            } else {
-                tab.classList.remove('active');
-            }
-        });
-
-        // Update sidebar sub-item active state
-        document.querySelectorAll('.nav-sub-item').forEach(sub => {
-            if (sub.getAttribute('data-view') === viewName) {
-                sub.classList.add('active');
-            } else {
-                sub.classList.remove('active');
-            }
-        });
-
-        // Load specific view data
-        if (viewName === 'year') {
-            CalendarYear.load(State.currentYear);
-        } else if (viewName === 'month') {
-            CalendarMonth.load(State.currentYear, State.currentMonth);
-        } else if (viewName === 'week') {
-            CalendarWeek.load(State.currentWeekDate);
-        }
-    },
-
-    refreshCurrentView() {
-        this.switchView(State.activeView);
     }
 };
 
 window.App = App;
 
-// Bootstrap on DOM Ready
+// Bootstrap on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });

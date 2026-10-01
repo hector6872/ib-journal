@@ -13,6 +13,7 @@ from backend.flex_client import generate_sample_trades
 from backend.scheduler import scheduler
 from backend.analytics import (
     get_overview_stats,
+    get_detailed_stats,
     get_year_calendar,
     get_month_calendar,
     get_week_calendar,
@@ -59,7 +60,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # -------------------------------------------------------------
 # REST API Endpoints
 # -------------------------------------------------------------
@@ -75,6 +75,12 @@ async def get_app_config():
 async def api_stats_overview(start_date: str = None, end_date: str = None):
     """Returns top KPI bar metrics."""
     return get_overview_stats(start_date=start_date, end_date=end_date)
+
+@app.get("/api/stats/detailed")
+async def api_stats_detailed():
+    """Returns comprehensive trading performance analytics."""
+    return get_detailed_stats()
+
 
 @app.get("/api/calendar/year")
 async def api_calendar_year(year: int = Query(default=None)):

@@ -81,6 +81,132 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "avg_loss": round(avg_loss, 2)
         }
 
+def get_detailed_stats() -> Dict[str, Any]:
+    """
+    Returns comprehensive trading statistics:
+    - Overview KPIs
+    - Symbol breakdown
+    - Asset class breakdown
+    - Long vs Short breakdown
+    - Day of week performance
+    """
+    overview = get_overview_stats()
+    
+    with db_session() as conn:
+        cursor = conn.cursor()
+        
+        # 1. Symbol Breakdown
+        cursor.execute("""
+            SELECT 
+                symbol,
+                asset_category,
+                COUNT(*) as trades_count,
+                COALESCE(SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN realized_pnl < 0 THEN 1 ELSE 0 END), 0) as losses,
+                COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
+                COALESCE(SUM(ib_commission), 0.0) as commissions,
+                COALESCE(SUM(ABS(quantity)), 0.0) as total_volume
+            FROM trades
+            GROUP BY symbol, asset_category
+            ORDER BY net_pnl DESC
+        """)
+        symbols = []
+        for r in cursor.fetchall():
+            cnt = r["trades_count"]
+            wins = r["wins"]
+            wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
+            symbols.append({
+                "symbol": r["symbol"],
+                "category": r["asset_category"] or "STK",
+                "trades_count": cnt,
+                "wins": wins,
+                "losses": r["losses"],
+                "win_rate": wr,
+                "net_pnl": round(r["net_pnl"], 2),
+                "commissions": round(r["commissions"], 2),
+                "total_volume": round(r["total_volume"], 0)
+            })
+
+        # 2. Asset Category Breakdown
+        cursor.execute("""
+            SELECT 
+                COALESCE(asset_category, 'STK') as category,
+                COUNT(*) as trades_count,
+                COALESCE(SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
+            FROM trades
+            GROUP BY asset_category
+            ORDER BY net_pnl DESC
+        """)
+        categories = []
+        for r in cursor.fetchall():
+            cnt = r["trades_count"]
+            wins = r["wins"]
+            wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
+            categories.append({
+                "category": r["category"],
+                "trades_count": cnt,
+                "win_rate": wr,
+                "net_pnl": round(r["net_pnl"], 2)
+            })
+
+        # 3. Buy vs Sell / Long vs Short
+        cursor.execute("""
+            SELECT 
+                buy_sell,
+                COUNT(*) as trades_count,
+                COALESCE(SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
+            FROM trades
+            GROUP BY buy_sell
+        """)
+        sides = []
+        for r in cursor.fetchall():
+            cnt = r["trades_count"]
+            wins = r["wins"]
+            wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
+            sides.append({
+                "side": r["buy_sell"],
+                "trades_count": cnt,
+                "win_rate": wr,
+                "net_pnl": round(r["net_pnl"], 2)
+            })
+
+        # 4. Day of Week Breakdown
+        cursor.execute("""
+            SELECT 
+                strftime('%w', trade_date) as day_of_week,
+                COUNT(*) as trades_count,
+                COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
+                COALESCE(SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END), 0) as wins
+            FROM trades
+            GROUP BY strftime('%w', trade_date)
+            ORDER BY day_of_week ASC
+        """)
+        dow_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        dow_list = []
+        for r in cursor.fetchall():
+            dow_idx = int(r["day_of_week"])
+            cnt = r["trades_count"]
+            wins = r["wins"]
+            wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
+            dow_list.append({
+                "day_index": dow_idx,
+                "day_name": dow_names[dow_idx],
+                "trades_count": cnt,
+                "win_rate": wr,
+                "net_pnl": round(r["net_pnl"], 2)
+            })
+
+    return {
+        "overview": overview,
+        "symbols": symbols,
+        "categories": categories,
+        "sides": sides,
+        "day_of_week": dow_list
+    }
+
+
 def get_year_calendar(year: int) -> Dict[str, Any]:
     """
     Returns data formatted for the 12-month matrix Year View:

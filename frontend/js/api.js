@@ -13,6 +13,13 @@ const API = {
         return await res.json();
     },
 
+    async fetchDetailedStats() {
+        const res = await fetch('/api/stats/detailed');
+        if (!res.ok) throw new Error("Failed to fetch detailed statistics");
+        return await res.json();
+    },
+
+
     async fetchYearCalendar(year) {
         const res = await fetch(`/api/calendar/year?year=${year}`);
         if (!res.ok) throw new Error(`Failed to fetch calendar for year ${year}`);

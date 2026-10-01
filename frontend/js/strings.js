@@ -1,32 +1,33 @@
 /**
  * Centralized Copy & Text Dictionary
- * 
- * Edit any UI string, label, button, or message in this single file.
+ * Single Source of Truth for all UI text, labels, buttons, headers, and messages.
  */
 const STRINGS = {
     // Brand & App
-    appName: "TRADING JOURNAL",
-    appSubtitle: "Tortuga Trades",
+    appName: "IBKR JOURNAL",
+    appSubtitle: "Trading Execution & Performance",
 
-    // Navigation Menu
-    nav: {
-        panel: "Panel",
-        operations: "Operations",
+    // Header Main Tabs
+    tabs: {
         calendar: "Calendar",
-        calendarYear: "Year",
-        calendarMonth: "Month",
-        calendarWeek: "Week",
-        portfolio: "Portfolio",
+        stats: "Statistics"
+    },
+
+    // Theme Switcher
+    theme: {
+        light: "Light",
+        dark: "Dark",
+        system: "System"
     },
 
     // Header & KPIs
     kpi: {
-        winRate: "WR",
-        operations: "OPERATIONS",
-        profitFactor: "PF",
-        expectancy: "EXPECTANCY",
-        netPnl: "NET P&L",
-        total: "TOTAL",
+        winRate: "Win Rate",
+        operations: "Operations",
+        profitFactor: "Profit Factor",
+        expectancy: "Expectancy",
+        netPnl: "Net P&L",
+        total: "Total",
     },
 
     // Sync Widget & Rate Limiting
@@ -35,17 +36,20 @@ const STRINGS = {
         syncing: "Syncing...",
         cooldownPrefix: "Available in",
         lastUpdated: "Updated",
-        nextSync: "Next sync in",
+        nextSync: "Next in",
         marketClosed: "Market Closed",
         marketOpen: "Market Open",
         success: "Sync completed successfully",
         error: "Sync error",
     },
 
-    // Calendar Titles & Subtitles
+    // Calendar Section Headers
     calendar: {
-        title: "Calendar",
-        subtitle: "Annual, monthly and weekly views of your P&L.",
+        pageTitle: "Trading Calendar",
+        pageSubtitle: "Continuous chronological overview of weekly, monthly, and annual trading performance.",
+        weekSectionTitle: "Weekly Performance",
+        monthSectionTitle: "Monthly Calendar Grid",
+        yearSectionTitle: "Annual Performance Matrix",
         tabYear: "Year",
         tabMonth: "Month",
         tabWeek: "Week",
@@ -57,7 +61,7 @@ const STRINGS = {
         tradesBadge: "trades",
         tradeSingleBadge: "trade",
         yearHeader: "YEAR",
-        totalHeader: "TOTAL",
+        totalHeader: "ANNUAL TOTAL",
     },
 
     // Months & Days
@@ -74,32 +78,59 @@ const STRINGS = {
         long: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     },
 
+    // Detailed Stats Tab
+    statsPage: {
+        title: "Trading Analytics & Distribution",
+        subtitle: "In-depth breakdown by instrument, asset category, execution side, and trading days.",
+        kpiSummary: "Executive Summary",
+        grossProfit: "Gross Profit",
+        grossLoss: "Gross Loss",
+        totalCommissions: "Commissions & Fees",
+        grossPnl: "Gross P&L",
+        avgWin: "Average Win",
+        avgLoss: "Average Loss",
+        winLossRatio: "Win / Loss Ratio",
+        largestWin: "Largest Gain",
+        largestLoss: "Largest Loss",
+        symbolTableTitle: "Performance by Symbol",
+        categoryTableTitle: "Asset Category Allocation",
+        sideTableTitle: "Long vs Short Breakdown",
+        dowTableTitle: "Day of Week Distribution",
+        colSymbol: "Symbol",
+        colCategory: "Category",
+        colTrades: "Trades",
+        colWinRate: "Win Rate",
+        colNetPnl: "Net P&L",
+        colCommissions: "Commissions",
+        colVolume: "Volume",
+        colSide: "Side",
+        colDay: "Day"
+    },
+
     // Day Trade Modal
     modal: {
-        dayDetailsTitle: "Trades for",
-        summaryPnl: "Net P&L",
+        dayDetailsTitle: "Execution Details for",
+        summaryPnl: "Net Realized P&L",
         summaryGross: "Gross P&L",
         summaryCommissions: "Commissions",
         summaryCount: "Trades Executed",
         tableTime: "Time",
         tableSymbol: "Symbol",
         tableSide: "Side",
-        tableQty: "Qty",
+        tableQty: "Volume",
         tablePrice: "Price",
-        tableCommission: "Comm",
+        tableCommission: "Commission",
         tablePnl: "Realized P&L",
-        tableAction: "Action",
         closeBtn: "Close",
-        noTradesFound: "No trade executions recorded on this day."
+        noTradesFound: "No trade executions recorded on this date."
     },
 
     // Generic Placeholders & States
     common: {
-        loading: "Loading data...",
-        errorLoading: "Failed to load data. Please check your backend connection.",
+        loading: "Loading trading data...",
+        errorLoading: "Failed to load data. Please verify your backend connection.",
         currency: "€"
     }
 };
 
-// Expose globally
 window.STRINGS = STRINGS;

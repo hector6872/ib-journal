@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Journal - IBKR</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/calendar.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐢</text></svg>">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon">🐢</div>
+                <div class="logo-text">
+                    <span class="logo-title" data-i18n="appName">TRADING JOURNAL</span>
+                    <span class="logo-subtitle" data-i18n="appSubtitle">Tortuga Trades</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a class="nav-item" data-nav="panel">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+                    <span data-i18n="nav.panel">Panel</span>
+                </a>
+
+                <a class="nav-item" data-nav="operations">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                    <span data-i18n="nav.operations">Operations</span>
+                </a>
+
+                <div class="nav-group">
+                    <a class="nav-item active" data-nav="calendar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+                        <span data-i18n="nav.calendar">Calendar</span>
+                    </a>
+                    <div class="nav-sub-items">
+                        <span class="nav-sub-item active" data-view="year" data-i18n="nav.calendarYear">Year</span>
+                        <span class="nav-sub-item" data-view="month" data-i18n="nav.calendarMonth">Month</span>
+                        <span class="nav-sub-item" data-view="week" data-i18n="nav.calendarWeek">Week</span>
+                    </div>
+                </div>
+
+                <a class="nav-item" data-nav="portfolio">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                    <span data-i18n="nav.portfolio">Portfolio</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-wrapper">
+            <!-- Top KPI & Sync Bar -->
+            <header class="top-header">
+                <div class="kpi-container">
+                    <div class="kpi-item">
+                        <span class="kpi-label" data-i18n="kpi.winRate">WR</span>
+                        <span class="kpi-value mono" id="kpi-wr">--%</span>
+                    </div>
+
+                    <div class="kpi-item">
+                        <span class="kpi-label" data-i18n="kpi.operations">OPERATIONS</span>
+                        <span class="kpi-value mono" id="kpi-ops">--</span>
+                    </div>
+
+                    <div class="kpi-item">
+                        <span class="kpi-label" data-i18n="kpi.profitFactor">PF</span>
+                        <span class="kpi-value mono" id="kpi-pf">--</span>
+                    </div>
+
+                    <div class="kpi-item">
+                        <span class="kpi-label" data-i18n="kpi.expectancy">EXPECTANCY</span>
+                        <span class="kpi-value mono" id="kpi-exp">--</span>
+                    </div>
+
+                    <div class="kpi-item">
+                        <span class="kpi-label" data-i18n="kpi.netPnl">NET P&L</span>
+                        <span class="kpi-value mono" id="kpi-pnl">--</span>
+                    </div>
+                </div>
+
+                <!-- Sync Controls -->
+                <div class="sync-widget">
+                    <div class="sync-info">
+                        <span class="sync-last" id="sync-last-time">Updated: --:--</span>
+                        <span class="sync-next" id="sync-next-time">Next sync in --m</span>
+                    </div>
+                    <button class="btn-sync" id="btn-sync">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        <span class="btn-sync-label" data-i18n="sync.syncNow">Sync Now</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Dynamic Content Area -->
+            <section class="content-area">
+                <div class="view-header">
+                    <div class="view-titles">
+                        <h1 class="view-title" data-i18n="calendar.title">Calendar</h1>
+                        <p class="view-subtitle" data-i18n="calendar.subtitle">Annual, monthly and weekly views of your P&L.</p>
+                    </div>
+
+                    <div class="view-tabs">
+                        <button class="view-tab active" data-view="year" data-i18n="calendar.tabYear">Year</button>
+                        <button class="view-tab" data-view="month" data-i18n="calendar.tabMonth">Month</button>
+                        <button class="view-tab" data-view="week" data-i18n="calendar.tabWeek">Week</button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Calendar View Container -->
+                <div id="calendar-view-container">
+                    <!-- Loaded dynamically via CalendarYear / CalendarMonth / CalendarWeek -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Day Trades Detail Modal -->
+    <div class="modal-backdrop" id="day-modal-backdrop">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-date-title">Trades</h3>
+                <button class="btn-icon" id="modal-close-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="modal-body-content">
+                <!-- Injected dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="modal-footer-close-btn" data-i18n="modal.closeBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="/static/js/strings.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/state.js"></script>
+    <script src="/static/js/day_modal.js"></script>
+    <script src="/static/js/stats.js"></script>
+    <script src="/static/js/calendar_year.js"></script>
+    <script src="/static/js/calendar_month.js"></script>
+    <script src="/static/js/calendar_week.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

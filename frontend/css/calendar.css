@@ -1,0 +1,602 @@
+/* ============================================================
+   Calendar Views (Year, Month, Week) & Day Modal
+   ============================================================ */
+
+/* ============================================================
+   1. YEAR VIEW (12-Month Matrix + Bottom Summary Bar)
+   ============================================================ */
+.year-view-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.year-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+}
+
+.nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.year-title-label {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.btn-icon {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-icon:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-surface-hover);
+    border-color: var(--color-green);
+}
+
+.year-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
+.legend-loss { background-color: var(--color-red); }
+.legend-neutral { background-color: var(--border-default); }
+.legend-profit { background-color: var(--color-green); }
+
+/* Year Months Grid (4 columns x 3 rows) */
+.year-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+}
+
+.mini-month {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    transition: border-color 0.15s ease;
+    cursor: pointer;
+}
+
+.mini-month:hover {
+    border-color: var(--border-default);
+    background-color: var(--bg-surface-elevated);
+}
+
+.mini-month-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.mini-month-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+}
+
+.mini-month-pnl {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.mini-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 9px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.mini-days-matrix {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+}
+
+.mini-day {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    background-color: var(--bg-surface-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: var(--text-muted);
+    transition: transform 0.1s ease;
+}
+
+.mini-day.has-trades {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.mini-day.has-trades:hover {
+    transform: scale(1.15);
+    z-index: 2;
+}
+
+.mini-day.win {
+    background-color: var(--color-green-soft);
+    color: var(--color-green);
+    border: 1px solid var(--color-green-border);
+}
+
+.mini-day.loss {
+    background-color: var(--color-red-soft);
+    color: var(--color-red);
+    border: 1px solid var(--color-red-border);
+}
+
+.mini-day.empty {
+    visibility: hidden;
+}
+
+/* Bottom Year Totals Row */
+.year-summary-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow-x: auto;
+}
+
+.year-tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    min-width: 48px;
+}
+
+.months-pnl-ribbon {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-grow: 1;
+}
+
+.month-pill {
+    flex: 1;
+    min-width: 60px;
+    padding: 8px 6px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.month-pill:hover {
+    border-color: var(--border-default);
+    background-color: var(--bg-surface-elevated);
+}
+
+.month-pill.positive {
+    color: var(--color-green);
+    border-color: var(--color-green-border);
+    background-color: var(--color-green-soft);
+}
+
+.month-pill.negative {
+    color: var(--color-red);
+    border-color: var(--color-red-border);
+    background-color: var(--color-red-soft);
+}
+
+.year-total-pill {
+    min-width: 110px;
+    padding: 10px 16px;
+    background-color: var(--bg-surface-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.year-total-pill .total-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.year-total-pill .total-value {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* ============================================================
+   2. MONTH VIEW (Full Calendar Grid)
+   ============================================================ */
+.month-view-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.month-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.btn-secondary {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+    background-color: var(--bg-surface-hover);
+    border-color: var(--color-orange);
+}
+
+.month-totals-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.month-grid-container {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.month-weekdays-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.month-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+}
+
+.month-day-cell {
+    min-height: 100px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.15s ease;
+    position: relative;
+    cursor: pointer;
+}
+
+.month-day-cell:hover {
+    border-color: var(--border-default);
+    background-color: var(--bg-surface-elevated);
+}
+
+.month-day-cell.today {
+    border-color: var(--color-blue);
+    box-shadow: 0 0 0 1px var(--color-blue);
+}
+
+.month-day-cell.empty {
+    background-color: transparent;
+    border: 1px dashed var(--border-subtle);
+    opacity: 0.3;
+    cursor: default;
+}
+
+.day-cell-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.day-number {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.day-trade-pill {
+    font-size: 10px;
+    font-weight: 600;
+    background-color: var(--bg-surface-elevated);
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    color: var(--text-muted);
+}
+
+.day-pnl-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.day-pnl-amount {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* ============================================================
+   3. WEEK VIEW (7 Horizontal Day Cards)
+   ============================================================ */
+.week-view-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.week-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 12px;
+}
+
+@media (max-width: 1200px) {
+    .week-cards-grid {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+}
+
+.week-day-card {
+    min-height: 220px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.week-day-card:hover {
+    border-color: var(--border-default);
+    background-color: var(--bg-surface-elevated);
+}
+
+.week-day-card.today {
+    border-color: var(--color-blue);
+    box-shadow: 0 0 0 1px var(--color-blue);
+}
+
+.week-card-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 10px;
+}
+
+.week-card-dayname {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+}
+
+.week-card-daynum {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.week-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-grow: 1;
+    justify-content: center;
+}
+
+.week-card-empty {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    font-style: italic;
+}
+
+.week-card-pnl {
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.week-card-trade-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+/* ============================================================
+   4. DAY TRADES MODAL
+   ============================================================ */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.modal-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-container {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 860px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.modal-summary-bar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 14px 18px;
+    background-color: var(--bg-main);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+}
+
+.summary-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.summary-block-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.summary-block-val {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.trades-table-wrapper {
+    overflow-x: auto;
+}
+
+.trades-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.trades-table th {
+    text-align: left;
+    padding: 10px 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.trades-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+}
+
+.badge-side {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+}
+.badge-buy { background-color: var(--color-green-soft); color: var(--color-green); }
+.badge-sell { background-color: var(--color-red-soft); color: var(--color-red); }
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: flex-end;
+}

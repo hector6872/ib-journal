@@ -1,0 +1,20 @@
+[Unit]
+Description=IBKR Trading Journal Web Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/ib-journal
+ExecStart=/home/pi/ib-journal/.venv/bin/python3 -m backend.main
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# MicroSD write wear reduction environment
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+[Install]
+WantedBy=multi-user.target

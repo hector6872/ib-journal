@@ -24,11 +24,34 @@ const StatsPage = {
         const sides = data.sides || [];
         const dow = data.day_of_week || [];
 
+        // Update global top banner as well
+        if (ov) StatsController.renderOverview(ov);
+
         const winLossRatio = ov.avg_loss > 0 ? (ov.avg_win / ov.avg_loss).toFixed(2) : '--';
 
         // 1. Executive Summary Cards
         const kpisHtml = `
             <div class="stats-kpi-grid">
+                <div class="stat-card">
+                    <span class="stat-card-label">${STRINGS.kpi.netPnl}</span>
+                    <span class="stat-card-value mono ${ov.net_pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(ov.net_pnl)}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card-label">${STRINGS.kpi.winRate}</span>
+                    <span class="stat-card-value mono">${ov.win_rate.toFixed(1)}%</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card-label">${STRINGS.kpi.operations}</span>
+                    <span class="stat-card-value mono">${State.formatNumber(ov.total_trades)}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card-label">${STRINGS.kpi.profitFactor}</span>
+                    <span class="stat-card-value mono">${ov.profit_factor.toFixed(2)}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
+                    <span class="stat-card-value mono ${ov.expectancy >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(ov.expectancy)}</span>
+                </div>
                 <div class="stat-card">
                     <span class="stat-card-label">${STRINGS.statsPage.grossProfit}</span>
                     <span class="stat-card-value mono pnl-positive">${State.formatCurrency(ov.gross_profit)}</span>
@@ -40,10 +63,6 @@ const StatsPage = {
                 <div class="stat-card">
                     <span class="stat-card-label">${STRINGS.statsPage.totalCommissions}</span>
                     <span class="stat-card-value mono">${State.currency}${ov.total_commissions.toFixed(2)}</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-card-label">${STRINGS.kpi.profitFactor}</span>
-                    <span class="stat-card-value mono">${ov.profit_factor.toFixed(2)}</span>
                 </div>
                 <div class="stat-card">
                     <span class="stat-card-label">${STRINGS.statsPage.avgWin}</span>
@@ -58,10 +77,6 @@ const StatsPage = {
                     <span class="stat-card-value mono">${winLossRatio}</span>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
-                    <span class="stat-card-value mono ${ov.expectancy >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(ov.expectancy)}</span>
-                </div>
-                <div class="stat-card">
                     <span class="stat-card-label">${STRINGS.statsPage.largestWin}</span>
                     <span class="stat-card-value mono pnl-positive">${State.formatCurrency(ov.largest_win)}</span>
                 </div>
@@ -71,6 +86,7 @@ const StatsPage = {
                 </div>
             </div>
         `;
+
 
         // 2. Symbols Table
         const symbolRows = symbols.map(s => {
@@ -129,9 +145,6 @@ const StatsPage = {
 
         container.innerHTML = `
             <div class="stats-container">
-                <div class="section-header">
-                    <h2 class="section-title">${STRINGS.statsPage.kpiSummary}</h2>
-                </div>
                 ${kpisHtml}
 
                 <div class="stats-tables-grid">

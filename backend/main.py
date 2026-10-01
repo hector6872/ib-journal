@@ -7,9 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from backend.config import BASE_DIR, HOST, PORT, CURRENCY_SYMBOL
-from backend.database import init_db, upsert_trades
-from backend.flex_client import generate_sample_trades
+from backend.config import BASE_DIR, HOST, PORT, CURRENCY_SYMBOL, IBKR_TOKEN, IBKR_QUERY_ID
+from backend.database import init_db
 from backend.scheduler import scheduler
 from backend.analytics import (
     get_overview_stats,
@@ -29,17 +28,15 @@ logger = logging.getLogger("ib-journal.app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize SQLite tables with WAL pragmas
+    # Startup: Initialize SQLite tables with WAL pragmas (No sample data, clean DB)
     init_db()
-    # Check if empty, run initial seed or initial sync if needed
-    overview = get_overview_stats()
-    if overview["total_trades"] == 0:
-        logger.info("Database is empty. Populating with initial sample data...")
-        sample_trades = generate_sample_trades(num_trades=220)
-        upsert_trades(sample_trades)
     
-    # Start background scheduler
-    scheduler.start()
+    # Start background scheduler if credentials exist
+    if IBKR_TOKEN and IBKR_QUERY_ID:
+        scheduler.start()
+    else:
+        logger.info("IBKR credentials not set in .env. Background sync scheduler is idle.")
+
     yield
     # Shutdown
     scheduler.stop()
@@ -50,6 +47,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
 
 # Allow CORS for local development
 app.add_middleware(
@@ -69,7 +67,9 @@ async def get_app_config():
     """Returns frontend runtime settings."""
     return {
         "currency_symbol": CURRENCY_SYMBOL,
+        "is_configured": bool(IBKR_TOKEN and IBKR_QUERY_ID)
     }
+
 
 @app.get("/api/stats/overview")
 async def api_stats_overview(start_date: str = None, end_date: str = None):
@@ -136,19 +136,13 @@ async def api_sync_trigger():
     
     result = await scheduler.execute_sync(sync_type="manual")
     if result["status"] == "failed":
-        raise HTTPException(status_code=500, detail=result["message"])
+        raise HTTPException(status_code=400, detail=result["message"])
     return result
-
-@app.post("/api/seed")
-async def api_seed_sample_data(count: int = 150):
-    """Populates database with sample trading data."""
-    trades = generate_sample_trades(num_trades=count)
-    inserted = upsert_trades(trades)
-    return {"status": "success", "trades_inserted": inserted}
 
 # -------------------------------------------------------------
 # Static Frontend Serving
 # -------------------------------------------------------------
+
 frontend_dir = BASE_DIR / "frontend"
 if frontend_dir.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")

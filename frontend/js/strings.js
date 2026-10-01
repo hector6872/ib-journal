@@ -57,12 +57,15 @@ const STRINGS = {
         thisMonth: "This Month",
         thisWeek: "This Week",
         weekOf: "Week of",
+        weekTotal: "WEEK TOTAL",
+        weekCol: "WK",
         noTradesDay: "No operations",
         tradesBadge: "trades",
         tradeSingleBadge: "trade",
         yearHeader: "YEAR",
         totalHeader: "ANNUAL TOTAL",
     },
+
 
     // Months & Days
     months: {

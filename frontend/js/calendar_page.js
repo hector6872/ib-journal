@@ -7,30 +7,37 @@ const CalendarPage = {
         const container = document.getElementById('view-calendar');
         if (!container) return;
 
-        // Render skeleton / containers if not already present
+        // Render skeleton / containers inside calendar-page-inner if not present
+        let inner = document.getElementById('calendar-page-inner');
+        if (!inner) {
+            inner = document.createElement('div');
+            inner.className = 'page-view';
+            inner.id = 'calendar-page-inner';
+            container.appendChild(inner);
+        }
+
         if (!document.getElementById('sec-week-container')) {
-            container.innerHTML = `
-                <div class="page-view" id="calendar-page-inner">
-                    <!-- 1. Week Section -->
-                    <div class="section-week-container" id="sec-week-container">
-                        <div style="text-align:center; padding: 20px; color: var(--text-muted);">${STRINGS.common.loading}</div>
-                    </div>
+            inner.innerHTML = `
+                <!-- 1. Week Section -->
+                <div class="section-week-container" id="sec-week-container">
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">${STRINGS.common.loading}</div>
+                </div>
 
-                    <!-- 2. Month Section -->
-                    <div class="section-month-container" id="sec-month-container">
-                        <div style="text-align:center; padding: 20px; color: var(--text-muted);">${STRINGS.common.loading}</div>
-                    </div>
+                <!-- 2. Month Section -->
+                <div class="section-month-container" id="sec-month-container">
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">${STRINGS.common.loading}</div>
+                </div>
 
-                    <!-- 3. Year Section -->
-                    <div class="section-year-container" id="sec-year-container">
-                        <div style="text-align:center; padding: 20px; color: var(--text-muted);">${STRINGS.common.loading}</div>
-                    </div>
+                <!-- 3. Year Section -->
+                <div class="section-year-container" id="sec-year-container">
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">${STRINGS.common.loading}</div>
                 </div>
             `;
         }
 
-        // Fetch all 3 sections concurrently
+        // Fetch overview metrics for sticky banner and all 3 calendar sections concurrently
         await Promise.all([
+            StatsController.updateOverview(),
             this.loadWeek(State.currentWeekDate),
             this.loadMonth(State.currentYear, State.currentMonth),
             this.loadYear(State.currentYear)
@@ -75,6 +82,7 @@ const CalendarPage = {
             const dayName = STRINGS.days.short3[d.weekday_index];
             const hasTrades = d.trades_count > 0;
             const pnlClass = d.pnl > 0 ? 'pnl-positive' : (d.pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
+            const cardTintClass = hasTrades ? (d.pnl > 0 ? 'card-win' : (d.pnl < 0 ? 'card-loss' : '')) : '';
 
             let bodyContent = hasTrades
                 ? `
@@ -84,7 +92,7 @@ const CalendarPage = {
                 : `<div class="week-card-empty">${STRINGS.calendar.noTradesDay}</div>`;
 
             return `
-                <div class="week-card ${isToday ? 'today' : ''}" data-date="${d.date}">
+                <div class="week-card ${isToday ? 'today' : ''} ${cardTintClass}" data-date="${d.date}">
                     <div class="week-card-top">
                         <span class="week-card-weekday">${dayName}</span>
                         <span class="week-card-daynumber mono">${d.day_number}</span>
@@ -95,6 +103,23 @@ const CalendarPage = {
                 </div>
             `;
         }).join('');
+
+        // 8th Card: Weekly Total Summary Card
+        const totalCardHtml = `
+            <div class="week-card total-card">
+                <div class="week-card-top">
+                    <span class="week-card-weekday" style="color: var(--color-accent);">${STRINGS.calendar.weekTotal}</span>
+                </div>
+                <div class="week-card-main">
+                    <div class="week-card-pnl mono ${totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-size: 16px;">
+                        ${State.formatCurrency(totalNetPnl)}
+                    </div>
+                    <div class="week-card-count mono" style="font-weight: 600;">
+                        ${totalTrades} ${STRINGS.calendar.tradesBadge}
+                    </div>
+                </div>
+            </div>
+        `;
 
         container.innerHTML = `
             <div class="week-nav-bar">
@@ -109,13 +134,13 @@ const CalendarPage = {
                     <button class="btn-pill" id="btn-week-today">${STRINGS.calendar.thisWeek}</button>
                 </div>
                 <div class="section-summary-badge">
-                    <span style="font-size: 11px; color: var(--text-muted);">${STRINGS.kpi.netPnl}:</span>
+                    <span style="font-size: 11px; color: var(--text-muted);">${STRINGS.calendar.weekTotal}:</span>
                     <span class="mono ${totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(totalNetPnl)}</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">(${totalTrades} ${STRINGS.calendar.tradesBadge})</span>
                 </div>
             </div>
             <div class="week-cards-row">
                 ${cardsHtml}
+                ${totalCardHtml}
             </div>
         `;
 
@@ -134,7 +159,7 @@ const CalendarPage = {
             this.loadWeek(new Date().toISOString().split('T')[0]);
         });
 
-        container.querySelectorAll('.week-card').forEach(card => {
+        container.querySelectorAll('.week-card:not(.total-card)').forEach(card => {
             card.addEventListener('click', () => {
                 const dStr = card.getAttribute('data-date');
                 if (dStr) DayModal.open(dStr);
@@ -143,7 +168,7 @@ const CalendarPage = {
     },
 
     // -------------------------------------------------------------
-    // 2. MONTH SECTION
+    // 2. MONTH SECTION (8 Columns: Mon-Sun + SEM Weekly Total)
     // -------------------------------------------------------------
     async loadMonth(year, month) {
         State.currentYear = year;
@@ -170,39 +195,78 @@ const CalendarPage = {
         const daysInMonth = new Date(year, month, 0).getDate();
         const firstDayObj = new Date(year, month - 1, 1);
         let firstDayOfWeek = firstDayObj.getDay() - 1;
-        if (firstDayOfWeek < 0) firstDayOfWeek = 6;
+        if (firstDayOfWeek < 0) firstDayOfWeek = 6; // Mon=0 ... Sun=6
 
-        let daysGridHtml = '';
-        for (let e = 0; e < firstDayOfWeek; e++) {
-            daysGridHtml += `<div class="month-day-cell empty"></div>`;
-        }
+        // Build list of cells row by row (7 days + 1 weekly total)
+        let matrixHtml = '';
+        let currentDay = 1;
+        let weekRowIndex = 1;
 
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const dayData = dailyMap[dStr];
-            const isToday = dStr === todayStr;
+        while (currentDay <= daysInMonth) {
+            let rowDaysHtml = '';
+            let rowNetPnl = 0;
+            let rowTradesCount = 0;
 
-            let badgeHtml = '';
-            let pnlHtml = '';
+            for (let dow = 0; dow < 7; dow++) {
+                if (weekRowIndex === 1 && dow < firstDayOfWeek) {
+                    // Empty placeholder before start of month
+                    rowDaysHtml += `<div class="month-day-cell empty"></div>`;
+                } else if (currentDay > daysInMonth) {
+                    // Empty placeholder after end of month
+                    rowDaysHtml += `<div class="month-day-cell empty"></div>`;
+                } else {
+                    const dStr = `${year}-${String(month).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+                    const dayData = dailyMap[dStr];
+                    const isToday = dStr === todayStr;
 
-            if (dayData && dayData.count > 0) {
-                const pnl = dayData.pnl;
-                const pnlClass = pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
-                badgeHtml = `<span class="cell-badge-count mono">${dayData.count}</span>`;
-                pnlHtml = `<span class="cell-pnl-val mono ${pnlClass}">${State.formatCurrency(pnl)}</span>`;
+                    let badgeHtml = '';
+                    let pnlHtml = '';
+                    let cellTintClass = '';
+
+                    if (dayData && dayData.count > 0) {
+                        const pnl = dayData.pnl;
+                        const pnlClass = pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
+                        cellTintClass = pnl > 0 ? 'cell-win' : (pnl < 0 ? 'cell-loss' : '');
+                        badgeHtml = `<span class="cell-badge-count mono">${dayData.count}</span>`;
+                        pnlHtml = `<span class="cell-pnl-val mono ${pnlClass}">${State.formatCurrency(pnl)}</span>`;
+                        rowNetPnl += pnl;
+                        rowTradesCount += dayData.count;
+                    }
+
+                    rowDaysHtml += `
+                        <div class="month-day-cell ${isToday ? 'today' : ''} ${cellTintClass}" data-date="${dStr}">
+                            <div class="cell-top">
+                                <span class="cell-day-num mono">${currentDay}</span>
+                                ${badgeHtml}
+                            </div>
+                            <div class="cell-bottom">
+                                ${pnlHtml}
+                            </div>
+                        </div>
+                    `;
+                    currentDay++;
+                }
             }
 
-            daysGridHtml += `
-                <div class="month-day-cell ${isToday ? 'today' : ''}" data-date="${dStr}">
+            // 8th Cell: Weekly Total for this row
+            const rowPnlClass = rowNetPnl > 0 ? 'pnl-positive' : (rowNetPnl < 0 ? 'pnl-negative' : 'pnl-neutral');
+            const rowPnlText = rowTradesCount > 0 ? State.formatCurrency(rowNetPnl) : '--';
+            const rowCountBadge = rowTradesCount > 0 ? `<span class="cell-badge-count mono">${rowTradesCount}</span>` : '';
+
+            const rowTotalCellHtml = `
+                <div class="month-day-cell week-total-cell">
                     <div class="cell-top">
-                        <span class="cell-day-num mono">${d}</span>
-                        ${badgeHtml}
+                        <span style="font-size: 10px; font-weight: 800; color: var(--color-accent);">${STRINGS.calendar.weekCol} ${weekRowIndex}</span>
+                        ${rowCountBadge}
                     </div>
                     <div class="cell-bottom">
-                        ${pnlHtml}
+                        <span class="cell-pnl-val mono ${rowPnlClass}">${rowPnlText}</span>
                     </div>
                 </div>
             `;
+
+            matrixHtml += rowDaysHtml + rowTotalCellHtml;
+            weekRowIndex++;
         }
 
         container.innerHTML = `
@@ -226,9 +290,10 @@ const CalendarPage = {
             <div class="month-grid-wrapper">
                 <div class="month-weekdays-row">
                     ${STRINGS.days.short3.map(d => `<span>${d}</span>`).join('')}
+                    <span class="col-week">${STRINGS.calendar.weekCol}</span>
                 </div>
                 <div class="month-days-matrix">
-                    ${daysGridHtml}
+                    ${matrixHtml}
                 </div>
             </div>
         `;
@@ -248,7 +313,7 @@ const CalendarPage = {
             this.loadMonth(now.getFullYear(), now.getMonth() + 1);
         });
 
-        container.querySelectorAll('.month-day-cell:not(.empty)').forEach(cell => {
+        container.querySelectorAll('.month-day-cell:not(.empty):not(.week-total-cell)').forEach(cell => {
             cell.addEventListener('click', () => {
                 const dStr = cell.getAttribute('data-date');
                 if (dStr) DayModal.open(dStr);

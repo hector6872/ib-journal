@@ -1,86 +1,99 @@
 /* ============================================================
-   IBKR Trading Journal - Professional Financial Theme
-   Light (Default) / Dark / System Adaptive Theme
+   Interactive Brokers (IBKR) Theme
+   Authentic IBKR Design Language (Light Default & Dark Mode)
    ============================================================ */
 
 :root {
-    /* Base Font & Typography */
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --font-mono: "SF Mono", "Roboto Mono", Menlo, Consolas, Monaco, monospace;
+    --radius-xs: 3px;
     --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
     --radius-full: 9999px;
 }
 
 /* ============================================================
-   Light Theme (Default) - Institutional Clean
+   IBKR Light Theme (Default)
    ============================================================ */
 :root, [data-theme="light"] {
-    --bg-app: #f4f6f9;
+    --bg-app: #f4f6f8;
     --bg-header: #ffffff;
     --bg-card: #ffffff;
-    --bg-card-secondary: #f8fafc;
-    --bg-hover: #f1f5f9;
-    --bg-subtle: #eef2f6;
+    --bg-card-secondary: #f8f9fa;
+    --bg-hover: #f1f3f5;
+    --bg-subtle: #eef1f4;
 
-    --border-subtle: #e2e8f0;
-    --border-default: #cbd5e1;
-    --border-active: #0284c7;
+    --border-subtle: #e9ecef;
+    --border-default: #dee2e6;
+    --border-active: #0066cc;
 
-    --text-main: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #64748b;
+    --text-main: #1a1e24;
+    --text-secondary: #495057;
+    --text-muted: #868e96;
     --text-inverse: #ffffff;
 
-    --color-profit: #15803d;
-    --color-profit-bg: #dcfce7;
-    --color-profit-border: #86efac;
+    /* IBKR Brand Red */
+    --color-ibkr-red: #cc0000;
+    --color-ibkr-red-dark: #b30000;
 
-    --color-loss: #b91c1c;
-    --color-loss-bg: #fee2e2;
-    --color-loss-border: #fca5a5;
+    /* IBKR Profit & Loss Colors */
+    --color-profit: #00875a;
+    --color-profit-bg: #eaf7ed;
+    --color-profit-border: #c3e6cb;
+    --color-profit-badge: #00875a;
 
-    --color-accent: #0284c7;
-    --color-accent-soft: #e0f2fe;
+    --color-loss: #d32f2f;
+    --color-loss-bg: #fdeded;
+    --color-loss-border: #f5c6cb;
+    --color-loss-badge: #d32f2f;
 
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+    /* IBKR Blue Accents */
+    --color-accent: #0066cc;
+    --color-accent-soft: #e7f1ff;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 /* ============================================================
-   Dark Theme - Professional Terminal
+   IBKR Dark Theme
    ============================================================ */
 [data-theme="dark"] {
-    --bg-app: #0b0f19;
-    --bg-header: #111827;
-    --bg-card: #141d2e;
-    --bg-card-secondary: #1a2438;
-    --bg-hover: #222f46;
-    --bg-subtle: #1e293b;
+    --bg-app: #0e131d;
+    --bg-header: #141b29;
+    --bg-card: #182030;
+    --bg-card-secondary: #1e283d;
+    --bg-hover: #26334d;
+    --bg-subtle: #1e283d;
 
-    --border-subtle: #1e293b;
-    --border-default: #2d3d57;
+    --border-subtle: #232f46;
+    --border-default: #314261;
     --border-active: #38bdf8;
 
     --text-main: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
     --text-inverse: #0f172a;
 
+    --color-ibkr-red: #e53935;
+    --color-ibkr-red-dark: #c62828;
+
     --color-profit: #22c55e;
-    --color-profit-bg: rgba(34, 197, 94, 0.14);
-    --color-profit-border: rgba(34, 197, 94, 0.35);
+    --color-profit-bg: rgba(34, 197, 94, 0.12);
+    --color-profit-border: rgba(34, 197, 94, 0.3);
+    --color-profit-badge: #16a34a;
 
     --color-loss: #ef4444;
-    --color-loss-bg: rgba(239, 68, 68, 0.14);
-    --color-loss-border: rgba(239, 68, 68, 0.35);
+    --color-loss-bg: rgba(239, 68, 68, 0.12);
+    --color-loss-border: rgba(239, 68, 68, 0.3);
+    --color-loss-badge: #dc2626;
 
     --color-accent: #38bdf8;
     --color-accent-soft: rgba(56, 189, 248, 0.15);
 
-    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* Base resets */
@@ -100,7 +113,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow-x: hidden;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .mono {
@@ -109,11 +122,11 @@ body {
 }
 
 /* ============================================================
-   Top Main Header (Tabs, KPIs, Theme & Sync)
+   Top IBKR Header
    ============================================================ */
 .app-header {
     background-color: var(--bg-header);
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-default);
     position: sticky;
     top: 0;
     z-index: 50;
@@ -124,14 +137,14 @@ body {
     max-width: 1560px;
     margin: 0 auto;
     padding: 0 24px;
-    height: 64px;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 20px;
 }
 
-/* Left: Logo & Main Navigation Tabs */
+/* Left: IBKR Brand & Main Navigation Tabs */
 .header-left {
     display: flex;
     align-items: center;
@@ -141,49 +154,56 @@ body {
 .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     cursor: pointer;
     user-select: none;
 }
 
 .brand-badge {
-    width: 32px;
-    height: 32px;
-    background: var(--color-accent);
+    width: 28px;
+    height: 28px;
+    background: var(--color-ibkr-red);
     color: #ffffff;
     border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 800;
-    font-size: 14px;
+    font-size: 13px;
     letter-spacing: -0.5px;
+    box-shadow: 0 1px 2px rgba(204, 0, 0, 0.3);
 }
 
 .brand-title {
     font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
+    font-weight: 800;
+    letter-spacing: -0.2px;
     color: var(--text-main);
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.brand-title span {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--text-muted);
 }
 
 .main-tabs {
     display: flex;
     align-items: center;
-    background-color: var(--bg-subtle);
-    padding: 3px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-subtle);
+    gap: 4px;
 }
 
 .tab-btn {
-    padding: 6px 18px;
+    padding: 6px 16px;
     font-size: 13px;
     font-weight: 600;
     color: var(--text-secondary);
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
+    border-bottom: 2px solid transparent;
     cursor: pointer;
     transition: all 0.15s ease;
     display: flex;
@@ -196,39 +216,8 @@ body {
 }
 
 .tab-btn.active {
-    background-color: var(--bg-card);
-    color: var(--text-main);
-    box-shadow: var(--shadow-sm);
-    font-weight: 700;
-}
-
-/* Center: Top KPI Ticker */
-.header-center {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    background-color: var(--bg-card-secondary);
-    padding: 6px 16px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-subtle);
-}
-
-.kpi-ticker-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.kpi-ticker-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.kpi-ticker-val {
-    font-size: 13px;
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
     font-weight: 700;
 }
 
@@ -251,12 +240,12 @@ body {
     flex-direction: column;
     align-items: flex-end;
     font-size: 11px;
-    line-height: 1.3;
+    line-height: 1.25;
 }
 
 .sync-updated {
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .sync-countdown {
@@ -268,7 +257,7 @@ body {
     background-color: var(--bg-card);
     border: 1px solid var(--border-default);
     color: var(--text-main);
-    padding: 6px 12px;
+    padding: 5px 12px;
     border-radius: var(--radius-sm);
     font-size: 12px;
     font-weight: 600;
@@ -281,11 +270,12 @@ body {
 
 .btn-sync-action:hover:not(:disabled) {
     background-color: var(--bg-hover);
-    border-color: var(--border-active);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
 }
 
 .btn-sync-action:disabled {
-    opacity: 0.6;
+    opacity: 0.55;
     cursor: not-allowed;
 }
 
@@ -298,7 +288,7 @@ body {
     to { transform: rotate(360deg); }
 }
 
-/* Theme Switcher Button Group */
+/* Theme Switcher */
 .theme-switch-group {
     display: flex;
     align-items: center;
@@ -309,7 +299,7 @@ body {
 }
 
 .theme-btn {
-    padding: 5px 10px;
+    padding: 4px 8px;
     font-size: 11px;
     font-weight: 600;
     color: var(--text-secondary);
@@ -340,35 +330,107 @@ body {
     max-width: 1560px;
     width: 100%;
     margin: 0 auto;
-    padding: 24px;
+    padding: 20px 24px;
     display: flex;
     flex-direction: column;
-    gap: 28px;
+    gap: 20px;
     flex-grow: 1;
 }
 
-/* Page Section Wrappers */
+/* ============================================================
+   Global Executive KPI Summary Banner (IBKR Style - Sticky in Calendar)
+   ============================================================ */
+#view-calendar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.kpi-summary-banner {
+    position: sticky;
+    top: 66px; /* Sits right below the 56px sticky top header with 10px margin */
+    z-index: 30;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 12px 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 32px;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="dark"] .kpi-summary-banner {
+    background-color: var(--bg-card);
+    border-color: var(--border-subtle);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.kpi-banner-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.kpi-banner-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.kpi-banner-value {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1.1;
+}
+
+.kpi-banner-divider {
+    width: 1px;
+    height: 28px;
+    background-color: var(--border-default);
+}
+
+@media (max-width: 768px) {
+    .kpi-summary-banner {
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 12px 16px;
+    }
+    .kpi-banner-divider {
+        display: none;
+    }
+    .kpi-banner-item {
+        flex: 1 1 40%;
+    }
+}
+
+/* Utility / Visibility */
+.hidden {
+    display: none !important;
+}
+
 .page-view {
     display: flex;
     flex-direction: column;
-    gap: 24px;
-}
-
-.page-view.hidden {
-    display: none;
+    gap: 20px;
 }
 
 .section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-subtle);
-    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-default);
+    margin-bottom: 10px;
 }
 
 .section-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-main);
     display: flex;
@@ -376,7 +438,7 @@ body {
     gap: 8px;
 }
 
-/* Data Pill Badges & Values */
+/* Data Values & Colors */
 .pnl-positive {
     color: var(--color-profit) !important;
 }
@@ -387,38 +449,21 @@ body {
     color: var(--text-muted) !important;
 }
 
-.badge-profit {
-    background-color: var(--color-profit-bg);
-    color: var(--color-profit);
-    border: 1px solid var(--color-profit-border);
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
-    font-weight: 600;
+/* IBKR Solid Pill Badges */
+.badge-pill-profit {
+    background-color: var(--color-profit-badge);
+    color: #ffffff !important;
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+    font-weight: 700;
+    font-size: 12px;
 }
 
-.badge-loss {
-    background-color: var(--color-loss-bg);
-    color: var(--color-loss);
-    border: 1px solid var(--color-loss-border);
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
-    font-weight: 600;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1100px) {
-    .header-center {
-        display: none;
-    }
-}
-@media (max-width: 768px) {
-    .header-inner {
-        height: auto;
-        padding: 12px 16px;
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-    .header-right {
-        margin-left: auto;
-    }
+.badge-pill-loss {
+    background-color: var(--color-loss-badge);
+    color: #ffffff !important;
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+    font-weight: 700;
+    font-size: 12px;
 }

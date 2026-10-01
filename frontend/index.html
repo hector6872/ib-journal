@@ -25,30 +25,6 @@
                 </nav>
             </div>
 
-            <!-- Center: Executive KPI Ticker -->
-            <div class="header-center">
-                <div class="kpi-ticker-item">
-                    <span class="kpi-ticker-label" data-i18n="kpi.winRate">WR:</span>
-                    <span class="kpi-ticker-val mono" id="kpi-wr">--%</span>
-                </div>
-                <div class="kpi-ticker-item">
-                    <span class="kpi-ticker-label" data-i18n="kpi.operations">Trades:</span>
-                    <span class="kpi-ticker-val mono" id="kpi-ops">--</span>
-                </div>
-                <div class="kpi-ticker-item">
-                    <span class="kpi-ticker-label" data-i18n="kpi.profitFactor">PF:</span>
-                    <span class="kpi-ticker-val mono" id="kpi-pf">--</span>
-                </div>
-                <div class="kpi-ticker-item">
-                    <span class="kpi-ticker-label" data-i18n="kpi.expectancy">Exp:</span>
-                    <span class="kpi-ticker-val mono" id="kpi-exp">--</span>
-                </div>
-                <div class="kpi-ticker-item">
-                    <span class="kpi-ticker-label" data-i18n="kpi.netPnl">Net:</span>
-                    <span class="kpi-ticker-val mono" id="kpi-pnl">--</span>
-                </div>
-            </div>
-
             <!-- Right: Sync Widget & Theme Switcher -->
             <div class="header-right">
                 <!-- Sync Controls -->
@@ -84,16 +60,61 @@
 
     <!-- Main Workspace Container -->
     <main class="main-content">
-        <!-- 1. Unified Continuous Calendar View (Week -> Month -> Year) -->
+        <!-- 1. Calendar Tab: Only Calendars (Week -> Month -> Year) with Sticky Summary Banner -->
         <div id="view-calendar">
-            <!-- Dynamically populated by CalendarPage -->
+            <!-- Executive KPI Summary Banner (Sticky in Calendar view) -->
+            <div class="kpi-summary-banner" id="global-kpi-banner">
+                <div class="kpi-banner-item">
+                    <span class="kpi-banner-label">NET P&L</span>
+                    <span class="kpi-banner-value mono" id="banner-net-pnl">--</span>
+                </div>
+                <div class="kpi-banner-divider"></div>
+                <div class="kpi-banner-item">
+                    <span class="kpi-banner-label">WR</span>
+                    <span class="kpi-banner-value mono" id="banner-wr">--%</span>
+                </div>
+                <div class="kpi-banner-divider"></div>
+                <div class="kpi-banner-item">
+                    <span class="kpi-banner-label">OPERATIONS</span>
+                    <span class="kpi-banner-value mono" id="banner-trades">--</span>
+                </div>
+                <div class="kpi-banner-divider"></div>
+                <div class="kpi-banner-item">
+                    <span class="kpi-banner-label">PF</span>
+                    <span class="kpi-banner-value mono" id="banner-pf">--</span>
+                </div>
+                <div class="kpi-banner-divider"></div>
+                <div class="kpi-banner-item">
+                    <span class="kpi-banner-label">EXPECTANCY</span>
+                    <span class="kpi-banner-value mono" id="banner-expectancy">--</span>
+                </div>
+            </div>
+
+            <div class="page-view" id="calendar-page-inner">
+                <!-- 1. Week Section -->
+                <div class="section-week-container" id="sec-week-container">
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">Loading trading data...</div>
+                </div>
+
+                <!-- 2. Month Section -->
+                <div class="section-month-container" id="sec-month-container">
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">Loading trading data...</div>
+                </div>
+
+                <!-- 3. Year Section -->
+                <div class="section-year-container" id="sec-year-container">
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">Loading trading data...</div>
+                </div>
+            </div>
         </div>
 
-        <!-- 2. Detailed Statistics View -->
+        <!-- 2. Statistics Tab: Only Statistics & Analytics -->
         <div id="view-stats" class="hidden">
             <!-- Dynamically populated by StatsPage -->
         </div>
     </main>
+
+
 
     <!-- Day Trades Execution Modal -->
     <div class="modal-backdrop" id="day-modal-backdrop">

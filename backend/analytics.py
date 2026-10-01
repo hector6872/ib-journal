@@ -353,16 +353,17 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
 
 def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
     """
-    Returns data for the 7-day Week View (Monday to Sunday) containing target_date:
-    - 7 day cards with stats & summary
+    Returns data for the 5-day Trading Week View (Monday to Friday) containing target_date:
+    - 5 trading day cards (Mon-Fri) with stats & summary
     """
     try:
         target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
     except ValueError:
         target_date = date.today()
 
-    # Find Monday (weekday 0)
+    # Find Monday (weekday 0) and Friday (weekday 4)
     monday = target_date - timedelta(days=target_date.weekday())
+    friday = monday + timedelta(days=4)
     sunday = monday + timedelta(days=6)
 
     query = """
@@ -389,7 +390,8 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
     week_net_pnl = 0.0
     week_trades_count = 0
 
-    for i in range(7):
+    # 5 Trading Days: Monday (0) to Friday (4)
+    for i in range(5):
         current_d = monday + timedelta(days=i)
         d_str = current_d.isoformat()
         day_trades = trades_by_date.get(d_str, [])
@@ -401,7 +403,7 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
         days.append({
             "date": d_str,
             "day_number": current_d.day,
-            "weekday_index": i, # 0 = Monday, 6 = Sunday
+            "weekday_index": i, # 0 = Monday, 4 = Friday
             "pnl": round(day_pnl, 2),
             "trades_count": len(day_trades),
             "wins": day_wins,
@@ -413,7 +415,7 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
 
     return {
         "start_date": monday.isoformat(),
-        "end_date": sunday.isoformat(),
+        "end_date": friday.isoformat(),
         "days": days,
         "total_net_pnl": round(week_net_pnl, 2),
         "total_trades": week_trades_count

@@ -185,6 +185,47 @@ class SyncScheduler:
         status_val = self.last_sync_status if configured else "unconfigured"
         msg_val = self.last_sync_message if configured else "IBKR credentials not configured in .env"
 
+        has_sync_gap = False
+        gap_days = 0
+        last_trade_date = None
+        last_sync_dt = self.last_sync_time
+
+        try:
+            with db_session() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT MAX(trade_date) as max_date FROM trades;")
+                r = cursor.fetchone()
+                if r and r["max_date"]:
+                    last_trade_date = r["max_date"]
+
+                if not last_sync_dt:
+                    cursor.execute("SELECT MAX(completed_at) as last_completed FROM sync_history WHERE status = 'success';")
+                    sr = cursor.fetchone()
+                    if sr and sr["last_completed"]:
+                        try:
+                            last_sync_dt = datetime.fromisoformat(sr["last_completed"])
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.debug(f"Could not compute sync gap: {e}")
+
+        now = datetime.now(timezone.utc)
+        if last_sync_dt:
+            sync_tz = last_sync_dt if last_sync_dt.tzinfo else last_sync_dt.replace(tzinfo=timezone.utc)
+            days_since_sync = (now - sync_tz).days
+            if days_since_sync > 7:
+                has_sync_gap = True
+                gap_days = days_since_sync
+        elif last_trade_date:
+            try:
+                lt_date = date.fromisoformat(last_trade_date)
+                days_since_trade = (now.date() - lt_date).days
+                if days_since_trade > 7:
+                    has_sync_gap = True
+                    gap_days = days_since_trade
+            except Exception:
+                pass
+
         return {
             "is_configured": configured,
             "last_sync_time": self.last_sync_time.isoformat() if (configured and self.last_sync_time) else None,
@@ -194,7 +235,10 @@ class SyncScheduler:
             "trades_count": self.last_trades_count if configured else 0,
             "is_syncing": self.is_syncing if configured else False,
             "cooldown_remaining_seconds": self.get_cooldown_remaining_seconds() if configured else 0,
-            "is_market_hours": self.is_market_hours()
+            "is_market_hours": self.is_market_hours(),
+            "has_sync_gap": has_sync_gap,
+            "gap_days": gap_days,
+            "last_trade_date": last_trade_date
         }
 
 

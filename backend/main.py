@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -138,6 +138,60 @@ async def api_sync_status():
     """Returns current sync status, countdown, and cooldown info."""
     return scheduler.get_status()
 
+@app.post("/api/trades/import")
+async def api_trades_import(request: Request):
+    """Imports trades from uploaded CSV, XML, or JSON payload."""
+    content_bytes = await request.body()
+    if not content_bytes:
+        raise HTTPException(status_code=400, detail="No content provided for import.")
+
+    text = content_bytes.decode("utf-8-sig", errors="replace")
+    trades = []
+
+    # 1. Check XML
+    if text.strip().startswith("<?xml") or "<FlexStatement" in text or "<Trade" in text:
+        import tempfile
+        from scripts.import_trades import parse_xml_file
+        with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", encoding="utf-8", delete=False) as tmp:
+            tmp.write(text)
+            tmp_path = Path(tmp.name)
+        try:
+            trades = parse_xml_file(tmp_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+    # 2. Check JSON
+    elif text.strip().startswith("[") or text.strip().startswith("{"):
+        try:
+            import json
+            data = json.loads(text)
+            trades = data if isinstance(data, list) else data.get("trades", [])
+        except Exception:
+            pass
+    # 3. Check CSV
+    if not trades:
+        from scripts.import_trades import parse_ibkr_activity_statement_csv, parse_generic_ibkr_csv
+        lines = text.splitlines()
+        is_activity = any(l.startswith("Trades,Header") or l.startswith("Trades,Data") for l in lines[:50])
+        if is_activity:
+            trades = parse_ibkr_activity_statement_csv(lines)
+        else:
+            trades = parse_generic_ibkr_csv(lines)
+
+    if not trades:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract valid trades from provided content. Please ensure it is an IBKR Activity Statement CSV or Flex XML/CSV export."
+        )
+
+    from backend.database import upsert_trades
+    count = upsert_trades(trades)
+    return {
+        "status": "success",
+        "trades_count": count,
+        "message": f"Successfully imported {count} trades."
+    }
+
 @app.post("/api/sync/trigger")
 async def api_sync_trigger():
     """Triggers an on-demand manual sync if cooldown permits."""
@@ -147,7 +201,7 @@ async def api_sync_trigger():
             status_code=429,
             detail=f"Rate limit cooldown active. Please wait {cooldown} seconds before syncing again."
         )
-    
+
     result = await scheduler.execute_sync(sync_type="manual")
     if result["status"] == "failed":
         raise HTTPException(status_code=400, detail=result["message"])

@@ -77,6 +77,27 @@ To enable automated trade ingestion from Interactive Brokers:
 
 ---
 
+## 📥 Historical Multi-Year Import & Vacation Desync
+
+IBKR's Flex Query API has a **365-day maximum window**. For importing older historical years or handling gaps after vacations (>7 days):
+
+### 1. CLI Multi-File Importer (`scripts/import_trades.py`)
+Import any number of IBKR Activity Statement CSVs, Flex XMLs, or trade reports safely (idempotent, zero duplicate risk):
+```bash
+# Import single file or multiple years
+python3 scripts/import_trades.py ~/Downloads/2021.csv ~/Downloads/2022.csv ~/Downloads/2023.xml
+
+# Or import an entire folder
+python3 scripts/import_trades.py ~/Downloads/ibkr_statements/
+```
+
+### 2. Browser UI Drag & Drop
+Click the **Import** 📥 button in the top header (or the `⚠️ Desync` alert if absent >7 days) to drag and drop your CSV/XML files directly in the browser.
+
+> 📖 **Read the full step-by-step guide**: [docs/IBKR_IMPORT_GUIDE.md](docs/IBKR_IMPORT_GUIDE.md)
+
+---
+
 ## 🛡️ MicroSD Protection & Optimization
 
 Raspberry Pi SD cards degrade primarily from continuous write churn. This project implements multiple safeguards:

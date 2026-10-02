@@ -93,6 +93,19 @@ const API = {
             throw new Error(data.detail || "Sync failed");
         }
         return data;
+    },
+
+    async importTrades(content) {
+        const res = await fetch('/api/trades/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            body: content
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || "Import failed");
+        }
+        return data;
     }
 };
 

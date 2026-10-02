@@ -57,6 +57,9 @@
             <div class="header-right">
                 <!-- Sync Controls -->
                 <div class="sync-section">
+                    <button class="btn-sync-gap hidden" id="btn-sync-gap" title="Desincronización detectada. Haz clic para importar extracto manual.">
+                        <span>⚠️</span> <span id="sync-gap-label">Desync</span>
+                    </button>
                     <div class="sync-status-text">
                         <span class="sync-updated" id="sync-last-time">Last update at --:--</span>
                         <span class="sync-countdown" id="sync-next-time">Next in --m</span>
@@ -64,6 +67,9 @@
                     <button class="btn-sync-action" id="btn-sync" disabled>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                         <span class="btn-sync-label" data-i18n="sync.syncNow">Sync Now</span>
+                    </button>
+                    <button class="btn-ctrl" id="btn-open-import" title="Importar extracto manual (CSV / XML)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     </button>
                 </div>
 
@@ -158,6 +164,47 @@
         </div>
     </div>
 
+    <!-- Manual Import & Sync Gap Modal -->
+    <div class="modal-backdrop" id="import-modal-backdrop">
+        <div class="modal-container" style="max-width: 580px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="import-modal-title">Import Historical IBKR Statements</h3>
+                <button class="btn-ctrl" id="import-modal-close-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="import-modal-body">
+                <div id="import-sync-gap-alert" class="sync-gap-alert-box hidden">
+                    <div class="sync-gap-alert-icon">⚠️</div>
+                    <div class="sync-gap-alert-content">
+                        <strong>Desincronización detectada (>7 días sin registrar)</strong>
+                        <p id="import-gap-desc">Tu última sincronización o trade registrado tiene más de 7 días. Si tu Flex Query en IBKR está configurada para 7 días, importa el extracto CSV o XML para no perder operaciones pasadas.</p>
+                    </div>
+                </div>
+
+                <!-- Dropzone for Drag & Drop / File Selection -->
+                <div class="import-dropzone" id="import-dropzone">
+                    <input type="file" id="import-file-input" accept=".csv,.xml,.CSV,.XML" style="display: none;" multiple>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--color-accent); margin-bottom: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <div style="font-weight: 700; margin-bottom: 4px;">Arrastra tus archivos CSV o XML de IBKR aquí</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">Compatible con Activity Statements y Flex Queries (multi-año)</div>
+                    <button class="btn-pill" type="button" id="btn-browse-file">Seleccionar Archivo</button>
+                </div>
+
+                <div id="import-status-box" style="margin-top: 12px; display: none;"></div>
+
+                <!-- Terminal CLI Command Hint -->
+                <div class="cli-import-box" style="margin-top: 16px;">
+                    <span class="cli-label">O importar vía Terminal CLI:</span>
+                    <pre class="cli-code-block"><code>python3 scripts/import_trades.py /ruta/a/extractos_ibkr/</code></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-pill" id="import-modal-cancel-btn">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts in proper load sequence -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="/static/js/strings.js"></script>
@@ -165,6 +212,7 @@
     <script src="/static/js/state.js"></script>
     <script src="/static/js/theme.js"></script>
     <script src="/static/js/day_modal.js"></script>
+    <script src="/static/js/import_modal.js"></script>
     <script src="/static/js/stats.js"></script>
     <script src="/static/js/calendar_page.js"></script>
     <script src="/static/js/stats_page.js"></script>

@@ -357,6 +357,91 @@ body {
     to { transform: rotate(360deg); }
 }
 
+/* Desync Gap Warning Badge in Header */
+.btn-sync-gap {
+    background-color: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #d97706;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-sync-gap:hover {
+    background-color: rgba(245, 158, 11, 0.22);
+    border-color: #d97706;
+}
+[data-theme="dark"] .btn-sync-gap {
+    color: #fbbf24;
+    background-color: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.45);
+}
+
+.sync-gap-alert-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background-color: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.sync-gap-alert-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.import-dropzone {
+    border: 2px dashed var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    text-align: center;
+    background-color: var(--bg-subtle);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.import-dropzone:hover, .import-dropzone.dragover {
+    border-color: var(--color-accent);
+    background-color: var(--bg-card);
+}
+
+.cli-import-box {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+}
+.cli-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+}
+.cli-code-block {
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-main);
+    overflow-x: auto;
+}
+
 /* Theme Switcher */
 .theme-switch-group {
     display: flex;

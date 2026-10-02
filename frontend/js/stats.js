@@ -185,6 +185,32 @@ const StatsController = {
             }
         }
 
+        // Desync Gap Warning Badge
+        const btnGap = document.getElementById('btn-sync-gap');
+        const gapLabel = document.getElementById('sync-gap-label');
+        if (btnGap) {
+            if (status.has_sync_gap) {
+                btnGap.classList.remove('hidden');
+                if (gapLabel) gapLabel.textContent = `Desync (${status.gap_days}d)`;
+                btnGap.onclick = () => {
+                    if (typeof ImportModal !== 'undefined') {
+                        ImportModal.show({ has_gap: true, days: status.gap_days });
+                    }
+                };
+            } else {
+                btnGap.classList.add('hidden');
+            }
+        }
+
+        const btnOpenImport = document.getElementById('btn-open-import');
+        if (btnOpenImport) {
+            btnOpenImport.onclick = () => {
+                if (typeof ImportModal !== 'undefined') {
+                    ImportModal.show({ has_gap: status.has_sync_gap, days: status.gap_days });
+                }
+            };
+        }
+
         // Cooldown button handling
         const cooldownSec = status.cooldown_remaining_seconds || 0;
         if (status.is_syncing) {
@@ -212,6 +238,9 @@ const StatsController = {
         this.updateOverview();
         this.updateSyncStatus();
         this.initScrollDock();
+        if (typeof ImportModal !== 'undefined') {
+            ImportModal.init();
+        }
 
         // Local 1-second in-memory countdown (0 HTTP requests sent over network)
         this.timerInterval = setInterval(() => {

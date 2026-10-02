@@ -1,0 +1,965 @@
+/* ============================================================
+   IBKR Calendar & Statistics Layout Styles
+   ============================================================ */
+
+/* ============================================================
+   1. SECTION 1: WEEKLY CARDS (IBKR Style)
+   ============================================================ */
+.section-week-container {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-margin-top: 76px;
+}
+
+.week-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.nav-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-ctrl {
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    color: var(--text-main);
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    border-radius: var(--radius-xs);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+.btn-ctrl:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--border-active);
+}
+
+.btn-pill {
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    color: var(--text-main);
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 12px;
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    line-height: 1;
+}
+
+.btn-pill:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--border-active);
+}
+
+.nav-title-text {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.section-summary-badge {
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 5 Horizontal Trading Day Cards (Mon-Fri) + 1 Week Total Card */
+.week-cards-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr) 1.2fr;
+    gap: 8px;
+}
+
+@media (max-width: 1200px) {
+    .week-cards-row {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+}
+
+.week-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 105px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.week-card:hover {
+    border-color: var(--border-active);
+    box-shadow: var(--shadow-sm);
+}
+
+.week-card.today {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+/* IBKR Green / Red Soft Tinted Cards */
+.week-card.card-win {
+    background-color: var(--color-profit-bg);
+    border-color: var(--color-profit-border);
+}
+
+.week-card.card-loss {
+    background-color: var(--color-loss-bg);
+    border-color: var(--color-loss-border);
+}
+
+.week-card.total-card {
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    cursor: default;
+}
+.week-card.total-card:hover {
+    border-color: var(--border-default);
+}
+
+.week-card-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding-bottom: 4px;
+}
+
+.week-card-weekday {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.week-card-daynumber {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.week-card-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+    gap: 4px;
+}
+
+.week-card-pnl {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.week-card-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.week-card-empty {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ============================================================
+   2. SECTION 2: MONTHLY CALENDAR GRID (8 COLUMNS)
+   ============================================================ */
+.section-month-container {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-margin-top: 76px;
+}
+
+.month-grid-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.month-weekdays-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr) 1.15fr;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.month-weekdays-row .col-sem,
+.month-weekdays-row .col-week {
+    color: var(--color-accent);
+    font-weight: 800;
+}
+
+.month-days-matrix {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr) 1.15fr;
+    gap: 4px;
+}
+
+.month-day-cell {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    padding: 8px;
+    min-height: 74px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.month-day-cell:hover {
+    border-color: var(--border-active);
+}
+
+.month-day-cell.today {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+/* IBKR Row / Cell Tints */
+.month-day-cell.cell-win {
+    background-color: var(--color-profit-bg);
+    border-color: var(--color-profit-border);
+}
+
+.month-day-cell.cell-loss {
+    background-color: var(--color-loss-bg);
+    border-color: var(--color-loss-border);
+}
+
+.month-day-cell.empty {
+    background-color: transparent;
+    border: 1px dashed var(--border-subtle);
+    opacity: 0.2;
+    cursor: default;
+}
+
+/* 8th Column: Weekly Total Cell */
+.month-day-cell.week-total-cell {
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    cursor: default;
+}
+
+.cell-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cell-day-num {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.cell-badge-count {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: var(--radius-xs);
+    background-color: var(--bg-subtle);
+    color: var(--text-secondary);
+}
+
+.cell-bottom {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.cell-pnl-val {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* ============================================================
+   3. SECTION 3: ANNUAL MATRIX & TOTALS
+   ============================================================ */
+.section-year-container {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-margin-top: 76px;
+}
+
+.annual-months-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+.annual-mini-month {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.annual-mini-month:hover {
+    border-color: var(--border-active);
+}
+
+.annual-month-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.annual-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.annual-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.annual-day-dot {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background-color: var(--bg-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: var(--text-muted);
+}
+
+.annual-day-dot.has-trades {
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.annual-day-dot.win {
+    background-color: var(--color-profit-bg);
+    color: var(--color-profit);
+    border: 1px solid var(--color-profit-border);
+}
+
+.annual-day-dot.loss {
+    background-color: var(--color-loss-bg);
+    color: var(--color-loss);
+    border: 1px solid var(--color-loss-border);
+}
+
+.annual-day-dot.empty {
+    visibility: hidden;
+}
+
+/* Annual Summary Ribbon */
+.annual-totals-ribbon {
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+}
+
+.ribbon-year-tag {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-main);
+    min-width: 44px;
+}
+
+.ribbon-months {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-grow: 1;
+}
+
+.ribbon-month-pill {
+    flex: 1;
+    min-width: 54px;
+    padding: 5px 3px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ribbon-month-pill:hover {
+    border-color: var(--border-active);
+}
+
+.ribbon-month-pill.win {
+    color: var(--color-profit);
+    background-color: var(--color-profit-bg);
+    border-color: var(--color-profit-border);
+}
+
+.ribbon-month-pill.loss {
+    color: var(--color-loss);
+    background-color: var(--color-loss-bg);
+    border-color: var(--color-loss-border);
+}
+
+.ribbon-annual-total {
+    min-width: 130px;
+    padding: 6px 12px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+}
+
+.ribbon-annual-total .tot-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.ribbon-annual-total .tot-val {
+    font-size: 14px;
+    font-weight: 800;
+}
+
+/* ============================================================
+   4. DETAILED STATS PAGE (IBKR Style)
+   ============================================================ */
+.stats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.stats-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+
+@media (max-width: 1400px) {
+    .stats-kpi-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+@media (max-width: 1100px) {
+    .stats-kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .stats-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.stat-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 86px;
+    gap: 6px;
+    transition: border-color 0.15s ease;
+}
+
+.stat-card:hover {
+    border-color: var(--border-active);
+}
+
+.stat-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stat-card-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stat-card-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1.1;
+}
+
+.stat-card-subtitle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+/* Rolling Win Rate Box */
+.rolling-winrate-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 4px 0;
+}
+
+.rolling-winrate-left {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.rolling-winrate-val {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.rolling-winrate-record {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.trend-delta-text {
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Stats Page Header Navigation */
+.stats-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 2px;
+}
+
+/* ============================================================
+   Stats Section Layouts & Charts
+   ============================================================ */
+.stats-main-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.stats-section-box {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.stats-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.stats-section-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-main);
+}
+
+
+.metric-toggles-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+}
+
+.metric-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: color 0.15s ease;
+}
+.metric-toggle-label:hover {
+    color: var(--text-main);
+}
+.metric-toggle-label input[type="checkbox"] {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--metric-color, #0066cc);
+}
+
+.metric-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.segmented-control {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    padding: 2px;
+    gap: 2px;
+}
+
+.segmented-btn {
+    background: transparent;
+    border: none;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.segmented-btn:hover {
+    color: var(--text-main);
+}
+.segmented-btn.active {
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    box-shadow: var(--shadow-sm);
+    font-weight: 700;
+}
+
+.chart-canvas-box {
+    position: relative;
+    width: 100%;
+    height: 280px;
+}
+.chart-canvas-box.tall {
+    height: 320px;
+}
+.chart-canvas-box.compact {
+    height: 240px;
+}
+
+/* Risk & Drawdown Grid */
+.risk-drawdown-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+@media (max-width: 1024px) {
+    .risk-drawdown-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 600px) {
+    .risk-drawdown-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.risk-stat-card {
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.risk-stat-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.risk-stat-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.risk-stat-subvalue {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* 2x2 Breakdowns Grid */
+.breakdowns-2x2-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+@media (max-width: 1100px) {
+    .breakdowns-2x2-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.stats-tables-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 16px;
+}
+
+@media (max-width: 1024px) {
+    .stats-tables-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.stats-panel {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 16px 18px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.stats-table-wrapper {
+    overflow-x: auto;
+}
+
+/* IBKR Institutional Table */
+.institutional-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.institutional-table th {
+    text-align: left;
+    padding: 8px 10px;
+    color: var(--text-muted);
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.institutional-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-main);
+}
+
+.institutional-table tr:hover td {
+    background-color: var(--bg-hover);
+}
+
+.exchange-tag {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-left: 4px;
+    text-transform: uppercase;
+}
+
+/* ============================================================
+   5. DAY TRADES MODAL
+   ============================================================ */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.modal-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-container {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    width: 90%;
+    max-width: 860px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+}
+
+.modal-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.modal-body {
+    padding: 18px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.modal-summary-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 14px;
+    background-color: var(--bg-card-secondary);
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-default);
+}
+
+.summary-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.summary-block-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.summary-block-val {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.modal-footer {
+    padding: 10px 18px;
+    border-top: 1px solid var(--border-default);
+    display: flex;
+    justify-content: flex-end;
+}

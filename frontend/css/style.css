@@ -1,0 +1,609 @@
+/* ============================================================
+   Interactive Brokers (IBKR) Theme
+   Authentic IBKR Design Language (Light Default & Dark Mode)
+   ============================================================ */
+
+:root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "SF Mono", "Roboto Mono", Menlo, Consolas, Monaco, monospace;
+    --radius-xs: 3px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-full: 9999px;
+}
+
+/* ============================================================
+   IBKR Light Theme (Default)
+   ============================================================ */
+:root, [data-theme="light"] {
+    --bg-app: #f4f6f8;
+    --bg-header: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-secondary: #f8f9fa;
+    --bg-hover: #f1f3f5;
+    --bg-subtle: #eef1f4;
+
+    --border-subtle: #e9ecef;
+    --border-default: #dee2e6;
+    --border-active: #0066cc;
+
+    --text-main: #1a1e24;
+    --text-secondary: #495057;
+    --text-muted: #868e96;
+    --text-inverse: #ffffff;
+
+    /* IBKR Brand Red */
+    --color-ibkr-red: #cc0000;
+    --color-ibkr-red-dark: #b30000;
+
+    /* IBKR Profit & Loss Colors */
+    --color-profit: #00875a;
+    --color-profit-bg: #eaf7ed;
+    --color-profit-border: #c3e6cb;
+    --color-profit-badge: #00875a;
+
+    --color-loss: #d32f2f;
+    --color-loss-bg: #fdeded;
+    --color-loss-border: #f5c6cb;
+    --color-loss-badge: #d32f2f;
+
+    /* IBKR Blue Accents */
+    --color-accent: #0066cc;
+    --color-accent-soft: #e7f1ff;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* ============================================================
+   IBKR Dark Theme
+   ============================================================ */
+[data-theme="dark"] {
+    --bg-app: #0e131d;
+    --bg-header: #141b29;
+    --bg-card: #182030;
+    --bg-card-secondary: #1e283d;
+    --bg-hover: #26334d;
+    --bg-subtle: #1e283d;
+
+    --border-subtle: #232f46;
+    --border-default: #314261;
+    --border-active: #38bdf8;
+
+    --text-main: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text-inverse: #0f172a;
+
+    --color-ibkr-red: #e53935;
+    --color-ibkr-red-dark: #c62828;
+
+    --color-profit: #22c55e;
+    --color-profit-bg: rgba(34, 197, 94, 0.12);
+    --color-profit-border: rgba(34, 197, 94, 0.3);
+    --color-profit-badge: #16a34a;
+
+    --color-loss: #ef4444;
+    --color-loss-bg: rgba(239, 68, 68, 0.12);
+    --color-loss-border: rgba(239, 68, 68, 0.3);
+    --color-loss-badge: #dc2626;
+
+    --color-accent: #38bdf8;
+    --color-accent-soft: rgba(56, 189, 248, 0.15);
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Base resets */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-app);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum" 1;
+}
+
+/* ============================================================
+   Top IBKR Header
+   ============================================================ */
+.app-header {
+    background-color: var(--bg-header);
+    border-bottom: 1px solid var(--border-default);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-sm);
+}
+
+.header-inner {
+    max-width: 1560px;
+    margin: 0 auto;
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+/* Left: IBKR Brand & Main Navigation Tabs */
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.brand-badge {
+    width: 28px;
+    height: 28px;
+    background: var(--color-ibkr-red);
+    color: #ffffff;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 11.5px;
+    letter-spacing: -0.4px;
+    box-shadow: 0 1px 2px rgba(204, 0, 0, 0.3);
+}
+
+.brand-title {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    color: var(--text-main);
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.brand-title span {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.main-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tab-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tab-btn:hover {
+    color: var(--text-main);
+}
+
+.tab-btn.active {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+    font-weight: 700;
+}
+
+/* ============================================================
+   Header Docked Mini KPI (Tucked into header on scroll)
+   ============================================================ */
+.header-mini-kpi {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 4px 14px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-8px) scale(0.95);
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, border-color 0.15s ease;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: var(--shadow-sm);
+}
+
+.header-mini-kpi:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--border-active);
+}
+
+.header-mini-kpi.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+.mini-kpi-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.mini-kpi-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mini-kpi-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.mini-kpi-divider {
+    width: 1px;
+    height: 14px;
+    background-color: var(--border-default);
+}
+
+@media (max-width: 1100px) {
+    .header-mini-kpi {
+        display: none !important;
+    }
+}
+
+/* Right: Sync Controls & Theme Switcher */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Sync Controls */
+.sync-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sync-status-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 11px;
+    line-height: 1.25;
+}
+
+.sync-updated {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.sync-countdown {
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.btn-sync-action {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    color: var(--text-main);
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-sync-action:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.btn-sync-action:disabled,
+.btn-sync-action.disabled {
+    opacity: 0.45;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    background-color: var(--bg-subtle) !important;
+    color: var(--text-muted) !important;
+    border-color: var(--border-subtle) !important;
+}
+
+.btn-sync-action.spinning svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Desync Gap Warning Badge in Header */
+.btn-sync-gap {
+    background-color: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #d97706;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-sync-gap:hover {
+    background-color: rgba(245, 158, 11, 0.22);
+    border-color: #d97706;
+}
+[data-theme="dark"] .btn-sync-gap {
+    color: #fbbf24;
+    background-color: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.45);
+}
+
+.sync-gap-alert-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background-color: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.sync-gap-alert-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.import-dropzone {
+    border: 2px dashed var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    text-align: center;
+    background-color: var(--bg-subtle);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.import-dropzone:hover, .import-dropzone.dragover {
+    border-color: var(--color-accent);
+    background-color: var(--bg-card);
+}
+
+.cli-import-box {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+}
+.cli-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+}
+.cli-code-block {
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-main);
+    overflow-x: auto;
+}
+
+/* Theme Switcher */
+.theme-switch-group {
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-subtle);
+    padding: 2px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+}
+
+.theme-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.theme-btn:hover {
+    color: var(--text-main);
+}
+
+.theme-btn.active {
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ============================================================
+   Main Layout & Content Area
+   ============================================================ */
+.main-content {
+    max-width: 1560px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex-grow: 1;
+}
+
+/* ============================================================
+   Global Executive KPI Summary Banner (IBKR Style - Sticky in Calendar)
+   ============================================================ */
+#view-calendar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.kpi-summary-banner {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+
+.kpi-banner-item {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.kpi-banner-item:hover {
+    border-color: var(--border-active);
+}
+
+.kpi-banner-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.kpi-banner-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1.1;
+}
+
+.kpi-banner-divider {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    .kpi-summary-banner {
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 10px;
+    }
+}
+
+/* Utility / Visibility */
+.hidden {
+    display: none !important;
+}
+
+.page-view {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-default);
+    margin-bottom: 10px;
+}
+
+.section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Data Values & Colors */
+.pnl-positive {
+    color: var(--color-profit) !important;
+}
+.pnl-negative {
+    color: var(--color-loss) !important;
+}
+.pnl-neutral {
+    color: var(--text-main) !important;
+}
+
+/* IBKR Solid Pill Badges */
+.badge-pill-profit {
+    background-color: var(--color-profit-badge);
+    color: #ffffff !important;
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.badge-pill-loss {
+    background-color: var(--color-loss-badge);
+    color: #ffffff !important;
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+    font-weight: 700;
+    font-size: 12px;
+}

@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -89,27 +91,29 @@ async def api_save_settings(settings: dict):
 
 
 @app.get("/api/stats/overview")
-async def api_stats_overview(start_date: str = None, end_date: str = None):
+async def api_stats_overview(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Returns top KPI bar metrics."""
     return get_overview_stats(start_date=start_date, end_date=end_date)
 
+
 @app.get("/api/stats/detailed")
-async def api_stats_detailed(start_date: str = None, end_date: str = None):
+async def api_stats_detailed(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Returns comprehensive trading performance analytics."""
     return get_detailed_stats(start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/calendar/year")
-async def api_calendar_year(year: int = Query(default=None)):
+async def api_calendar_year(year: Optional[int] = Query(default=None)):
     """Returns 12-month calendar matrix and monthly summaries."""
     if year is None:
         year = date.today().year
     return get_year_calendar(year)
 
+
 @app.get("/api/calendar/month")
 async def api_calendar_month(
-    year: int = Query(default=None),
-    month: int = Query(default=None)
+    year: Optional[int] = Query(default=None),
+    month: Optional[int] = Query(default=None)
 ):
     """Returns monthly calendar grid data."""
     today = date.today()
@@ -119,12 +123,14 @@ async def api_calendar_month(
         month = today.month
     return get_month_calendar(year, month)
 
+
 @app.get("/api/calendar/week")
-async def api_calendar_week(date_str: str = Query(default=None, alias="date")):
+async def api_calendar_week(date_str: Optional[str] = Query(default=None, alias="date")):
     """Returns 7-day card breakdown."""
     if not date_str:
         date_str = date.today().isoformat()
     return get_week_calendar(date_str)
+
 
 @app.get("/api/trades/day")
 async def api_day_trades(date_str: str = Query(..., alias="date")):

@@ -622,7 +622,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             })
 
         # 5. P&L by Holding Duration (Scalp vs Day Trade vs Swing)
-        duration_data = {
+        duration_data: Dict[str, Dict[str, Any]] = {
             "Scalp (<1h)": {"duration": "Scalp (<1h)", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
             "Day Trade (<1d)": {"duration": "Day Trade (<1d)", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
             "Swing Trade (>1d)": {"duration": "Swing Trade (>1d)", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
@@ -630,26 +630,30 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         for t in all_trades:
             dur_key = trade_durations.get(t["id"], "Day Trade (<1d)")
             if dur_key in duration_data:
-                duration_data[dur_key]["trades_count"] += 1
+                duration_data[dur_key]["trades_count"] = int(duration_data[dur_key]["trades_count"]) + 1
                 if t["realized_pnl"] > 0:
-                    duration_data[dur_key]["wins"] += 1
+                    duration_data[dur_key]["wins"] = int(duration_data[dur_key]["wins"]) + 1
                 elif t["realized_pnl"] < 0:
-                    duration_data[dur_key]["losses"] += 1
-                duration_data[dur_key]["net_pnl"] += t["net_pnl"]
+                    duration_data[dur_key]["losses"] = int(duration_data[dur_key]["losses"]) + 1
+                duration_data[dur_key]["net_pnl"] = float(duration_data[dur_key]["net_pnl"]) + float(t["net_pnl"])
 
         holding_durations = []
         for key in ["Scalp (<1h)", "Day Trade (<1d)", "Swing Trade (>1d)"]:
             d_val = duration_data[key]
-            cnt = d_val["trades_count"]
-            wr = round((d_val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+            cnt = int(d_val["trades_count"])
+            wins = int(d_val["wins"])
+            losses = int(d_val["losses"])
+            net_pnl = float(d_val["net_pnl"])
+            wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
             holding_durations.append({
                 "duration": key,
                 "trades_count": cnt,
-                "wins": d_val["wins"],
-                "losses": d_val["losses"],
+                "wins": wins,
+                "losses": losses,
                 "win_rate": wr,
-                "net_pnl": round(d_val["net_pnl"], 2)
+                "net_pnl": round(net_pnl, 2)
             })
+
 
         # 6. P&L by Order Type (Limit vs Market vs Stop)
         order_type_map = {

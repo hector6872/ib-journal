@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
+
 from typing import Any, Dict, Optional
 
 from backend.config import (

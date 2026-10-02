@@ -1,17 +1,15 @@
 import asyncio
 import logging
-import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import date
-from typing import Any, Dict, List, Tuple
-
-
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+import xml.etree.ElementTree as ET
 
 try:
     import httpx
 except ImportError:
-    httpx = None
+    httpx = None  # type: ignore[assignment]
 
 from backend.config import IBKR_QUERY_ID, IBKR_TOKEN
 
@@ -27,21 +25,22 @@ class IBKRFlexClient:
 
     async def _http_get(self, url: str, params: Dict[str, str]) -> Tuple[int, str]:
         """Performs GET request via httpx or urllib."""
-        query_string = urllib.parse.urlencode(params)
+        query_string = urlencode(params)
         full_url = f"{url}?{query_string}"
 
-        if httpx:
+        if httpx is not None:
             async with httpx.AsyncClient(timeout=30.0, headers={"User-Agent": "IB-Journal/1.0"}) as client:
                 resp = await client.get(full_url)
                 return resp.status_code, resp.text
         else:
             # Standard library urllib fallback
-            req = urllib.request.Request(full_url, headers={"User-Agent": "IB-Journal/1.0"})
+            req = Request(full_url, headers={"User-Agent": "IB-Journal/1.0"})
             loop = asyncio.get_event_loop()
             def sync_req():
-                with urllib.request.urlopen(req, timeout=30) as r:
+                with urlopen(req, timeout=30) as r:
                     return r.status, r.read().decode('utf-8')
             return await loop.run_in_executor(None, sync_req)
+
 
     async def fetch_statement_xml(self) -> str:
         """

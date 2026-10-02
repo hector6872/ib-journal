@@ -11,11 +11,11 @@ const StatsPage = {
     activeMetrics: {
         win_rate: true,
         profit_factor: true,
-        avg_win: false,
-        avg_loss: false,
-        expectancy: false,
-        avg_trade_pnl: false,
-        cumulative_pnl: false
+        avg_win: true,
+        avg_loss: true,
+        expectancy: true,
+        avg_trade_pnl: true,
+        cumulative_pnl: true
     },
     viewModes: {
         symbol: 'chart',
@@ -220,9 +220,9 @@ const StatsPage = {
                     </div>
                 </div>
 
-                <!-- 1. Primary Executive KPI Cards Grid (4 Columns) -->
-                <div class="stats-kpi-grid">
-                    <!-- P&L -->
+                <!-- 1. Primary Executive KPI Cards Grid (5 Columns - Matching Calendar Initial Order) -->
+                <div class="stats-kpi-grid" id="stats-kpi-grid">
+                    <!-- 1. Net Realized P&L -->
                     <div class="stat-card">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.netPnl}</span>
@@ -231,11 +231,11 @@ const StatsPage = {
                             ${State.formatCurrency(ov.net_pnl || 0)}
                         </span>
                         <span class="stat-card-subtitle mono">
-                            ${sp.grossLabel} ${State.formatCurrency(ov.gross_pnl || 0)} · <span class="${(ov.total_commissions || 0) > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${(ov.total_commissions || 0).toFixed(2)} ${sp.feesLabel}</span>
+                            ${sp.grossLabel} ${State.formatCurrency(ov.gross_pnl || 0)} · -${State.currency}${(ov.total_commissions || 0).toFixed(2)} ${sp.feesLabel}
                         </span>
                     </div>
 
-                    <!-- Win Rate -->
+                    <!-- 2. Win Rate -->
                     <div class="stat-card">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.winRate}</span>
@@ -248,7 +248,7 @@ const StatsPage = {
                         </span>
                     </div>
 
-                    <!-- Profit Factor -->
+                    <!-- 3. Profit Factor -->
                     <div class="stat-card">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.profitFactor}</span>
@@ -261,98 +261,7 @@ const StatsPage = {
                         </span>
                     </div>
 
-                    <!-- Adj. Win/Loss Ratio -->
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <span class="stat-card-label">${sp.adjWinLossRatio}</span>
-                        </div>
-                        <span class="stat-card-value mono ${this.getRatioClass(ov.adj_win_loss_ratio, ov.total_trades)}">
-                            ${(ov.adj_win_loss_ratio || 0).toFixed(2)}
-                        </span>
-                        <span class="stat-card-subtitle mono">
-                            Payoff ${(ov.avg_loss > 0 ? (ov.avg_win / ov.avg_loss).toFixed(2) : '--')}
-                        </span>
-                    </div>
-
-                    <!-- Sharpe (per trade) -->
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <span class="stat-card-label">${sp.sharpeRatio}</span>
-                        </div>
-                        <span class="stat-card-value mono ${this.getPnlClass(ov.sharpe_per_trade)}">
-                            ${(ov.sharpe_per_trade || 0).toFixed(2)}
-                        </span>
-                        <span class="stat-card-subtitle mono">
-                            Statistical efficiency
-                        </span>
-                    </div>
-
-                    <!-- Total Trades -->
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <span class="stat-card-label">${sp.totalTrades}</span>
-                        </div>
-                        <span class="stat-card-value mono pnl-neutral">
-                            ${State.formatNumber(ov.total_trades || 0)}
-                        </span>
-                        <span class="stat-card-subtitle mono">
-                            ${ov.winning_trades || 0}W · ${ov.losing_trades || 0}L · ${ov.breakeven_trades || 0}BE
-                        </span>
-                    </div>
-
-                    <!-- Avg Win -->
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <span class="stat-card-label">${sp.avgWin}</span>
-                        </div>
-                        <span class="stat-card-value mono ${ov.avg_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
-                            ${State.formatCurrency(ov.avg_win || 0)}
-                        </span>
-                        <span class="stat-card-subtitle mono">
-                            ${ov.winning_trades || 0} winning trades
-                        </span>
-                    </div>
-
-                    <!-- Avg Loss -->
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <span class="stat-card-label">${sp.avgLoss}</span>
-                        </div>
-                        <span class="stat-card-value mono ${ov.avg_loss > 0 ? 'pnl-negative' : 'pnl-neutral'}">
-                            ${State.formatCurrency(-(ov.avg_loss || 0))}
-                        </span>
-                        <span class="stat-card-subtitle mono">
-                            ${ov.losing_trades || 0} losing trades
-                        </span>
-                    </div>
-
-                    <!-- Largest Win -->
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <span class="stat-card-label">${sp.largestWin}</span>
-                        </div>
-                        <span class="stat-card-value mono ${ov.largest_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
-                            ${State.formatCurrency(ov.largest_win || 0)}
-                        </span>
-                        <span class="stat-card-subtitle mono">
-                            ${ov.largest_win_symbol ? `${ov.largest_win_symbol} · ` : ''}Single peak return
-                        </span>
-                    </div>
-
-                    <!-- Largest Loss -->
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <span class="stat-card-label">${sp.largestLoss}</span>
-                        </div>
-                        <span class="stat-card-value mono ${ov.largest_loss < 0 ? 'pnl-negative' : 'pnl-neutral'}">
-                            ${State.formatCurrency(ov.largest_loss || 0)}
-                        </span>
-                        <span class="stat-card-subtitle mono">
-                            ${ov.largest_loss_symbol ? `${ov.largest_loss_symbol} · ` : ''}Single worst loss
-                        </span>
-                    </div>
-
-                    <!-- Expectancy -->
+                    <!-- 4. Expectancy -->
                     <div class="stat-card">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
@@ -365,7 +274,98 @@ const StatsPage = {
                         </span>
                     </div>
 
-                    <!-- Avg Win Hold -->
+                    <!-- 5. Total Trades -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.totalTrades}</span>
+                        </div>
+                        <span class="stat-card-value mono pnl-neutral">
+                            ${State.formatNumber(ov.total_trades || 0)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            ${ov.winning_trades || 0}W · ${ov.losing_trades || 0}L · ${ov.breakeven_trades || 0}BE
+                        </span>
+                    </div>
+
+                    <!-- 6. Avg Win -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.avgWin}</span>
+                        </div>
+                        <span class="stat-card-value mono ${ov.avg_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
+                            ${State.formatCurrency(ov.avg_win || 0)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            ${ov.winning_trades || 0} winning trades
+                        </span>
+                    </div>
+
+                    <!-- 7. Avg Loss -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.avgLoss}</span>
+                        </div>
+                        <span class="stat-card-value mono ${ov.avg_loss > 0 ? 'pnl-negative' : 'pnl-neutral'}">
+                            ${State.formatCurrency(-(ov.avg_loss || 0))}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            ${ov.losing_trades || 0} losing trades
+                        </span>
+                    </div>
+
+                    <!-- 8. Largest Gain -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.largestWin}</span>
+                        </div>
+                        <span class="stat-card-value mono ${ov.largest_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
+                            ${State.formatCurrency(ov.largest_win || 0)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            ${ov.largest_win_symbol ? `${ov.largest_win_symbol} · ` : ''}Single peak return
+                        </span>
+                    </div>
+
+                    <!-- 9. Largest Loss -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.largestLoss}</span>
+                        </div>
+                        <span class="stat-card-value mono ${ov.largest_loss < 0 ? 'pnl-negative' : 'pnl-neutral'}">
+                            ${State.formatCurrency(ov.largest_loss || 0)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            ${ov.largest_loss_symbol ? `${ov.largest_loss_symbol} · ` : ''}Single worst loss
+                        </span>
+                    </div>
+
+                    <!-- 10. Adj. Win/Loss Ratio -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.adjWinLossRatio}</span>
+                        </div>
+                        <span class="stat-card-value mono ${this.getRatioClass(ov.adj_win_loss_ratio, ov.total_trades)}">
+                            ${(ov.adj_win_loss_ratio || 0).toFixed(2)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            Payoff ${(ov.avg_loss > 0 ? (ov.avg_win / ov.avg_loss).toFixed(2) : '--')}
+                        </span>
+                    </div>
+
+                    <!-- 11. Sharpe Ratio -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.sharpeRatio}</span>
+                        </div>
+                        <span class="stat-card-value mono ${this.getPnlClass(ov.sharpe_per_trade)}">
+                            ${(ov.sharpe_per_trade || 0).toFixed(2)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            Statistical efficiency
+                        </span>
+                    </div>
+
+                    <!-- 12. Avg Win Hold -->
                     <div class="stat-card">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgWinHold}</span>
@@ -378,7 +378,7 @@ const StatsPage = {
                         </span>
                     </div>
 
-                    <!-- Avg Loss Hold -->
+                    <!-- 13. Avg Loss Hold -->
                     <div class="stat-card">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgLossHold}</span>
@@ -388,6 +388,32 @@ const StatsPage = {
                         </span>
                         <span class="stat-card-subtitle mono">
                             ${ov.losing_trades || 0} losses duration
+                        </span>
+                    </div>
+
+                    <!-- 14. Gross Realized P&L -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.grossPnl}</span>
+                        </div>
+                        <span class="stat-card-value mono ${this.getPnlClass(ov.gross_pnl)}">
+                            ${State.formatCurrency(ov.gross_pnl || 0)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            Total trading returns
+                        </span>
+                    </div>
+
+                    <!-- 15. Total Commissions & Fees -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${sp.totalCommissions}</span>
+                        </div>
+                        <span class="stat-card-value mono ${(ov.total_commissions || 0) > 0 ? 'pnl-negative' : 'pnl-neutral'}">
+                            -${State.currency}${(ov.total_commissions || 0).toFixed(2)}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            IBKR execution costs
                         </span>
                     </div>
                 </div>
@@ -805,6 +831,9 @@ const StatsPage = {
 
         this.bindEvents();
         this.initAllCharts();
+        if (typeof StatsController !== 'undefined' && StatsController.updateScrollDockVisibility) {
+            StatsController.updateScrollDockVisibility();
+        }
     },
 
     bindEvents() {
@@ -1816,7 +1845,7 @@ const StatsPage = {
 
     buildSideTableRows(sides) {
         if (!sides || !sides.length) {
-            return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No operations</td></tr>`;
+            return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No trades</td></tr>`;
         }
         return sides.map(s => {
             const isBuy = s.side === 'BUY';

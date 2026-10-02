@@ -11,7 +11,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
     - Net Win Rate & Gross Win Rate (before costs)
     - Profit Factor (PF) & Adjusted Win/Loss Ratio
     - Expectancy & Sharpe Ratio per trade
-    - Total Operations, Avg Win, Avg Loss, Largest Win, Largest Loss
+    - Total Trades, Avg Win, Avg Loss, Largest Win, Largest Loss
     """
     query = """
     SELECT 

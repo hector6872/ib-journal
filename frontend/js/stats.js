@@ -65,12 +65,13 @@ const StatsController = {
         });
 
         const updateVisibility = () => {
-            if (typeof App !== 'undefined' && App.activeTab !== 'calendar') {
-                headerMini.classList.remove('visible');
-                return;
+            let bannerCard = null;
+            if (typeof App !== 'undefined' && App.activeTab === 'stats') {
+                bannerCard = document.getElementById('stats-kpi-grid');
+            } else {
+                bannerCard = document.getElementById('global-kpi-banner');
             }
 
-            const bannerCard = document.getElementById('global-kpi-banner');
             if (!bannerCard) {
                 headerMini.classList.remove('visible');
                 return;
@@ -93,15 +94,19 @@ const StatsController = {
     updateScrollDockVisibility() {
         const headerMini = document.getElementById('header-mini-kpi');
         if (!headerMini) return;
-        if (typeof App !== 'undefined' && App.activeTab !== 'calendar') {
-            headerMini.classList.remove('visible');
-            return;
+
+        let bannerCard = null;
+        if (typeof App !== 'undefined' && App.activeTab === 'stats') {
+            bannerCard = document.getElementById('stats-kpi-grid');
+        } else {
+            bannerCard = document.getElementById('global-kpi-banner');
         }
-        const bannerCard = document.getElementById('global-kpi-banner');
+
         if (!bannerCard) {
             headerMini.classList.remove('visible');
             return;
         }
+
         const rect = bannerCard.getBoundingClientRect();
         if (rect.bottom <= 56) {
             headerMini.classList.add('visible');

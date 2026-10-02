@@ -23,7 +23,8 @@ const STRINGS = {
     // Header & KPIs
     kpi: {
         winRate: "Win Rate",
-        operations: "Operations",
+        trades: "Total Trades",
+        operations: "Total Trades",
         profitFactor: "Profit Factor",
         expectancy: "Expectancy",
         netPnl: "Net P&L",
@@ -62,7 +63,7 @@ const STRINGS = {
         weekOf: "Week of",
         weekTotal: "WEEK TOTAL",
         weekCol: "WEEK TOTAL",
-        noTradesDay: "No operations",
+        noTradesDay: "No trades",
         tradesBadge: "trades",
         tradeSingleBadge: "trade",
         yearHeader: "YEAR",

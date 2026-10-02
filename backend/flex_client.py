@@ -1,10 +1,11 @@
 import asyncio
 import logging
+import xml.etree.ElementTree as ET
 from datetime import date
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-import xml.etree.ElementTree as ET
+
 
 try:
     import httpx

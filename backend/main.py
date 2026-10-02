@@ -2,9 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional
-
-
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +24,7 @@ from backend.settings import get_all_settings, update_settings
 
 
 # Logging configuration (Stdout / RAM-friendly)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"

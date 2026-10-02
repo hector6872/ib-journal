@@ -6,8 +6,8 @@ from typing import Any, Dict, Generator, List
 from backend.config import DB_PATH
 
 
-
 logger = logging.getLogger("ib-journal.db")
+
 
 def get_connection() -> sqlite3.Connection:
     """

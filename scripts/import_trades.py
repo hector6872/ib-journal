@@ -193,7 +193,8 @@ def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
         return []
 
     # Check if this is an IBKR multi-section Activity Statement
-    is_activity_statement = any(l.startswith("Trades,Header") or l.startswith("Trades,Data") for l in lines[:50])
+    is_activity_statement = any(line_item.startswith("Trades,Header") or line_item.startswith("Trades,Data") for line_item in lines[:50])
+
 
     if is_activity_statement:
         trades = parse_ibkr_activity_statement_csv(lines)

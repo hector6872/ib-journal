@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional
 from backend.database import db_session
 
 
-
 def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
+
     """
     Computes global trading performance KPIs:
     - Net P&L & Gross P&L & Fees

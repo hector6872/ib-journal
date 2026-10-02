@@ -12,9 +12,8 @@ from backend.settings import get_all_settings, update_settings
 from scripts.import_trades import parse_datetime_str, parse_ibkr_activity_statement_csv
 
 
-
-
 class TestIBKRJournal(unittest.TestCase):
+
     def setUp(self):
         """Creates an isolated temporary SQLite database for each test run."""
         self.tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)

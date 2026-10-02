@@ -1,9 +1,10 @@
-from contextlib import contextmanager
 import logging
 import sqlite3
+from contextlib import contextmanager
 from typing import Any, Dict, Generator, List
 
 from backend.config import DB_PATH
+
 
 
 logger = logging.getLogger("ib-journal.db")

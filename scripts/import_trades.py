@@ -7,14 +7,15 @@ Idempotent and safe to run multiple times without creating duplicates.
 
 import argparse
 import csv
-from datetime import date
 import glob
 import hashlib
 import logging
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Tuple
 import xml.etree.ElementTree as ET
+from datetime import date
+from typing import Any, Dict, List, Tuple
+
 
 
 # Add project root to sys.path

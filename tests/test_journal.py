@@ -205,6 +205,32 @@ Trades,Data,Order,Equity and Index Options,EUR,SPY 230120C400000,"2023-01-16, 16
             if settings_file.exists():
                 settings_file.unlink()
 
+    def test_environment_auto_sync_toggle(self):
+        """Tests that dev/debug mode disables automatic sync, while prod enables it."""
+        from backend.config import is_production
+        import backend.config as cfg
+        
+        orig_env = cfg.ENVIRONMENT
+        orig_debug = cfg.DEBUG
+        try:
+            cfg.ENVIRONMENT = "dev"
+            cfg.DEBUG = False
+            self.assertFalse(is_production())
+
+            cfg.ENVIRONMENT = "debug"
+            self.assertFalse(is_production())
+
+            cfg.ENVIRONMENT = "prod"
+            cfg.DEBUG = False
+            self.assertTrue(is_production())
+
+            cfg.ENVIRONMENT = "prod"
+            cfg.DEBUG = True
+            self.assertFalse(is_production())
+        finally:
+            cfg.ENVIRONMENT = orig_env
+            cfg.DEBUG = orig_debug
+
 
 if __name__ == "__main__":
     unittest.main()

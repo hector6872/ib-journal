@@ -174,7 +174,9 @@ const StatsController = {
                 }
             }
             if (elNext) {
-                if (status.next_sync_time) {
+                if (status.is_auto_sync_enabled === false) {
+                    elNext.textContent = STRINGS.sync.devMode;
+                } else if (status.next_sync_time) {
                     const nextDate = new Date(status.next_sync_time);
                     const diffMs = nextDate - new Date();
                     const diffMins = Math.max(0, Math.round(diffMs / 60000));

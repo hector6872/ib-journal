@@ -45,6 +45,7 @@ const STRINGS = {
         marketOpen: "Market Open",
         success: "Sync completed successfully",
         error: "Sync error",
+        devMode: "Dev Mode (Manual only)",
     },
 
     // Calendar Section Headers

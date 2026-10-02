@@ -40,12 +40,30 @@ def is_ibkr_configured() -> bool:
     return True
 
 
+# Environment & Debug Mode
+ENVIRONMENT = os.getenv("ENVIRONMENT", os.getenv("ENV", "prod")).strip().lower()
+DEBUG = os.getenv("DEBUG", "false").strip().lower() in ("true", "1", "yes")
+
+def is_production() -> bool:
+    """
+    Returns True if running in production mode.
+    In 'dev', 'development', or 'debug' mode, automatic background sync is disabled.
+    """
+    if DEBUG or ENVIRONMENT in ("dev", "development", "debug"):
+        return False
+    return True
+
+
 # Server Configuration
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 # Display Settings
 CURRENCY_SYMBOL = os.getenv("CURRENCY_SYMBOL", "€")
+
+# Sync Settings
+SYNC_INTERVAL_MINUTES = int(os.getenv("SYNC_INTERVAL_MINUTES", "60"))
+SYNC_COOLDOWN_SECONDS = int(os.getenv("SYNC_COOLDOWN_SECONDS", "600"))
 
 # Database Path
 DB_PATH = BASE_DIR / os.getenv("DB_PATH", "data/journal.db")

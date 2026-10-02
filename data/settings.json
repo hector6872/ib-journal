@@ -1,6 +1,6 @@
 {
   "theme": "light",
-  "activeTab": "stats",
+  "activeTab": "calendar",
   "stats_date_range": "ALL",
   "stats_timeframe": "day",
   "stats_rolling_window": "10",

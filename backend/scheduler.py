@@ -15,17 +15,18 @@ from typing import Dict, Any, Optional
 from backend.config import (
     IBKR_TOKEN,
     IBKR_QUERY_ID,
-    is_ibkr_configured
+    ENVIRONMENT,
+    DEBUG,
+    SYNC_INTERVAL_MINUTES,
+    SYNC_COOLDOWN_SECONDS,
+    is_ibkr_configured,
+    is_production,
 )
 from backend.database import upsert_trades, db_session
 from backend.flex_client import IBKRFlexClient
 
 logger = logging.getLogger("ib-journal.scheduler")
 
-
-# Internal defaults (Hourly sync during active global market sessions)
-SYNC_INTERVAL_MINUTES = 60
-SYNC_COOLDOWN_SECONDS = 600
 
 class SyncScheduler:
     def __init__(self):
@@ -172,6 +173,9 @@ class SyncScheduler:
     def start(self):
         if not is_ibkr_configured():
             return
+        if not is_production():
+            logger.info(f"Environment is '{ENVIRONMENT}' (dev/debug mode). Automatic background sync loop is disabled.")
+            return
         if self._task is None:
             self._task = asyncio.create_task(self._loop())
 
@@ -182,6 +186,7 @@ class SyncScheduler:
 
     def get_status(self) -> Dict[str, Any]:
         configured = is_ibkr_configured()
+        in_prod = is_production()
         status_val = self.last_sync_status if configured else "unconfigured"
         msg_val = self.last_sync_message if configured else "IBKR credentials not configured in .env"
 
@@ -228,8 +233,10 @@ class SyncScheduler:
 
         return {
             "is_configured": configured,
+            "environment": ENVIRONMENT,
+            "is_auto_sync_enabled": in_prod,
             "last_sync_time": self.last_sync_time.isoformat() if (configured and self.last_sync_time) else None,
-            "next_sync_time": (self.next_sync_time.isoformat() if self.next_sync_time else self.calculate_next_sync_time().isoformat()) if configured else None,
+            "next_sync_time": (self.next_sync_time.isoformat() if (self.next_sync_time and in_prod) else (self.calculate_next_sync_time().isoformat() if in_prod else None)) if configured else None,
             "status": status_val,
             "message": msg_val,
             "trades_count": self.last_trades_count if configured else 0,

@@ -1,18 +1,15 @@
-import xml.etree.ElementTree as ET
-import logging
 import asyncio
-from datetime import datetime, date, timedelta
-import random
-import urllib.request
-import urllib.parse
-from typing import List, Dict, Any, Tuple, Optional
+import logging
+import xml.etree.ElementTree as ET
+from datetime import date
+from typing import Any, Dict, List, Tuple
 
 try:
     import httpx
 except ImportError:
     httpx = None
 
-from backend.config import IBKR_TOKEN, IBKR_QUERY_ID
+from backend.config import IBKR_QUERY_ID, IBKR_TOKEN
 
 logger = logging.getLogger("ib-journal.flex")
 

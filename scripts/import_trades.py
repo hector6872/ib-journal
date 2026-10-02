@@ -5,24 +5,23 @@ Imports multiple CSV, XML, Flex Queries, or Activity Statements into the IBKR Jo
 Idempotent and safe to run multiple times without creating duplicates.
 """
 
-import sys
-import os
+import argparse
 import csv
 import glob
 import hashlib
-import argparse
 import logging
+import sys
 import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
-from datetime import datetime, date
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.database import init_db, upsert_trades, db_session
-from backend.config import DB_PATH
+from backend.config import DB_PATH  # noqa: E402
+from backend.database import init_db, upsert_trades  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,

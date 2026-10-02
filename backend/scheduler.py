@@ -1,28 +1,18 @@
 import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    try:
-        from pytz import timezone as ZoneInfo
-    except ImportError:
-        ZoneInfo = None
-
-from typing import Dict, Any, Optional
-
+from typing import Any, Dict, Optional
 
 from backend.config import (
-    IBKR_TOKEN,
-    IBKR_QUERY_ID,
     ENVIRONMENT,
-    DEBUG,
-    SYNC_INTERVAL_MINUTES,
+    IBKR_QUERY_ID,
+    IBKR_TOKEN,
     SYNC_COOLDOWN_SECONDS,
+    SYNC_INTERVAL_MINUTES,
     is_ibkr_configured,
     is_production,
 )
-from backend.database import upsert_trades, db_session
+from backend.database import db_session, upsert_trades
 from backend.flex_client import IBKRFlexClient
 
 logger = logging.getLogger("ib-journal.scheduler")

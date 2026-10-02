@@ -855,7 +855,6 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
     month_net_pnl = 0.0
     month_trades_count = 0
     month_wins = 0
-    month_losses = 0
 
     with db_session() as conn:
         cursor = conn.cursor()
@@ -873,7 +872,6 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
             month_net_pnl += pnl
             month_trades_count += row["trades_count"]
             month_wins += row["wins"]
-            month_losses += row["losses"]
 
     # Fill empty days for complete calendar mapping
     days_list = []

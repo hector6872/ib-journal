@@ -7,10 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from backend.config import BASE_DIR, HOST, PORT, CURRENCY_SYMBOL, IBKR_TOKEN, IBKR_QUERY_ID, is_ibkr_configured
+from backend.config import BASE_DIR, HOST, PORT, is_ibkr_configured
 from backend.database import init_db
-from backend.settings import get_all_settings, update_settings
 from backend.scheduler import scheduler
+from backend.settings import get_all_settings, update_settings
 from backend.analytics import (
     get_overview_stats,
     get_detailed_stats,

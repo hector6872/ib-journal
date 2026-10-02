@@ -1,28 +1,14 @@
-import unittest
-import sqlite3
 import tempfile
+import unittest
 from pathlib import Path
-from datetime import date
 
-from backend.database import init_db, upsert_trades, db_session
 import backend.config as config
 import backend.database as database
 import backend.settings as settings_mod
-from backend.analytics import (
-    get_overview_stats,
-    get_detailed_stats,
-    get_year_calendar,
-    get_month_calendar,
-    get_week_calendar,
-    get_day_trades,
-)
+from backend.analytics import get_detailed_stats, get_overview_stats
+from backend.database import db_session, init_db, upsert_trades
 from backend.settings import get_all_settings, update_settings
-from scripts.import_trades import (
-    parse_ibkr_activity_statement_csv,
-    parse_generic_ibkr_csv,
-    parse_datetime_str,
-    clean_num,
-)
+from scripts.import_trades import parse_datetime_str, parse_ibkr_activity_statement_csv
 
 
 class TestIBKRJournal(unittest.TestCase):

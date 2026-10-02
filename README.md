@@ -70,7 +70,6 @@ IBKR_TOKEN=your_ibkr_flex_token_here
 IBKR_QUERY_ID=your_flex_query_id_here
 PORT=8000
 HOST=0.0.0.0
-MARKET_TIMEZONE=Europe/Madrid
 CURRENCY_SYMBOL=€
 ENVIRONMENT=prod
 DEBUG=false
@@ -94,7 +93,6 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 | `PORT` | `8000` | HTTP port the server listens on. |
 | `HOST` | `0.0.0.0` | Bind host address (`0.0.0.0` allows LAN access). |
 | `CURRENCY_SYMBOL` | `€` | Display currency symbol (`$`, `€`, `£`, `¥`, etc.). |
-| `MARKET_TIMEZONE` | `Europe/Madrid` | Timezone for market hour calculations. |
 | `SYNC_INTERVAL_MINUTES` | `60` | Background automatic sync frequency in minutes. |
 | `SYNC_COOLDOWN_SECONDS` | `600` | Cooldown period between manual sync requests (seconds). |
 | `DB_PATH` | `data/journal.db` | Relative or absolute path to the SQLite database file. |

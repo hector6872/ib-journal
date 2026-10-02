@@ -17,7 +17,8 @@ from backend.analytics import (
     get_week_calendar,
     get_year_calendar,
 )
-from backend.config import BASE_DIR, HOST, PORT, is_ibkr_configured
+from backend.config import BASE_DIR, CURRENCY_SYMBOL, HOST, PORT, is_ibkr_configured
+
 from backend.database import init_db
 from backend.scheduler import scheduler
 from backend.settings import get_all_settings, update_settings
@@ -180,8 +181,9 @@ async def api_trades_import(request: Request):
     if not trades:
         from scripts.import_trades import parse_ibkr_activity_statement_csv, parse_generic_ibkr_csv
         lines = text.splitlines()
-        is_activity = any(l.startswith("Trades,Header") or l.startswith("Trades,Data") for l in lines[:50])
+        is_activity = any(line_item.startswith("Trades,Header") or line_item.startswith("Trades,Data") for line_item in lines[:50])
         if is_activity:
+
             trades = parse_ibkr_activity_statement_csv(lines)
         else:
             trades = parse_generic_ibkr_csv(lines)

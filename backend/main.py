@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from backend.config import BASE_DIR, HOST, PORT, CURRENCY_SYMBOL, IBKR_TOKEN, IBKR_QUERY_ID
+from backend.config import BASE_DIR, HOST, PORT, CURRENCY_SYMBOL, IBKR_TOKEN, IBKR_QUERY_ID, is_ibkr_configured
 from backend.database import init_db
 from backend.scheduler import scheduler
 from backend.analytics import (
@@ -32,10 +32,10 @@ async def lifespan(app: FastAPI):
     init_db()
     
     # Start background scheduler if credentials exist
-    if IBKR_TOKEN and IBKR_QUERY_ID:
+    if is_ibkr_configured():
         scheduler.start()
     else:
-        logger.info("IBKR credentials not set in .env. Background sync scheduler is idle.")
+        logger.info("IBKR credentials not configured or placeholder in .env. Background sync scheduler is idle.")
 
     yield
     # Shutdown
@@ -67,7 +67,7 @@ async def get_app_config():
     """Returns frontend runtime settings."""
     return {
         "currency_symbol": CURRENCY_SYMBOL,
-        "is_configured": bool(IBKR_TOKEN and IBKR_QUERY_ID)
+        "is_configured": is_ibkr_configured()
     }
 
 

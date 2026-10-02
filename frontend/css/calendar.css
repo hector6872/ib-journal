@@ -14,6 +14,7 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    scroll-margin-top: 76px;
 }
 
 .week-nav-bar {
@@ -33,14 +34,18 @@
     background-color: var(--bg-card-secondary);
     border: 1px solid var(--border-default);
     color: var(--text-main);
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
     border-radius: var(--radius-xs);
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.15s ease;
+    box-sizing: border-box;
+    padding: 0;
 }
 
 .btn-ctrl:hover {
@@ -52,12 +57,20 @@
     background-color: var(--bg-card-secondary);
     border: 1px solid var(--border-default);
     color: var(--text-main);
-    padding: 4px 10px;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 12px;
     border-radius: var(--radius-xs);
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    line-height: 1;
 }
 
 .btn-pill:hover {
@@ -193,6 +206,7 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    scroll-margin-top: 76px;
 }
 
 .month-grid-wrapper {
@@ -203,7 +217,7 @@
 
 .month-weekdays-row {
     display: grid;
-    grid-template-columns: repeat(7, 1fr) 1fr;
+    grid-template-columns: repeat(7, 1fr) 1.15fr;
     text-align: center;
     font-size: 11px;
     font-weight: 700;
@@ -220,7 +234,7 @@
 
 .month-days-matrix {
     display: grid;
-    grid-template-columns: repeat(7, 1fr) 1fr;
+    grid-template-columns: repeat(7, 1fr) 1.15fr;
     gap: 4px;
 }
 
@@ -314,6 +328,7 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    scroll-margin-top: 76px;
 }
 
 .annual-months-grid {

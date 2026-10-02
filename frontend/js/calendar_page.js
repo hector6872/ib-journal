@@ -81,7 +81,7 @@ const CalendarPage = {
             const isToday = d.date === todayStr;
             const dayName = STRINGS.days.short3[d.weekday_index];
             const hasTrades = d.trades_count > 0;
-            const pnlClass = d.pnl > 0 ? 'pnl-positive' : (d.pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
+            const pnlClass = State.getPnlClass(d.pnl);
             const cardTintClass = hasTrades ? (d.pnl > 0 ? 'card-win' : (d.pnl < 0 ? 'card-loss' : '')) : '';
 
             let bodyContent = hasTrades
@@ -89,7 +89,7 @@ const CalendarPage = {
                     <div class="week-card-pnl mono ${pnlClass}">${State.formatCurrency(d.pnl)}</div>
                     <div class="week-card-count mono">${d.trades_count} ${d.trades_count === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}</div>
                   `
-                : `<div class="week-card-empty">${STRINGS.calendar.noTradesDay}</div>`;
+                : '';
 
             return `
                 <div class="week-card ${isToday ? 'today' : ''} ${cardTintClass}" data-date="${d.date}">
@@ -111,11 +111,11 @@ const CalendarPage = {
                     <span class="week-card-weekday" style="color: var(--color-accent);">${STRINGS.calendar.weekTotal}</span>
                 </div>
                 <div class="week-card-main">
-                    <div class="week-card-pnl mono ${totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-size: 16px;">
+                    <div class="week-card-pnl mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 16px;">
                         ${State.formatCurrency(totalNetPnl)}
                     </div>
                     <div class="week-card-count mono" style="font-weight: 600;">
-                        ${totalTrades} ${STRINGS.calendar.tradesBadge}
+                        ${totalTrades} ${totalTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}
                     </div>
                 </div>
             </div>
@@ -132,10 +132,6 @@ const CalendarPage = {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
                     <button class="btn-pill" id="btn-week-today">${STRINGS.calendar.thisWeek}</button>
-                </div>
-                <div class="section-summary-badge">
-                    <span style="font-size: 11px; color: var(--text-muted);">${STRINGS.calendar.weekTotal}:</span>
-                    <span class="mono ${totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(totalNetPnl)}</span>
                 </div>
             </div>
             <div class="week-cards-row">
@@ -168,7 +164,7 @@ const CalendarPage = {
     },
 
     // -------------------------------------------------------------
-    // 2. MONTH SECTION (8 Columns: Mon-Sun + SEM Weekly Total)
+    // 2. MONTH SECTION (8 Columns: Mon-Sun + Weekly Total)
     // -------------------------------------------------------------
     async loadMonth(year, month) {
         State.currentYear = year;
@@ -225,7 +221,7 @@ const CalendarPage = {
 
                     if (dayData && dayData.count > 0) {
                         const pnl = dayData.pnl;
-                        const pnlClass = pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
+                        const pnlClass = State.getPnlClass(pnl);
                         cellTintClass = pnl > 0 ? 'cell-win' : (pnl < 0 ? 'cell-loss' : '');
                         badgeHtml = `<span class="cell-badge-count mono">${dayData.count}</span>`;
                         pnlHtml = `<span class="cell-pnl-val mono ${pnlClass}">${State.formatCurrency(pnl)}</span>`;
@@ -249,15 +245,15 @@ const CalendarPage = {
             }
 
             // 8th Cell: Weekly Total for this row
-            const rowPnlClass = rowNetPnl > 0 ? 'pnl-positive' : (rowNetPnl < 0 ? 'pnl-negative' : 'pnl-neutral');
-            const rowPnlText = rowTradesCount > 0 ? State.formatCurrency(rowNetPnl) : '--';
-            const rowCountBadge = rowTradesCount > 0 ? `<span class="cell-badge-count mono">${rowTradesCount}</span>` : '';
+            const rowPnlClass = State.getPnlClass(rowNetPnl);
+            const rowPnlText = State.formatCurrency(rowNetPnl);
+            const rowTradesBadge = `${rowTradesCount} ${rowTradesCount === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
 
             const rowTotalCellHtml = `
                 <div class="month-day-cell week-total-cell">
                     <div class="cell-top">
-                        <span style="font-size: 10px; font-weight: 800; color: var(--color-accent);">${STRINGS.calendar.weekCol} ${weekRowIndex}</span>
-                        ${rowCountBadge}
+                        <span style="font-size: 11px; font-weight: 800; color: var(--color-accent);">WEEK ${weekRowIndex}</span>
+                        <span class="cell-badge-count mono">${rowTradesBadge}</span>
                     </div>
                     <div class="cell-bottom">
                         <span class="cell-pnl-val mono ${rowPnlClass}">${rowPnlText}</span>
@@ -282,9 +278,8 @@ const CalendarPage = {
                     <button class="btn-pill" id="btn-month-today">${STRINGS.calendar.thisMonth}</button>
                 </div>
                 <div class="section-summary-badge">
-                    <span style="font-size: 11px; color: var(--text-muted);">${STRINGS.kpi.netPnl}:</span>
-                    <span class="mono ${totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(totalNetPnl)}</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">(${totalTrades} ${STRINGS.calendar.tradesBadge})</span>
+                    <span class="mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 15px; font-weight: 800;">${State.formatCurrency(totalNetPnl)}</span>
+                    <span class="mono" style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">· ${totalTrades} ${totalTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}</span>
                 </div>
             </div>
             <div class="month-grid-wrapper">
@@ -349,8 +344,9 @@ const CalendarPage = {
             const monthName = STRINGS.months.short[m - 1];
             const mTotal = monthlyTotals.find(item => item.month === m) || { net_pnl: 0, trades_count: 0 };
             const mPnl = mTotal.net_pnl;
-            const mPnlClass = mPnl > 0 ? 'pnl-positive' : (mPnl < 0 ? 'pnl-negative' : 'pnl-neutral');
-            const mPnlFormatted = mPnl !== 0 ? State.formatCurrency(mPnl) : '--';
+            const mTrades = mTotal.trades_count || 0;
+            const mTradesBadge = `${mTrades} ${mTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
+            const mPnlClass = State.getPnlClass(mPnl);
 
             const daysInMonth = new Date(year, m, 0).getDate();
             const firstDayObj = new Date(year, m - 1, 1);
@@ -383,7 +379,10 @@ const CalendarPage = {
                 <div class="annual-mini-month" data-month="${m}">
                     <div class="annual-month-header">
                         <span>${monthName}</span>
-                        <span class="mono ${mPnlClass}">${mPnlFormatted}</span>
+                        <span class="mono">
+                            <span class="${mPnlClass}">${State.formatCurrency(mPnl)}</span>
+                            <span style="font-size: 10px; font-weight: 600; color: var(--text-secondary);"> · ${mTradesBadge}</span>
+                        </span>
                     </div>
                     <div class="annual-weekdays">
                         ${STRINGS.days.shortMonSun.map(d => `<span>${d}</span>`).join('')}
@@ -391,19 +390,6 @@ const CalendarPage = {
                     <div class="annual-days-grid">
                         ${daysHtml}
                     </div>
-                </div>
-            `;
-        }
-
-        let ribbonHtml = '';
-        for (let m = 1; m <= 12; m++) {
-            const mTotal = monthlyTotals.find(item => item.month === m) || { net_pnl: 0 };
-            const mPnl = mTotal.net_pnl;
-            const pillClass = mPnl > 0 ? 'win' : (mPnl < 0 ? 'loss' : '');
-            const displayPnl = mPnl !== 0 ? State.formatCurrency(mPnl) : '--';
-            ribbonHtml += `
-                <div class="ribbon-month-pill mono ${pillClass}" data-month="${m}">
-                    ${displayPnl}
                 </div>
             `;
         }
@@ -420,27 +406,13 @@ const CalendarPage = {
                     </button>
                 </div>
                 <div class="section-summary-badge">
-                    <span style="font-size: 11px; color: var(--text-muted);">${STRINGS.calendar.totalHeader}:</span>
-                    <span class="mono ${totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(totalNetPnl)}</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">(${totalTrades} ${STRINGS.calendar.tradesBadge})</span>
+                    <span class="mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 15px; font-weight: 800;">${State.formatCurrency(totalNetPnl)}</span>
+                    <span class="mono" style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">· ${totalTrades} ${totalTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}</span>
                 </div>
             </div>
 
             <div class="annual-months-grid">
                 ${monthsHtml}
-            </div>
-
-            <div class="annual-totals-ribbon">
-                <span class="ribbon-year-tag mono">${year}</span>
-                <div class="ribbon-months">
-                    ${ribbonHtml}
-                </div>
-                <div class="ribbon-annual-total">
-                    <span class="tot-label">${STRINGS.calendar.totalHeader}</span>
-                    <span class="tot-val mono ${totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">
-                        ${State.formatCurrency(totalNetPnl)}
-                    </span>
-                </div>
             </div>
         `;
 
@@ -459,13 +431,16 @@ const CalendarPage = {
             });
         });
 
-        container.querySelectorAll('.annual-mini-month, .ribbon-month-pill').forEach(el => {
+        container.querySelectorAll('.annual-mini-month').forEach(el => {
             el.addEventListener('click', () => {
                 const m = parseInt(el.getAttribute('data-month'), 10);
                 if (m) {
                     this.loadMonth(year, m);
                     // Smooth scroll to month section
-                    document.getElementById('sec-month-container')?.scrollIntoView({ behavior: 'smooth' });
+                    const monthSec = document.getElementById('sec-month-container');
+                    if (monthSec) {
+                        monthSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
                 }
             });
         });

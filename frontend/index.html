@@ -38,11 +38,6 @@
                 </div>
                 <div class="mini-kpi-divider"></div>
                 <div class="mini-kpi-item">
-                    <span class="mini-kpi-label">OPS</span>
-                    <span class="mini-kpi-value mono" id="mini-trades">--</span>
-                </div>
-                <div class="mini-kpi-divider"></div>
-                <div class="mini-kpi-item">
                     <span class="mini-kpi-label">PF</span>
                     <span class="mini-kpi-value mono" id="mini-pf">--</span>
                 </div>
@@ -51,6 +46,11 @@
                     <span class="mini-kpi-label">EXP</span>
                     <span class="mini-kpi-value mono" id="mini-expectancy">--</span>
                 </div>
+                <div class="mini-kpi-divider"></div>
+                <div class="mini-kpi-item">
+                    <span class="mini-kpi-label">OPS</span>
+                    <span class="mini-kpi-value mono" id="mini-trades">--</span>
+                </div>
             </div>
 
             <!-- Right: Sync Widget & Theme Switcher -->
@@ -58,10 +58,10 @@
                 <!-- Sync Controls -->
                 <div class="sync-section">
                     <div class="sync-status-text">
-                        <span class="sync-updated" id="sync-last-time">Updated: --:--</span>
+                        <span class="sync-updated" id="sync-last-time">Last update at --:--</span>
                         <span class="sync-countdown" id="sync-next-time">Next in --m</span>
                     </div>
-                    <button class="btn-sync-action" id="btn-sync">
+                    <button class="btn-sync-action" id="btn-sync" disabled>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                         <span class="btn-sync-label" data-i18n="sync.syncNow">Sync Now</span>
                     </button>
@@ -90,31 +90,27 @@
     <main class="main-content">
         <!-- 1. Calendar Tab: Only Calendars (Week -> Month -> Year) with Sticky Summary Banner -->
         <div id="view-calendar">
-            <!-- Executive KPI Summary Banner (Sticky in Calendar view) -->
+            <!-- Executive KPI Summary Banner (5 Cards in Calendar view) -->
             <div class="kpi-summary-banner" id="global-kpi-banner">
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">NET P&L</span>
+                    <span class="kpi-banner-label">NET REALIZED P&L</span>
                     <span class="kpi-banner-value mono" id="banner-net-pnl">--</span>
                 </div>
-                <div class="kpi-banner-divider"></div>
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">WR</span>
+                    <span class="kpi-banner-label">WIN RATE</span>
                     <span class="kpi-banner-value mono" id="banner-wr">--%</span>
                 </div>
-                <div class="kpi-banner-divider"></div>
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">OPERATIONS</span>
-                    <span class="kpi-banner-value mono" id="banner-trades">--</span>
-                </div>
-                <div class="kpi-banner-divider"></div>
-                <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">PF</span>
+                    <span class="kpi-banner-label">PROFIT FACTOR</span>
                     <span class="kpi-banner-value mono" id="banner-pf">--</span>
                 </div>
-                <div class="kpi-banner-divider"></div>
                 <div class="kpi-banner-item">
                     <span class="kpi-banner-label">EXPECTANCY</span>
                     <span class="kpi-banner-value mono" id="banner-expectancy">--</span>
+                </div>
+                <div class="kpi-banner-item">
+                    <span class="kpi-banner-label">TOTAL OPERATIONS</span>
+                    <span class="kpi-banner-value mono" id="banner-trades">--</span>
                 </div>
             </div>
 

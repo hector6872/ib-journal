@@ -14,7 +14,8 @@ from typing import Dict, Any, Optional
 
 from backend.config import (
     IBKR_TOKEN,
-    IBKR_QUERY_ID
+    IBKR_QUERY_ID,
+    is_ibkr_configured
 )
 from backend.database import upsert_trades, db_session
 from backend.flex_client import IBKRFlexClient
@@ -94,11 +95,11 @@ class SyncScheduler:
         """
         Executes the sync operation against IBKR Flex Query.
         """
-        if not IBKR_TOKEN or not IBKR_QUERY_ID:
+        if not is_ibkr_configured():
             self.last_sync_status = "unconfigured"
-            self.last_sync_message = "IBKR_TOKEN and IBKR_QUERY_ID are not set in .env."
+            self.last_sync_message = "IBKR credentials are not configured in .env."
             return {
-                "status": "failed",
+                "status": "unconfigured",
                 "message": self.last_sync_message
             }
 
@@ -146,8 +147,8 @@ class SyncScheduler:
 
     async def _loop(self):
         """Background loop running on the server."""
-        if not IBKR_TOKEN or not IBKR_QUERY_ID:
-            logger.info("IBKR credentials missing. Scheduler loop will not run.")
+        if not is_ibkr_configured():
+            logger.info("IBKR credentials missing or placeholder. Scheduler loop will not run.")
             return
 
         # Calculate initial next sync
@@ -169,7 +170,7 @@ class SyncScheduler:
                 logger.error(f"Scheduler loop error: {e}")
 
     def start(self):
-        if not IBKR_TOKEN or not IBKR_QUERY_ID:
+        if not is_ibkr_configured():
             return
         if self._task is None:
             self._task = asyncio.create_task(self._loop())
@@ -180,19 +181,19 @@ class SyncScheduler:
             self._task = None
 
     def get_status(self) -> Dict[str, Any]:
-        is_configured = bool(IBKR_TOKEN and IBKR_QUERY_ID)
-        status_val = self.last_sync_status if is_configured else "unconfigured"
-        msg_val = self.last_sync_message if is_configured else "IBKR credentials not configured in .env"
+        configured = is_ibkr_configured()
+        status_val = self.last_sync_status if configured else "unconfigured"
+        msg_val = self.last_sync_message if configured else "IBKR credentials not configured in .env"
 
         return {
-            "is_configured": is_configured,
-            "last_sync_time": self.last_sync_time.isoformat() if self.last_sync_time else None,
-            "next_sync_time": self.next_sync_time.isoformat() if self.next_sync_time else self.calculate_next_sync_time().isoformat(),
+            "is_configured": configured,
+            "last_sync_time": self.last_sync_time.isoformat() if (configured and self.last_sync_time) else None,
+            "next_sync_time": (self.next_sync_time.isoformat() if self.next_sync_time else self.calculate_next_sync_time().isoformat()) if configured else None,
             "status": status_val,
             "message": msg_val,
-            "trades_count": self.last_trades_count,
-            "is_syncing": self.is_syncing,
-            "cooldown_remaining_seconds": self.get_cooldown_remaining_seconds(),
+            "trades_count": self.last_trades_count if configured else 0,
+            "is_syncing": self.is_syncing if configured else False,
+            "cooldown_remaining_seconds": self.get_cooldown_remaining_seconds() if configured else 0,
             "is_market_hours": self.is_market_hours()
         }
 

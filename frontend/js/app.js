@@ -15,6 +15,14 @@ const App = {
                 State.currency = cfg.currency_symbol;
                 STRINGS.common.currency = cfg.currency_symbol;
             }
+            if (cfg.is_configured === false) {
+                const btnSync = document.getElementById('btn-sync');
+                if (btnSync) {
+                    btnSync.disabled = true;
+                    btnSync.classList.add('disabled');
+                    btnSync.title = "Configure IBKR_TOKEN and IBKR_QUERY_ID in .env to enable sync";
+                }
+            }
         } catch (e) {
             console.warn("Could not fetch app config, using defaults:", e);
         }
@@ -95,6 +103,9 @@ const App = {
         if (!btnSync) return;
 
         btnSync.addEventListener('click', async () => {
+            if (btnSync.disabled || btnSync.classList.contains('disabled') || (State.syncStatus && State.syncStatus.is_configured === false)) {
+                return;
+            }
             try {
                 btnSync.disabled = true;
                 btnSync.classList.add('spinning');

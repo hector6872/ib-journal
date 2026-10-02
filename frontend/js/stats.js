@@ -26,14 +26,14 @@ const StatsController = {
 
         if (elNetPnl) {
             elNetPnl.textContent = State.formatCurrency(data.net_pnl);
-            elNetPnl.className = `kpi-banner-value mono ${data.net_pnl > 0 ? 'pnl-positive' : (data.net_pnl < 0 ? 'pnl-negative' : '')}`;
+            elNetPnl.className = `kpi-banner-value mono ${State.getPnlClass(data.net_pnl)}`;
         }
         if (elWr) elWr.textContent = `${data.win_rate.toFixed(1)}%`;
         if (elOps) elOps.textContent = State.formatNumber(data.total_trades);
         if (elPf) elPf.textContent = data.profit_factor.toFixed(2);
         if (elExp) {
             elExp.textContent = State.formatCurrency(data.expectancy);
-            elExp.className = `kpi-banner-value mono ${data.expectancy > 0 ? 'pnl-positive' : (data.expectancy < 0 ? 'pnl-negative' : '')}`;
+            elExp.className = `kpi-banner-value mono ${State.getPnlClass(data.expectancy)}`;
         }
 
         // 2. Compact Header Mini KPI (Tucked into header on scroll)
@@ -45,14 +45,14 @@ const StatsController = {
 
         if (miniNetPnl) {
             miniNetPnl.textContent = State.formatCurrency(data.net_pnl);
-            miniNetPnl.className = `mini-kpi-value mono ${data.net_pnl > 0 ? 'pnl-positive' : (data.net_pnl < 0 ? 'pnl-negative' : '')}`;
+            miniNetPnl.className = `mini-kpi-value mono ${State.getPnlClass(data.net_pnl)}`;
         }
         if (miniWr) miniWr.textContent = `${data.win_rate.toFixed(1)}%`;
         if (miniOps) miniOps.textContent = State.formatNumber(data.total_trades);
         if (miniPf) miniPf.textContent = data.profit_factor.toFixed(2);
         if (miniExp) {
             miniExp.textContent = State.formatCurrency(data.expectancy);
-            miniExp.className = `mini-kpi-value mono ${data.expectancy > 0 ? 'pnl-positive' : (data.expectancy < 0 ? 'pnl-negative' : '')}`;
+            miniExp.className = `mini-kpi-value mono ${State.getPnlClass(data.expectancy)}`;
         }
     },
 
@@ -128,34 +128,55 @@ const StatsController = {
 
         if (!btnSync || !status) return;
 
-        // If not configured in .env
+        // 1. Unconfigured State
         if (status.is_configured === false || status.status === 'unconfigured') {
-            if (elLast) elLast.textContent = "IBKR Not Configured";
-            if (elNext) elNext.textContent = "Set token in .env";
+            if (elLast) elLast.textContent = STRINGS.sync.notConfiguredTitle;
+            if (elNext) elNext.textContent = STRINGS.sync.notConfiguredSubtitle;
             btnSync.disabled = true;
+            btnSync.classList.add('disabled');
+            btnSync.classList.remove('spinning');
             btnSync.title = "Configure IBKR_TOKEN and IBKR_QUERY_ID in .env to enable sync";
+            btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncNow;
             return;
         }
 
-        btnSync.title = "";
+        btnSync.classList.remove('disabled');
 
-        // Last sync text
-        if (elLast) {
-            if (status.last_sync_time) {
-                const lastDate = new Date(status.last_sync_time);
-                elLast.textContent = `${STRINGS.sync.lastUpdated}: ${lastDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-            } else {
-                elLast.textContent = `${STRINGS.sync.lastUpdated}: --:--`;
+        // 2. Failed State (Configured, but last sync failed)
+        if (status.status === 'failed') {
+            btnSync.title = status.message || "Sync failed";
+            if (elLast) {
+                if (status.last_sync_time) {
+                    const lastDate = new Date(status.last_sync_time);
+                    elLast.textContent = `${STRINGS.sync.lastUpdated} ${lastDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                } else {
+                    elLast.textContent = STRINGS.sync.syncFailed;
+                }
             }
-        }
-
-        // Next sync text
-        if (elNext) {
-            if (status.next_sync_time) {
-                const nextDate = new Date(status.next_sync_time);
-                const diffMs = nextDate - new Date();
-                const diffMins = Math.max(0, Math.round(diffMs / 60000));
-                elNext.textContent = `${STRINGS.sync.nextSync} ${diffMins}m`;
+            if (elNext) {
+                const errMsg = status.message || STRINGS.sync.error;
+                elNext.textContent = errMsg.length > 25 ? errMsg.slice(0, 25) + '...' : errMsg;
+            }
+        } else {
+            // 3. Normal / Success / Idle State
+            btnSync.title = "";
+            if (elLast) {
+                if (status.last_sync_time) {
+                    const lastDate = new Date(status.last_sync_time);
+                    elLast.textContent = `${STRINGS.sync.lastUpdated} ${lastDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                } else {
+                    elLast.textContent = `${STRINGS.sync.lastUpdated} --:--`;
+                }
+            }
+            if (elNext) {
+                if (status.next_sync_time) {
+                    const nextDate = new Date(status.next_sync_time);
+                    const diffMs = nextDate - new Date();
+                    const diffMins = Math.max(0, Math.round(diffMs / 60000));
+                    elNext.textContent = `${STRINGS.sync.nextSync} ${diffMins}m`;
+                } else {
+                    elNext.textContent = "";
+                }
             }
         }
 

@@ -34,6 +34,14 @@ const State = {
     formatNumber(num) {
         if (num === undefined || num === null) return "0";
         return num.toLocaleString();
+    },
+
+    getPnlClass(amount) {
+        if (amount === undefined || amount === null || isNaN(amount)) return 'pnl-neutral';
+        const rounded = Math.round(amount * 100) / 100;
+        if (rounded > 0) return 'pnl-positive';
+        if (rounded < 0) return 'pnl-negative';
+        return 'pnl-neutral';
     }
 };
 

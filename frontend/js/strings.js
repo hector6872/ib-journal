@@ -10,7 +10,7 @@ const STRINGS = {
     // Header Main Tabs
     tabs: {
         calendar: "Calendar",
-        stats: "Statistics"
+        stats: "Stats"
     },
 
     // Theme Switcher
@@ -35,8 +35,11 @@ const STRINGS = {
         syncNow: "Sync Now",
         syncing: "Syncing...",
         cooldownPrefix: "Available in",
-        lastUpdated: "Updated",
+        lastUpdated: "Last update at",
         nextSync: "Next in",
+        notConfiguredTitle: "Not configured",
+        notConfiguredSubtitle: "Set credentials in .env",
+        syncFailed: "Sync Failed",
         marketClosed: "Market Closed",
         marketOpen: "Market Open",
         success: "Sync completed successfully",
@@ -58,7 +61,7 @@ const STRINGS = {
         thisWeek: "This Week",
         weekOf: "Week of",
         weekTotal: "WEEK TOTAL",
-        weekCol: "WK",
+        weekCol: "WEEK TOTAL",
         noTradesDay: "No operations",
         tradesBadge: "trades",
         tradeSingleBadge: "trade",

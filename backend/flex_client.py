@@ -192,6 +192,8 @@ class IBKRFlexClient:
                 "trade_time": trade_time,
                 "trade_date_time": trade_datetime_iso,
                 "open_close_indicator": attrs.get("openCloseIndicator") or "C",
+                "order_type": (attrs.get("orderType") or "MKT").upper(),
+                "exchange": (attrs.get("exchange") or "SMART").upper(),
             }
             trades.append(trade_record)
 

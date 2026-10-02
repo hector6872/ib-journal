@@ -5,7 +5,8 @@ const ThemeManager = {
     currentTheme: 'light', // 'light' | 'dark' | 'system'
 
     init() {
-        const saved = localStorage.getItem('ib_journal_theme') || 'light';
+        const saved = (typeof SettingsManager !== 'undefined' ? SettingsManager.get('theme', 'light') : null) ||
+            localStorage.getItem('ib_journal_theme') || 'light';
         this.setTheme(saved, false);
 
         // Listen for OS system theme changes
@@ -26,7 +27,12 @@ const ThemeManager = {
 
     setTheme(theme, save = true) {
         this.currentTheme = theme;
-        if (save) localStorage.setItem('ib_journal_theme', theme);
+        if (save) {
+            localStorage.setItem('ib_journal_theme', theme);
+            if (typeof SettingsManager !== 'undefined') {
+                SettingsManager.set('theme', theme);
+            }
+        }
 
         if (theme === 'system') {
             this.applySystemTheme();
@@ -42,11 +48,14 @@ const ThemeManager = {
                 btn.classList.remove('active');
             }
         });
+
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: this.currentTheme } }));
     },
 
     applySystemTheme() {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: 'system', effective: prefersDark ? 'dark' : 'light' } }));
     }
 };
 

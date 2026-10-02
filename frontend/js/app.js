@@ -5,10 +5,15 @@ const App = {
     activeTab: 'calendar', // 'calendar' | 'stats'
 
     async init() {
-        // 1. Initialize Theme Manager (Light by default, Dark, System)
+        // 1. Initialize Settings Manager (Loads local + fetches remote settings)
+        if (typeof SettingsManager !== 'undefined') {
+            await SettingsManager.init();
+        }
+
+        // 2. Initialize Theme Manager (Light by default, Dark, System)
         ThemeManager.init();
 
-        // 2. Fetch runtime backend config
+        // 3. Fetch runtime backend config
         try {
             const cfg = await API.fetchConfig();
             if (cfg.currency_symbol) {
@@ -27,21 +32,22 @@ const App = {
             console.warn("Could not fetch app config, using defaults:", e);
         }
 
-        // 3. Apply centralized translations to static HTML
+        // 4. Apply centralized translations to static HTML
         this.applyTranslations();
 
-        // 4. Setup Main Tab Navigation (Calendar / Stats)
+        // 5. Setup Main Tab Navigation (Calendar / Stats)
         this.setupTabNavigation();
 
-        // 5. Setup Sync Button
+        // 6. Setup Sync Button
         this.setupSyncButton();
 
-        // 6. Initialize Day Modal & Top Stats Polling
+        // 7. Initialize Day Modal & Top Stats Polling
         DayModal.init();
         StatsController.startPolling();
 
-        // 7. Load default tab (Calendar)
-        this.switchTab('calendar');
+        // 8. Restore persisted tab (default to Calendar)
+        const savedTab = typeof SettingsManager !== 'undefined' ? SettingsManager.get('activeTab', 'calendar') : 'calendar';
+        this.switchTab(savedTab);
     },
 
     applyTranslations() {
@@ -69,6 +75,9 @@ const App = {
 
     switchTab(tabName) {
         this.activeTab = tabName;
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.set('activeTab', tabName);
+        }
 
         // Update active tab buttons
         document.querySelectorAll('.tab-btn').forEach(btn => {

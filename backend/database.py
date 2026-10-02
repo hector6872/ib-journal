@@ -71,6 +71,8 @@ def init_db():
             trade_time TEXT,           -- HH:MM:SS
             trade_date_time TEXT,      -- YYYY-MM-DDTHH:MM:SS
             open_close_indicator TEXT, -- O, C, O/C
+            order_type TEXT DEFAULT 'MKT', -- LMT, MKT, STP, STP LMT
+            exchange TEXT DEFAULT 'SMART', -- NASDAQ, NYSE, SMART, etc.
             notes TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -81,6 +83,14 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_category ON trades(asset_category);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_pnl ON trades(realized_pnl);")
+
+        # Column migrations
+        cursor.execute("PRAGMA table_info(trades);")
+        cols = [c[1] for c in cursor.fetchall()]
+        if "order_type" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN order_type TEXT DEFAULT 'MKT';")
+        if "exchange" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN exchange TEXT DEFAULT 'SMART';")
 
         # Sync History Table
         cursor.execute("""
@@ -112,18 +122,20 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         ib_exec_id, trade_id, account_id, symbol, description, asset_category,
         currency, buy_sell, quantity, trade_price, trade_money, proceeds,
         ib_commission, realized_pnl, trade_date, trade_time, trade_date_time,
-        open_close_indicator
+        open_close_indicator, order_type, exchange
     ) VALUES (
         :ib_exec_id, :trade_id, :account_id, :symbol, :description, :asset_category,
         :currency, :buy_sell, :quantity, :trade_price, :trade_money, :proceeds,
         :ib_commission, :realized_pnl, :trade_date, :trade_time, :trade_date_time,
-        :open_close_indicator
+        :open_close_indicator, :order_type, :exchange
     )
     ON CONFLICT(ib_exec_id) DO UPDATE SET
         realized_pnl = excluded.realized_pnl,
         ib_commission = excluded.ib_commission,
         proceeds = excluded.proceeds,
         open_close_indicator = excluded.open_close_indicator,
+        order_type = excluded.order_type,
+        exchange = excluded.exchange,
         notes = trades.notes;
     """
     

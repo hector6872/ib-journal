@@ -7,14 +7,50 @@ const API = {
         return await res.json();
     },
 
-    async fetchOverviewStats() {
-        const res = await fetch('/api/stats/overview');
+    async fetchSettings() {
+        try {
+            const res = await fetch('/api/settings');
+            if (res.ok) return await res.json();
+        } catch (e) {
+            console.warn("Could not fetch remote settings:", e);
+        }
+        return {};
+    },
+
+    async saveSettings(settings) {
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+            if (res.ok) return await res.json();
+        } catch (e) {
+            console.warn("Could not save remote settings:", e);
+        }
+        return null;
+    },
+
+    async fetchOverviewStats(startDate = null, endDate = null) {
+        let url = '/api/stats/overview';
+        const params = [];
+        if (startDate) params.push(`start_date=${encodeURIComponent(startDate)}`);
+        if (endDate) params.push(`end_date=${encodeURIComponent(endDate)}`);
+        if (params.length) url += `?${params.join('&')}`;
+
+        const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch overview stats");
         return await res.json();
     },
 
-    async fetchDetailedStats() {
-        const res = await fetch('/api/stats/detailed');
+    async fetchDetailedStats(startDate = null, endDate = null) {
+        let url = '/api/stats/detailed';
+        const params = [];
+        if (startDate) params.push(`start_date=${encodeURIComponent(startDate)}`);
+        if (endDate) params.push(`end_date=${encodeURIComponent(endDate)}`);
+        if (params.length) url += `?${params.join('&')}`;
+
+        const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch detailed statistics");
         return await res.json();
     },

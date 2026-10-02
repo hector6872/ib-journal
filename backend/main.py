@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 
 from backend.config import BASE_DIR, HOST, PORT, CURRENCY_SYMBOL, IBKR_TOKEN, IBKR_QUERY_ID, is_ibkr_configured
 from backend.database import init_db
+from backend.settings import get_all_settings, update_settings
 from backend.scheduler import scheduler
 from backend.analytics import (
     get_overview_stats,
@@ -71,15 +72,28 @@ async def get_app_config():
     }
 
 
+@app.get("/api/settings")
+async def api_get_settings():
+    """Returns user settings persisted in DB for cross-device sync."""
+    return get_all_settings()
+
+
+@app.post("/api/settings")
+async def api_save_settings(settings: dict):
+    """Persists user settings in DB for cross-device sync."""
+    update_settings(settings)
+    return {"status": "ok", "settings": get_all_settings()}
+
+
 @app.get("/api/stats/overview")
 async def api_stats_overview(start_date: str = None, end_date: str = None):
     """Returns top KPI bar metrics."""
     return get_overview_stats(start_date=start_date, end_date=end_date)
 
 @app.get("/api/stats/detailed")
-async def api_stats_detailed():
+async def api_stats_detailed(start_date: str = None, end_date: str = None):
     """Returns comprehensive trading performance analytics."""
-    return get_detailed_stats()
+    return get_detailed_stats(start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/calendar/year")

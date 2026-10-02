@@ -110,7 +110,68 @@ const STRINGS = {
         colCommissions: "Commissions",
         colVolume: "Volume",
         colSide: "Side",
-        colDay: "Day"
+        colDay: "Day",
+        colTag: "Tag / Setup",
+        colHour: "Hour",
+        
+        // Risk & Drawdown
+        riskTitle: "RISK & DRAWDOWN",
+        maxDrawdown: "Max Drawdown",
+        currentDrawdown: "Current Drawdown",
+        longestLosingStreak: "Longest Losing Streak",
+        longestWinningStreak: "Longest Winning Streak",
+        avgRiskTrade: "Avg Risk / Trade",
+        avgTradePnl: "Avg P&L / Trade",
+        currentStreak: "Current",
+        noStopLoss: "No stop loss on closed trades",
+        drawdownChartTitle: "DRAWDOWN",
+        
+        // Detailed KPIs
+        adjWinLossRatio: "Adj. Win/Loss Ratio",
+        sharpeRatio: "Sharpe (per trade)",
+        totalTrades: "Total Trades",
+        avgWinHold: "Avg Win Hold",
+        avgLossHold: "Avg Loss Hold",
+        beforeCosts: "before costs",
+        onPrice: "on price",
+        grossLabel: "Gross",
+        feesLabel: "fees",
+        vsPrior: "vs prior",
+
+        // Rolling Win Rate
+        rollingWinRateTitle: "ROLLING WIN RATE",
+        filter1W: "1W",
+        filter1M: "1M",
+        filter3M: "3M",
+        filterYTD: "YTD",
+        filterAll: "ALL",
+        
+        // Metric Evolution & Equity
+        metricEvolutionTitle: "METRIC EVOLUTION",
+        equityCurveTitle: "EQUITY CURVE",
+        day: "Day",
+        week: "Week",
+        month: "Month",
+        winRateMetric: "Win %",
+        profitFactorMetric: "Profit Factor",
+        avgWinMetric: "Avg Win",
+        avgLossMetric: "Avg Loss",
+        expectancyMetric: "Expectancy",
+        avgPnlTradeMetric: "Avg P&L / Trade",
+        cumPnlMetric: "Cumulative P&L",
+        dailyPnlMetric: "Daily P&L",
+        chartView: "Chart",
+        tableView: "Table",
+        
+        // Breakdowns
+        pnlBySymbolTitle: "P&L BY SYMBOL",
+        pnlByTagTitle: "P&L BY TAG",
+        perfByDowTitle: "PERFORMANCE BY DAY OF WEEK",
+        perfByTodTitle: "PERFORMANCE BY TIME OF DAY",
+        pnlByDurationTitle: "P&L BY HOLDING DURATION",
+        pnlByOrderTypeTitle: "P&L BY ORDER TYPE",
+        colDuration: "Holding Duration",
+        colOrderType: "Order Type"
     },
 
     // Day Trade Modal

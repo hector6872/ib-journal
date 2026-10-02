@@ -1,8 +1,10 @@
-import math
 import calendar
 from datetime import date, datetime, timedelta
-from typing import Dict, Any, List, Optional
+import math
+from typing import Any, Dict, List, Optional
+
 from backend.database import db_session
+
 
 def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -14,7 +16,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
     - Total Trades, Avg Win, Avg Loss, Largest Win, Largest Loss
     """
     query = """
-    SELECT 
+    SELECT
         COUNT(*) as total_trades,
         COALESCE(SUM(realized_pnl), 0.0) as gross_pnl,
         COALESCE(SUM(ib_commission), 0.0) as total_commissions,
@@ -59,14 +61,14 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         win_rate = round((winning_trades / total_trades * 100), 2) if total_trades > 0 else 0.0
         gross_win_rate = round((winning_trades_price / total_trades * 100), 1) if total_trades > 0 else 0.0
         profit_factor = round((gross_profit / gross_loss), 2) if gross_loss > 0 else (round(gross_profit, 2) if gross_profit > 0 else 0.0)
-        
+
         avg_win = (gross_profit / winning_trades) if winning_trades > 0 else 0.0
         avg_loss = (gross_loss / losing_trades) if losing_trades > 0 else 0.0
         loss_rate_dec = (losing_trades / total_trades) if total_trades > 0 else 0.0
         win_rate_dec = (winning_trades / total_trades) if total_trades > 0 else 0.0
-        
+
         expectancy = round((win_rate_dec * avg_win) - (loss_rate_dec * avg_loss), 2)
-        
+
         # Adjusted Win/Loss Ratio
         if loss_rate_dec > 0 and avg_loss > 0:
             adj_win_loss_ratio = round((win_rate_dec * avg_win) / (loss_rate_dec * avg_loss), 2)
@@ -192,10 +194,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
     - Asset class and Long/Short breakdown
     """
     overview = get_overview_stats(start_date=start_date, end_date=end_date)
-    
+
     with db_session() as conn:
         cursor = conn.cursor()
-        
+
         where_clause = "WHERE 1=1"
         params = []
         if start_date:
@@ -207,13 +209,13 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         # Fetch all trades in chronological order
         cursor.execute(f"""
-            SELECT 
-                id, ib_exec_id, trade_id, symbol, description, 
+            SELECT
+                id, ib_exec_id, trade_id, symbol, description,
                 COALESCE(asset_category, 'STK') as asset_category,
-                COALESCE(buy_sell, 'BUY') as buy_sell, 
+                COALESCE(buy_sell, 'BUY') as buy_sell,
                 quantity, trade_price, ib_commission, realized_pnl,
                 (realized_pnl - ib_commission) as net_pnl,
-                trade_date, trade_time, trade_date_time, 
+                trade_date, trade_time, trade_date_time,
                 COALESCE(open_close_indicator, 'C') as open_close_indicator,
                 COALESCE(order_type, 'MKT') as order_type,
                 COALESCE(exchange, 'SMART') as exchange,
@@ -412,7 +414,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         # 1. Symbol Breakdown
         cursor.execute("""
-            SELECT 
+            SELECT
                 symbol,
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(*) as trades_count,
@@ -445,7 +447,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         # Match positions to compute duration per trade execution
         open_pos_map: Dict[str, List[datetime]] = {}
         trade_durations: Dict[int, str] = {}
-        
+
         for t in all_trades:
             sym = t["symbol"]
             indicator = (t.get("open_close_indicator") or "").upper()
@@ -477,10 +479,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         # 2. Tag / Setup / Mistake Breakdown (Custom tags from notes + Derived execution tags)
         tag_map: Dict[str, Dict[str, Any]] = {}
         cat_labels = {
-            "STK": "STK (Acciones)", 
-            "OPT": "OPT (Opciones)", 
-            "FUT": "FUT (Futuros)", 
-            "CASH": "CASH (Forex)", 
+            "STK": "STK (Acciones)",
+            "OPT": "OPT (Opciones)",
+            "FUT": "FUT (Futuros)",
+            "CASH": "CASH (Forex)",
             "CRYPTO": "CRYPTO (Cripto)"
         }
 
@@ -551,7 +553,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         dow_data = {i: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for i in range(7)}
 
         cursor.execute("""
-            SELECT 
+            SELECT
                 strftime('%w', trade_date) as day_of_week,
                 COUNT(*) as trades_count,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
@@ -701,7 +703,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         # 7. Asset Category Breakdown
         cursor.execute("""
-            SELECT 
+            SELECT
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(*) as trades_count,
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END), 0) as wins,
@@ -724,7 +726,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         # 8. Buy vs Sell / Long vs Short
         cursor.execute("""
-            SELECT 
+            SELECT
                 buy_sell,
                 COUNT(*) as trades_count,
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END), 0) as wins,
@@ -774,7 +776,7 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
 
     # Daily aggregation query
     query = """
-    SELECT 
+    SELECT
         trade_date,
         COUNT(*) as trades_count,
         COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
@@ -810,7 +812,7 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
 
         m_pnl = sum(daily_map[d]["pnl"] for d in daily_map if m_start <= d <= m_end)
         m_count = sum(daily_map[d]["count"] for d in daily_map if m_start <= d <= m_end)
-        
+
         monthly_totals.append({
             "month": m,
             "net_pnl": round(m_pnl, 2),
@@ -839,7 +841,7 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
     end_date = f"{year}-{m_str}-{last_day:02d}"
 
     query = """
-    SELECT 
+    SELECT
         trade_date,
         COUNT(*) as trades_count,
         COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
@@ -919,7 +921,7 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
     sunday = monday + timedelta(days=6)
 
     query = """
-    SELECT 
+    SELECT
         id, ib_exec_id, symbol, asset_category, buy_sell, quantity,
         trade_price, realized_pnl, ib_commission, (realized_pnl - ib_commission) as net_pnl,
         trade_date, trade_time
@@ -976,7 +978,7 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
 def get_day_trades(target_date_str: str) -> List[Dict[str, Any]]:
     """Returns detailed individual executions for a given day."""
     query = """
-    SELECT 
+    SELECT
         id, ib_exec_id, trade_id, symbol, description, asset_category,
         currency, buy_sell, quantity, trade_price, trade_money, proceeds,
         ib_commission, realized_pnl, (realized_pnl - ib_commission) as net_pnl,

@@ -1,8 +1,9 @@
 import asyncio
-import logging
-import xml.etree.ElementTree as ET
 from datetime import date
+import logging
 from typing import Any, Dict, List, Tuple
+import xml.etree.ElementTree as ET
+
 
 try:
     import httpx
@@ -54,7 +55,7 @@ class IBKRFlexClient:
             SEND_REQUEST_URL,
             {"t": self.token, "q": self.query_id, "v": "3"}
         )
-        
+
         if status_code != 200:
             raise RuntimeError(f"IBKR SendRequest HTTP error: {status_code} - {resp_text}")
 
@@ -81,7 +82,7 @@ class IBKRFlexClient:
         max_attempts = 15
         for attempt in range(1, max_attempts + 1):
             await asyncio.sleep(attempt * 1.5)  # Progressive backoff
-            
+
             s_code, stmt_text = await self._http_get(
                 GET_STATEMENT_URL,
                 {"t": self.token, "q": ref_code, "v": "3"}
@@ -91,7 +92,7 @@ class IBKRFlexClient:
                 continue
 
             stmt_text = stmt_text.strip()
-            
+
             # Check if it returned an intermediate status message
             if stmt_text.startswith("<FlexStatementResponse") and "Statement is being generated" in stmt_text:
                 logger.debug(f"Attempt {attempt}: Statement is generating...")

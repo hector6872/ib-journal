@@ -1,8 +1,10 @@
-import sqlite3
-import logging
 from contextlib import contextmanager
-from typing import Generator, List, Dict, Any
+import logging
+import sqlite3
+from typing import Any, Dict, Generator, List
+
 from backend.config import DB_PATH
+
 
 logger = logging.getLogger("ib-journal.db")
 
@@ -19,7 +21,7 @@ def get_connection() -> sqlite3.Connection:
         check_same_thread=False
     )
     conn.row_factory = sqlite3.Row
-    
+
     # SD-Card preservation PRAGMAs
     cursor = conn.cursor()
     cursor.execute("PRAGMA journal_mode = WAL;")
@@ -28,7 +30,7 @@ def get_connection() -> sqlite3.Connection:
     cursor.execute("PRAGMA cache_size = -32000;")  # 32 MB in RAM
     cursor.execute("PRAGMA mmap_size = 67108864;") # 64 MB MMAP
     cursor.close()
-    
+
     return conn
 
 @contextmanager
@@ -48,7 +50,7 @@ def init_db():
     """Initializes the database schema with necessary tables and indexes."""
     with db_session() as conn:
         cursor = conn.cursor()
-        
+
         # Trades Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS trades (
@@ -77,7 +79,7 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        
+
         # Performance Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(trade_date);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);")
@@ -104,9 +106,9 @@ def init_db():
             completed_at DATETIME
         );
         """)
-        
+
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_started ON sync_history(started_at);")
-        
+
         logger.info("Database initialized successfully with WAL mode.")
 
 def upsert_trades(trades: List[Dict[str, Any]]) -> int:
@@ -116,7 +118,7 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
     """
     if not trades:
         return 0
-        
+
     sql = """
     INSERT INTO trades (
         ib_exec_id, trade_id, account_id, symbol, description, asset_category,
@@ -138,7 +140,7 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         exchange = excluded.exchange,
         notes = trades.notes;
     """
-    
+
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.executemany(sql, trades)

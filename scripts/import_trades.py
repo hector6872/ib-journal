@@ -7,14 +7,15 @@ Idempotent and safe to run multiple times without creating duplicates.
 
 import argparse
 import csv
+from datetime import date
 import glob
 import hashlib
 import logging
-import sys
-import xml.etree.ElementTree as ET
-from datetime import date
 from pathlib import Path
+import sys
 from typing import Any, Dict, List, Tuple
+import xml.etree.ElementTree as ET
+
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -139,7 +140,7 @@ def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
         qty = clean_num(attrs.get("quantity"))
         price = clean_num(attrs.get("tradePrice"))
         side = (attrs.get("buySell") or ("BUY" if qty > 0 else "SELL")).upper()
-        
+
         if not exec_id:
             exec_id = generate_deterministic_exec_id(symbol, t_dt_iso, side, qty, price, attrs.get("tradeID", ""))
 
@@ -223,7 +224,7 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
                 data += [""] * (len(headers) - len(data))
 
             row_dict = dict(zip(headers, data))
-            
+
             # Skip subheaders or total summary lines
             discriminator = row_dict.get("datadiscriminator", "").lower()
             if "total" in discriminator or "subtotal" in discriminator:
@@ -241,7 +242,7 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             proceeds = clean_num(row_dict.get("proceeds"))
             comm = abs(clean_num(row_dict.get("comm/fee") or row_dict.get("commission") or row_dict.get("ib commission")))
             realized_pnl = clean_num(row_dict.get("realized p/l") or row_dict.get("realized pnl") or row_dict.get("realized profit"))
-            
+
             # Asset category: Stocks, Equity and Index Options, Futures, etc.
             raw_cat = row_dict.get("asset category", "").upper()
             asset_category = "STK"
@@ -294,11 +295,11 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
     """Parses standard tabular Flex CSV or Trade Confirmation CSV exports."""
     trades: List[Dict[str, Any]] = []
     reader = csv.DictReader(lines)
-    
+
     # Normalize headers
     for raw_row in reader:
         row = {k.strip().lower().replace(" ", "").replace("_", "").replace("/", ""): v for k, v in raw_row.items() if k}
-        
+
         symbol = (row.get("symbol") or row.get("underlying") or "").upper().strip()
         if not symbol:
             continue
@@ -311,7 +312,7 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
         proceeds = clean_num(row.get("proceeds"))
         comm = abs(clean_num(row.get("ibcommission") or row.get("commission") or row.get("commfee") or row.get("comm")))
         realized_pnl = clean_num(row.get("fifopnlrealized") or row.get("realizedpnl") or row.get("realizedpl") or row.get("pnl"))
-        
+
         raw_side = (row.get("buysell") or row.get("side") or row.get("action") or "").upper()
         side = "BUY" if "BUY" in raw_side or "BOT" in raw_side or qty > 0 else "SELL"
 
@@ -383,7 +384,7 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
                 parsed = parse_xml_file(f)
             else:
                 parsed = parse_csv_file(f)
-            
+
             logger.info(f"  -> Extracted {len(parsed)} trade executions.")
             if verbose:
                 for t in parsed[:5]:

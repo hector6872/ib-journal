@@ -1,24 +1,26 @@
-import logging
 from contextlib import asynccontextmanager
 from datetime import date
+import logging
 from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
+from backend.analytics import (
+    get_day_trades,
+    get_detailed_stats,
+    get_month_calendar,
+    get_overview_stats,
+    get_week_calendar,
+    get_year_calendar,
+)
 from backend.config import BASE_DIR, HOST, PORT, is_ibkr_configured
 from backend.database import init_db
 from backend.scheduler import scheduler
 from backend.settings import get_all_settings, update_settings
-from backend.analytics import (
-    get_overview_stats,
-    get_detailed_stats,
-    get_year_calendar,
-    get_month_calendar,
-    get_week_calendar,
-    get_day_trades,
-)
+
 
 # Logging configuration (Stdout / RAM-friendly)
 logging.basicConfig(
@@ -31,7 +33,7 @@ logger = logging.getLogger("ib-journal.app")
 async def lifespan(app: FastAPI):
     # Startup: Initialize SQLite tables with WAL pragmas (No sample data, clean DB)
     init_db()
-    
+
     # Start background scheduler if credentials exist
     if is_ibkr_configured():
         scheduler.start()

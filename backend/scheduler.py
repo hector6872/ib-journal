@@ -59,7 +59,7 @@ class SyncScheduler:
     def calculate_next_sync_time(self) -> datetime:
         """Calculates next sync timestamp based on market hours and interval."""
         now = datetime.now(timezone.utc)
-        
+
         # If currently in market hours, add SYNC_INTERVAL_MINUTES
         if self.is_market_hours(now):
             candidate = now + timedelta(minutes=SYNC_INTERVAL_MINUTES)
@@ -149,7 +149,7 @@ class SyncScheduler:
             try:
                 await asyncio.sleep(60)
                 now = datetime.now(timezone.utc)
-                
+
                 # If market hours and time is past next_sync_time
                 if self.is_market_hours(now) and self.next_sync_time:
                     if now >= self.next_sync_time and not self.is_syncing:

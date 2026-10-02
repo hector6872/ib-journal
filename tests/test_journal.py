@@ -1,14 +1,16 @@
+from pathlib import Path
 import tempfile
 import unittest
-from pathlib import Path
 
-import backend.config as config
-import backend.database as database
-import backend.settings as settings_mod
 from backend.analytics import get_detailed_stats, get_overview_stats
+import backend.config as config
+from backend.config import is_production
+import backend.database as database
 from backend.database import db_session, init_db, upsert_trades
+import backend.settings as settings_mod
 from backend.settings import get_all_settings, update_settings
 from scripts.import_trades import parse_datetime_str, parse_ibkr_activity_statement_csv
+
 
 
 class TestIBKRJournal(unittest.TestCase):
@@ -193,29 +195,27 @@ Trades,Data,Order,Equity and Index Options,EUR,SPY 230120C400000,"2023-01-16, 16
 
     def test_environment_auto_sync_toggle(self):
         """Tests that dev/debug mode disables automatic sync, while prod enables it."""
-        from backend.config import is_production
-        import backend.config as cfg
-        
-        orig_env = cfg.ENVIRONMENT
-        orig_debug = cfg.DEBUG
+        orig_env = config.ENVIRONMENT
+        orig_debug = config.DEBUG
         try:
-            cfg.ENVIRONMENT = "dev"
-            cfg.DEBUG = False
+            config.ENVIRONMENT = "dev"
+            config.DEBUG = False
             self.assertFalse(is_production())
 
-            cfg.ENVIRONMENT = "debug"
+            config.ENVIRONMENT = "debug"
             self.assertFalse(is_production())
 
-            cfg.ENVIRONMENT = "prod"
-            cfg.DEBUG = False
+            config.ENVIRONMENT = "prod"
+            config.DEBUG = False
             self.assertTrue(is_production())
 
-            cfg.ENVIRONMENT = "prod"
-            cfg.DEBUG = True
+            config.ENVIRONMENT = "prod"
+            config.DEBUG = True
             self.assertFalse(is_production())
         finally:
-            cfg.ENVIRONMENT = orig_env
-            cfg.DEBUG = orig_debug
+            config.ENVIRONMENT = orig_env
+            config.DEBUG = orig_debug
+
 
 
 if __name__ == "__main__":

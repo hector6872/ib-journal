@@ -1,7 +1,9 @@
 import json
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
 from backend.config import BASE_DIR
+
 
 SETTINGS_PATH = BASE_DIR / "data" / "settings.json"
 logger = logging.getLogger("ib-journal.settings")
@@ -21,7 +23,7 @@ def update_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
     """Updates settings in data/settings.json using safe atomic writing."""
     if not new_settings:
         return get_all_settings()
-    
+
     current = get_all_settings()
     current.update(new_settings)
     try:

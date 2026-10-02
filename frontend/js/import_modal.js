@@ -80,7 +80,7 @@ const ImportModal = {
         if (gapInfo && gapInfo.has_gap) {
             if (gapAlert) gapAlert.classList.remove('hidden');
             if (gapDesc) {
-                gapDesc.textContent = `Tu última sincronización o trade registrado tiene una brecha de ${gapInfo.days} días. Dado que la Flex Query de IBKR suele cubrir 7 días, importa el extracto CSV o XML para no perder operaciones pasadas.`;
+                gapDesc.textContent = `Your last synchronization or recorded trade has a ${gapInfo.days}-day gap. Since IBKR Flex Query usually covers 7 days, please import your CSV or XML statement to prevent missing past trades.`;
             }
         } else {
             if (gapAlert) gapAlert.classList.add('hidden');

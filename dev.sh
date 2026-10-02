@@ -5,7 +5,7 @@ set -e
 # IBKR Trading Journal - Development Launcher
 # ========================================================
 
-echo "🐢 Starting IBKR Trading Journal in Development Mode..."
+echo "📓 Starting IBKR Trading Journal in Development Mode..."
 
 # 1. Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

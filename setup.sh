@@ -5,7 +5,7 @@ set -e
 # IBKR Trading Journal - Raspberry Pi Auto-Installer
 # ========================================================
 
-echo "🐢 Setting up IBKR Trading Journal..."
+echo "📓 Setting up IBKR Trading Journal..."
 
 # 1. Check Python 3
 if ! command -v python3 &> /dev/null; then

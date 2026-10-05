@@ -77,15 +77,29 @@ const DayModal = {
             const pnlClass = pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
             const timeStr = t.trade_time || '--:--';
 
+            const curr = t.raw_currency || t.currency || '';
+            const currPrefix = curr === 'USD' ? '$' : (curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : ''));
+            const priceDisplay = currPrefix ? `${currPrefix}${t.trade_price.toFixed(2)}` : (curr ? `${t.trade_price.toFixed(2)} ${curr}` : t.trade_price.toFixed(2));
+
+            let commTitle = '';
+            if (t.raw_currency && t.base_currency && t.raw_currency !== t.base_currency && t.raw_commission) {
+                commTitle = `Original: ${t.raw_commission.toFixed(2)} ${t.raw_currency} (FX ${t.fx_rate_to_base || 1})`;
+            }
+
+            let pnlTitle = '';
+            if (t.raw_currency && t.base_currency && t.raw_currency !== t.base_currency && t.raw_realized_pnl !== undefined && t.raw_realized_pnl !== null) {
+                pnlTitle = `Original: ${t.raw_realized_pnl >= 0 ? '+' : ''}${t.raw_realized_pnl.toFixed(2)} ${t.raw_currency} (FX ${t.fx_rate_to_base || 1})`;
+            }
+
             return `
                 <tr>
                     <td class="mono">${timeStr}</td>
                     <td><strong>${t.symbol}</strong> <span style="font-size: 10px; color: var(--text-muted);">(${t.asset_category})</span></td>
                     <td><span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${t.buy_sell}</span></td>
                     <td class="mono">${Math.abs(t.quantity)}</td>
-                    <td class="mono">${t.trade_price.toFixed(2)}</td>
-                    <td class="mono">${State.currency}${t.ib_commission.toFixed(2)}</td>
-                    <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(pnl)}</td>
+                    <td class="mono" title="${curr ? `Currency: ${curr}` : ''}">${priceDisplay}</td>
+                    <td class="mono" ${commTitle ? `title="${commTitle}"` : ''}>${State.currency}${t.ib_commission.toFixed(2)}</td>
+                    <td class="mono ${pnlClass}" style="font-weight: 700;" ${pnlTitle ? `title="${pnlTitle}"` : ''}>${State.formatCurrency(pnl)}</td>
                 </tr>
             `;
         }).join('');

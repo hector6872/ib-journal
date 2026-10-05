@@ -181,7 +181,7 @@ async def api_trades_import(request: Request):
     if not trades:
         from scripts.import_trades import parse_ibkr_activity_statement_csv, parse_generic_ibkr_csv
         lines = text.splitlines()
-        is_activity = any(line_item.startswith("Trades,Header") or line_item.startswith("Trades,Data") for line_item in lines[:50])
+        is_activity = any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") for line_item in lines)
         if is_activity:
             trades = parse_ibkr_activity_statement_csv(lines)
         else:
@@ -190,7 +190,7 @@ async def api_trades_import(request: Request):
     lines = text.splitlines() if not trades else []
     is_valid_ibkr_doc = (
         "<FlexStatement" in text or "<FlexQueryResponse" in text or "<Trade" in text or
-        any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") or line_item.startswith("Financial Instrument Information,") for line_item in lines[:50])
+        any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") or line_item.startswith("Financial Instrument Information,") for line_item in lines)
     )
 
     if not trades and not is_valid_ibkr_doc:

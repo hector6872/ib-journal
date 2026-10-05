@@ -76,6 +76,11 @@ def init_db():
             open_close_indicator TEXT, -- O, C, O/C
             order_type TEXT DEFAULT 'MKT', -- LMT, MKT, STP, STP LMT
             exchange TEXT DEFAULT 'SMART', -- NASDAQ, NYSE, SMART, etc.
+            raw_currency TEXT DEFAULT 'EUR',
+            base_currency TEXT DEFAULT 'EUR',
+            fx_rate_to_base REAL DEFAULT 1.0,
+            raw_commission REAL DEFAULT 0.0,
+            raw_realized_pnl REAL DEFAULT 0.0,
             notes TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -94,6 +99,16 @@ def init_db():
             cursor.execute("ALTER TABLE trades ADD COLUMN order_type TEXT DEFAULT 'MKT';")
         if "exchange" not in cols:
             cursor.execute("ALTER TABLE trades ADD COLUMN exchange TEXT DEFAULT 'SMART';")
+        if "raw_currency" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN raw_currency TEXT DEFAULT 'EUR';")
+        if "base_currency" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN base_currency TEXT DEFAULT 'EUR';")
+        if "fx_rate_to_base" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN fx_rate_to_base REAL DEFAULT 1.0;")
+        if "raw_commission" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN raw_commission REAL DEFAULT 0.0;")
+        if "raw_realized_pnl" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN raw_realized_pnl REAL DEFAULT 0.0;")
 
         # Sync History Table
         cursor.execute("""
@@ -139,12 +154,14 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         ib_exec_id, trade_id, account_id, symbol, description, asset_category,
         currency, buy_sell, quantity, trade_price, trade_money, proceeds,
         ib_commission, realized_pnl, trade_date, trade_time, trade_date_time,
-        open_close_indicator, order_type, exchange
+        open_close_indicator, order_type, exchange,
+        raw_currency, base_currency, fx_rate_to_base, raw_commission, raw_realized_pnl
     ) VALUES (
         :ib_exec_id, :trade_id, :account_id, :symbol, :description, :asset_category,
         :currency, :buy_sell, :quantity, :trade_price, :trade_money, :proceeds,
         :ib_commission, :realized_pnl, :trade_date, :trade_time, :trade_date_time,
-        :open_close_indicator, :order_type, :exchange
+        :open_close_indicator, :order_type, :exchange,
+        :raw_currency, :base_currency, :fx_rate_to_base, :raw_commission, :raw_realized_pnl
     )
     ON CONFLICT(ib_exec_id) DO UPDATE SET
         realized_pnl = excluded.realized_pnl,
@@ -153,11 +170,55 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         open_close_indicator = excluded.open_close_indicator,
         order_type = excluded.order_type,
         exchange = excluded.exchange,
+        raw_currency = excluded.raw_currency,
+        base_currency = excluded.base_currency,
+        fx_rate_to_base = excluded.fx_rate_to_base,
+        raw_commission = excluded.raw_commission,
+        raw_realized_pnl = excluded.raw_realized_pnl,
         notes = trades.notes;
     """
 
+    sanitized_trades = []
+    for t in trades:
+        curr = t.get("currency") or "EUR"
+        raw_curr = t.get("raw_currency") or curr
+        base_curr = t.get("base_currency") or "EUR"
+        fx_rate = float(t.get("fx_rate_to_base") or 1.0)
+        comm = float(t.get("ib_commission") or 0.0)
+        raw_comm = float(t.get("raw_commission") if t.get("raw_commission") is not None else comm)
+        pnl = float(t.get("realized_pnl") or 0.0)
+        raw_pnl = float(t.get("raw_realized_pnl") if t.get("raw_realized_pnl") is not None else pnl)
+
+        sanitized_trades.append({
+            "ib_exec_id": t.get("ib_exec_id", ""),
+            "trade_id": t.get("trade_id") or t.get("ib_exec_id", ""),
+            "account_id": t.get("account_id", ""),
+            "symbol": t.get("symbol", ""),
+            "description": t.get("description", ""),
+            "asset_category": t.get("asset_category", "STK"),
+            "currency": curr,
+            "raw_currency": raw_curr,
+            "base_currency": base_curr,
+            "buy_sell": t.get("buy_sell", "BUY"),
+            "quantity": float(t.get("quantity") or 0.0),
+            "trade_price": float(t.get("trade_price") or 0.0),
+            "trade_money": float(t.get("trade_money") or 0.0),
+            "proceeds": float(t.get("proceeds") or 0.0),
+            "fx_rate_to_base": fx_rate,
+            "raw_commission": raw_comm,
+            "raw_realized_pnl": raw_pnl,
+            "ib_commission": comm,
+            "realized_pnl": pnl,
+            "trade_date": t.get("trade_date", ""),
+            "trade_time": t.get("trade_time", ""),
+            "trade_date_time": t.get("trade_date_time", ""),
+            "open_close_indicator": t.get("open_close_indicator", "C"),
+            "order_type": t.get("order_type", "MKT"),
+            "exchange": t.get("exchange", "SMART"),
+        })
+
     with db_session() as conn:
         cursor = conn.cursor()
-        cursor.executemany(sql, trades)
+        cursor.executemany(sql, sanitized_trades)
         affected = cursor.rowcount
         return affected

@@ -193,8 +193,7 @@ def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
         return []
 
     # Check if this is an IBKR multi-section Activity Statement
-    is_activity_statement = any(line_item.startswith("Trades,Header") or line_item.startswith("Trades,Data") for line_item in lines[:50])
-
+    is_activity_statement = any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") for line_item in lines)
 
     if is_activity_statement:
         trades = parse_ibkr_activity_statement_csv(lines)
@@ -205,10 +204,59 @@ def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
 
 
 def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
-    """Parses standard IBKR Activity Statement CSV with 'Trades,Header' and 'Trades,Data' lines."""
+    """Parses standard IBKR Activity Statement CSV with multi-currency conversion to Base Currency."""
     trades: List[Dict[str, Any]] = []
     headers: List[str] = []
+    account_id = ""
+    base_currency = "EUR"
 
+    # Default fallback conversion rates to EUR
+    fx_rates_to_base: Dict[str, float] = {
+        "EUR": 1.0,
+        "USD": 0.906,
+        "CAD": 0.684,
+        "GBP": 1.154,
+        "AUD": 0.617,
+        "CHF": 1.05,
+        "JPY": 0.0061,
+        "NOK": 0.089,
+        "SEK": 0.088,
+        "HKD": 0.116,
+    }
+
+    # Pass 1: Extract account Base Currency and FX conversion rates from statement headers/summaries
+    for line in lines:
+        row = list(csv.reader([line]))[0] if line else []
+        if not row or len(row) < 3:
+            continue
+        section = row[0].strip()
+        record_type = row[1].strip()
+
+        if section == "Account Information" and record_type == "Data":
+            if len(row) >= 4:
+                field_name = row[2].strip()
+                field_val = row[3].strip()
+                if field_name == "Account":
+                    account_id = field_val
+                elif field_name == "Base Currency":
+                    base_currency = field_val.upper()
+                    fx_rates_to_base[base_currency] = 1.0
+
+        elif section == "Forex Balances" and record_type == "Data":
+            if len(row) >= 9:
+                curr = row[4].strip().upper()
+                close_price = clean_num(row[8])
+                if curr and close_price > 0:
+                    fx_rates_to_base[curr] = close_price
+
+        elif section == "Mark-to-Market Performance Summary" and record_type == "Data":
+            if len(row) >= 8 and row[2].strip() == "Forex":
+                curr = row[3].strip().upper()
+                curr_price = clean_num(row[7])
+                if curr and curr_price > 0:
+                    fx_rates_to_base[curr] = curr_price
+
+    # Pass 2: Process trade executions and convert P&L / commissions to base currency
     for line in lines:
         row = list(csv.reader([line]))[0] if line else []
         if not row or len(row) < 3:
@@ -218,7 +266,6 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
         record_type = row[1].strip()
 
         if section == "Trades" and record_type == "Header":
-            # Header line: Trades, Header, DataDiscriminator, Asset Category, Currency, Symbol, Date/Time, Quantity, T. Price, C. Price, Proceeds, Comm/Fee, Realized P/L, MTM P/L, Code
             headers = [h.strip().lower() for h in row[2:]]
         elif section == "Trades" and record_type == "Data" and headers:
             data = [d.strip() for d in row[2:]]
@@ -242,8 +289,27 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             qty = clean_num(row_dict.get("quantity") or row_dict.get("qty"))
             price = clean_num(row_dict.get("t. price") or row_dict.get("trade price") or row_dict.get("price"))
             proceeds = clean_num(row_dict.get("proceeds"))
-            comm = abs(clean_num(row_dict.get("comm/fee") or row_dict.get("commission") or row_dict.get("ib commission")))
-            realized_pnl = clean_num(row_dict.get("realized p/l") or row_dict.get("realized pnl") or row_dict.get("realized profit"))
+
+            raw_currency = row_dict.get("currency", base_currency).upper()
+            fx_rate = 1.0 if raw_currency == base_currency else fx_rates_to_base.get(raw_currency, 1.0)
+
+            raw_comm = abs(clean_num(
+                row_dict.get("comm/fee") or
+                row_dict.get("commission") or
+                row_dict.get("ib commission") or
+                row_dict.get("comm in eur") or
+                row_dict.get("comm in usd") or
+                row_dict.get("comm")
+            ))
+            raw_pnl = clean_num(row_dict.get("realized p/l") or row_dict.get("realized pnl") or row_dict.get("realized profit"))
+
+            # Convert commission & realized PnL to base currency
+            if "comm in eur" in headers and base_currency == "EUR" and row_dict.get("comm in eur"):
+                comm_in_base = raw_comm
+            else:
+                comm_in_base = round(raw_comm * fx_rate, 4)
+
+            pnl_in_base = round(raw_pnl * fx_rate, 4)
 
             # Asset category: Stocks, Equity and Index Options, Futures, etc.
             raw_cat = row_dict.get("asset category", "").upper()
@@ -259,7 +325,6 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             elif "BOND" in raw_cat:
                 asset_category = "BOND"
 
-            currency = row_dict.get("currency", "EUR").upper()
             code = (row_dict.get("code") or "C").upper()
             open_close = "O" if "O" in code else ("C" if "C" in code else "C")
             side = "BUY" if qty > 0 else "SELL"
@@ -270,18 +335,23 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             trades.append({
                 "ib_exec_id": exec_id,
                 "trade_id": trade_id or exec_id,
-                "account_id": row_dict.get("accountid", ""),
+                "account_id": row_dict.get("accountid", "") or account_id,
                 "symbol": symbol,
                 "description": row_dict.get("description", ""),
                 "asset_category": asset_category,
-                "currency": currency,
+                "currency": raw_currency,
+                "raw_currency": raw_currency,
+                "base_currency": base_currency,
                 "buy_sell": side,
                 "quantity": qty,
                 "trade_price": price,
-                "trade_money": abs(qty) * price,
+                "trade_money": abs(qty) * price if price else 0.0,
                 "proceeds": proceeds,
-                "ib_commission": comm,
-                "realized_pnl": realized_pnl,
+                "fx_rate_to_base": fx_rate,
+                "raw_commission": raw_comm,
+                "raw_realized_pnl": raw_pnl,
+                "ib_commission": comm_in_base,
+                "realized_pnl": pnl_in_base,
                 "trade_date": t_date,
                 "trade_time": t_time,
                 "trade_date_time": t_dt_iso,

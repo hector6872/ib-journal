@@ -167,8 +167,17 @@ class IBKRFlexClient:
                 trade_date = date.today().isoformat()
 
             # PnL & Money calculations
-            realized_pnl = float(attrs.get("fifoPnlRealized") or attrs.get("realizedPNL") or attrs.get("fxPnl") or 0.0)
-            commission = abs(float(attrs.get("ibCommission") or attrs.get("taxes") or 0.0))
+            fx_rate = float(attrs.get("fxRateToBase") or 1.0)
+            raw_currency = (attrs.get("currency") or "EUR").upper()
+            base_currency = (attrs.get("baseCurrency") or "EUR").upper()
+            
+            raw_pnl = float(attrs.get("fifoPnlRealized") or attrs.get("realizedPNL") or attrs.get("fxPnl") or 0.0)
+            raw_comm = abs(float(attrs.get("ibCommission") or attrs.get("taxes") or 0.0))
+            
+            # Convert to base currency using fxRateToBase
+            realized_pnl = round(raw_pnl * fx_rate, 4) if fx_rate > 0 else raw_pnl
+            commission = round(raw_comm * fx_rate, 4) if fx_rate > 0 else raw_comm
+
             quantity = float(attrs.get("quantity") or 0.0)
             trade_price = float(attrs.get("tradePrice") or 0.0)
             trade_money = float(attrs.get("tradeMoney") or (abs(quantity) * trade_price))
@@ -181,12 +190,17 @@ class IBKRFlexClient:
                 "symbol": (attrs.get("symbol") or "UNKNOWN").upper(),
                 "description": attrs.get("description") or "",
                 "asset_category": attrs.get("assetCategory") or "STK",
-                "currency": attrs.get("currency") or "EUR",
+                "currency": raw_currency,
+                "raw_currency": raw_currency,
+                "base_currency": base_currency,
                 "buy_sell": (attrs.get("buySell") or "BUY").upper(),
                 "quantity": quantity,
                 "trade_price": trade_price,
                 "trade_money": trade_money,
                 "proceeds": proceeds,
+                "fx_rate_to_base": fx_rate,
+                "raw_commission": raw_comm,
+                "raw_realized_pnl": raw_pnl,
                 "ib_commission": commission,
                 "realized_pnl": realized_pnl,
                 "trade_date": trade_date,

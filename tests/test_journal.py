@@ -176,6 +176,31 @@ Trades,Data,Order,Equity and Index Options,EUR,SPY 230120C400000,"2023-01-16, 16
         self.assertEqual(trades[0]["asset_category"], "STK")
         self.assertEqual(trades[1]["asset_category"], "OPT")
 
+        # Test full Activity Statement where Trades starts deep after NAV/Account sections
+        sample_full_activity = """Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers Ireland Limited
+Account Information,Header,Field Name,Field Value
+Account Information,Data,Account,U6920617
+Net Asset Value,Header,Asset Class,Prior Total,Current Long,Current Short,Current Total,Change
+Net Asset Value,Data,Stock,641.46,1342.39,0,1342.39,700.92
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+Trades,Data,Order,Stocks,CAD,AFM,"2023-01-20, 14:42:59",50,1,1,-50,-0.27,50.27,0,0,O
+Trades,Data,Order,Stocks,CAD,NGEX,"2023-03-08, 10:31:47",-16,3.24,3.27,51.84,-0.2656,-50.3368,1.2376,-0.48,C
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,,Proceeds,Comm in EUR,,,MTM in EUR,Code
+Trades,Data,Order,Forex,AUD,EUR.AUD,"2023-12-14, 12:18:41",-77,1.63815,,126.13755,-1.83912,,,-0.130516,
+"""
+        full_trades = parse_ibkr_activity_statement_csv(sample_full_activity.splitlines())
+        self.assertEqual(len(full_trades), 3)
+        self.assertEqual(full_trades[0]["account_id"], "U6920617")
+        self.assertEqual(full_trades[0]["symbol"], "AFM")
+        self.assertEqual(full_trades[1]["symbol"], "NGEX")
+        self.assertEqual(full_trades[1]["raw_currency"], "CAD")
+        self.assertEqual(full_trades[1]["raw_realized_pnl"], 1.2376)
+        self.assertEqual(full_trades[1]["realized_pnl"], 0.8465)  # 1.2376 CAD * 0.684 CAD/EUR
+        self.assertEqual(full_trades[2]["symbol"], "EUR.AUD")
+        self.assertEqual(full_trades[2]["asset_category"], "CASH")
+        self.assertEqual(full_trades[2]["ib_commission"], 1.83912)
+
         t_date, t_time, t_iso = parse_datetime_str("2023-05-12, 14:32:00")
         self.assertEqual(t_date, "2023-05-12")
         self.assertEqual(t_time, "14:32:00")

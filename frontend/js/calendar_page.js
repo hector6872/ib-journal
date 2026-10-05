@@ -118,7 +118,7 @@ const CalendarPage = {
         const avgLoss = losingTrades > 0 ? (grossLoss / losingTrades) : 0;
         const expectancy = totalTrades > 0 ? (totalNetPnl / totalTrades) : 0;
         const daysDivisor = fallbackDays || (activeDays > 0 ? activeDays : 1);
-        const activity = (totalTrades / daysDivisor).toFixed(1);
+        const activity = totalTrades > 0 ? (totalTrades / daysDivisor).toFixed(1) : "0.0";
 
         const largestWin = extraStats.largestWin !== undefined ? extraStats.largestWin : 0;
         const largestLoss = extraStats.largestLoss !== undefined ? extraStats.largestLoss : 0;
@@ -531,7 +531,7 @@ const CalendarPage = {
             weekTrades.push(d.trades_count || 0);
         });
 
-        const weekStats = this.computePeriodStats(days, 5, { largestWin: data.largest_win, largestLoss: data.largest_loss });
+        const weekStats = this.computePeriodStats(days, null, { largestWin: data.largest_win, largestLoss: data.largest_loss });
         const dockHtml = this.buildDockHtml('week', weekStats);
 
         container.innerHTML = `

@@ -282,9 +282,7 @@ const DayModal = {
         if (rawTrades.length === 0) {
             bodyEl.innerHTML = `
                 <div class="modal-empty-state">
-                    <div class="empty-icon">📂</div>
-                    <h4>${STRINGS.modal?.noTradesFound || 'No trade executions recorded on this date.'}</h4>
-                    <p>There are no executions or positions recorded for this trading session.</p>
+                    <p class="modal-empty-message">${STRINGS.modal?.noTradesFound || 'No trade executions recorded on this date.'}</p>
                 </div>
             `;
             return;

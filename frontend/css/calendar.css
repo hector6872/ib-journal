@@ -1723,19 +1723,11 @@
     color: var(--text-muted);
 }
 
-.modal-empty-state .empty-icon {
-    font-size: 32px;
-    margin-bottom: 8px;
-}
-
-.modal-empty-state h4 {
-    font-size: 14px;
-    color: var(--text-main);
-    margin: 0 0 6px 0;
-}
-
+.modal-empty-state .modal-empty-message,
 .modal-empty-state p {
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
     margin: 0;
 }
 

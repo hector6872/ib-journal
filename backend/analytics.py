@@ -1170,8 +1170,10 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             raw_curr = fill.get("raw_currency") or fill.get("currency") or "EUR"
             base_curr = fill.get("base_currency") or "EUR"
             fx_rate = float(fill.get("fx_rate_to_base") or 1.0)
-            raw_comm = float(fill.get("raw_commission") if fill.get("raw_commission") is not None else comm)
-            raw_pnl = float(fill.get("raw_realized_pnl") if fill.get("raw_realized_pnl") is not None else pnl)
+            raw_comm_val = fill.get("raw_commission")
+            raw_comm = float(raw_comm_val) if raw_comm_val is not None else comm
+            raw_pnl_val = fill.get("raw_realized_pnl")
+            raw_pnl = float(raw_pnl_val) if raw_pnl_val is not None else pnl
             fill_cat = fill.get("asset_category", "STK")
 
             if current_trade is None:

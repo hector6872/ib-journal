@@ -160,6 +160,7 @@ async def api_sync_status():
     return scheduler.get_status()
 
 @app.post("/api/trades/import")
+@app.post("/api/import/statement")
 async def api_trades_import(request: Request):
     """Imports trades and cash transactions from uploaded CSV, XML, or JSON payload."""
     try:
@@ -260,6 +261,8 @@ async def api_trades_import(request: Request):
             status_code=400,
             detail=f"Error importing statement: {str(e)}"
         )
+
+import_historical_statement = api_trades_import
 
 @app.get("/api/cash/transactions")
 async def api_get_cash_transactions():

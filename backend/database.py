@@ -1,7 +1,7 @@
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Dict, Generator, List
 
 from backend.config import DB_PATH
@@ -210,9 +210,11 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         base_curr = t.get("base_currency") or "EUR"
         fx_rate = float(t.get("fx_rate_to_base") or 1.0)
         comm = float(t.get("ib_commission") or 0.0)
-        raw_comm = float(t.get("raw_commission") if t.get("raw_commission") is not None else comm)
+        raw_comm_val = t.get("raw_commission")
+        raw_comm = float(raw_comm_val) if raw_comm_val is not None else comm
         pnl = float(t.get("realized_pnl") or 0.0)
-        raw_pnl = float(t.get("raw_realized_pnl") if t.get("raw_realized_pnl") is not None else pnl)
+        raw_pnl_val = t.get("raw_realized_pnl")
+        raw_pnl = float(raw_pnl_val) if raw_pnl_val is not None else pnl
 
         sanitized_trades.append({
             "ib_exec_id": t.get("ib_exec_id", ""),
@@ -281,9 +283,11 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
     sanitized = []
     for tx in transactions:
         tx_type = (tx.get("type") or "DEPOSIT").upper()
-        raw_val = float(tx.get("amount") if tx.get("amount") is not None else (tx.get("raw_amount") or 0.0))
+        amt_val = tx.get("amount")
+        raw_amt_val = tx.get("raw_amount")
+        raw_val = float(amt_val) if amt_val is not None else float(raw_amt_val or 0.0)
         amount = abs(raw_val) if tx_type in ("DEPOSIT", "DIVIDEND") else -abs(raw_val)
-        raw_amount = float(tx.get("raw_amount") if tx.get("raw_amount") is not None else amount)
+        raw_amount = float(raw_amt_val) if raw_amt_val is not None else amount
         fx = float(tx.get("fx_rate_to_base") or 1.0)
         sanitized.append({
             "transaction_id": tx.get("transaction_id", ""),
@@ -334,7 +338,6 @@ def get_cash_summary() -> Dict[str, Any]:
 
 def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
     """Adds a manual deposit or withdrawal."""
-    import hashlib
     import uuid
     tx_type = (data.get("type") or "DEPOSIT").upper()
     amount_val = abs(float(data.get("amount") or 0.0))

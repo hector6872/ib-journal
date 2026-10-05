@@ -36,6 +36,15 @@ const STRINGS = {
         clickToTop: "Click to scroll to top"
     },
 
+    // Docked Mini KPIs in Sticky Header (Abbreviated)
+    miniKpi: {
+        pnl: "P&L",
+        wr: "WR",
+        pf: "PF",
+        exp: "EXP",
+        trades: "TRADES"
+    },
+
     // Sync Widget & Rate Limiting
     sync: {
         syncNow: "Sync Now",

@@ -67,14 +67,20 @@ const DayModal = {
         }
 
         // Calculate totals
-        const grossPnl = trades.reduce((acc, t) => acc + (t.realized_pnl || 0), 0);
+        const closedTrades = trades.filter(t => (t.open_close_indicator || '').toUpperCase() === 'C' || (t.realized_pnl !== 0 && t.realized_pnl !== null && t.realized_pnl !== undefined));
+        const grossPnl = closedTrades.reduce((acc, t) => acc + (t.realized_pnl || 0), 0);
+        const closedComm = closedTrades.reduce((acc, t) => acc + (t.ib_commission || 0), 0);
         const totalComm = trades.reduce((acc, t) => acc + (t.ib_commission || 0), 0);
-        const netPnl = grossPnl - totalComm;
+        const netPnl = grossPnl - closedComm;
 
         let tableRowsHtml = trades.map(t => {
             const isBuy = (t.buy_sell || '').toUpperCase() === 'BUY';
+            const isOpen = (t.open_close_indicator || '').toUpperCase() === 'O' && (t.realized_pnl === 0 || t.realized_pnl === null);
             const pnl = (t.realized_pnl || 0) - (t.ib_commission || 0);
-            const pnlClass = pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
+            const pnlClass = isOpen ? 'pnl-neutral' : (pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral'));
+            const pnlDisplay = isOpen
+                ? `<span style="color: var(--text-muted); font-size: 11px; font-weight: 500;">(Open)</span>`
+                : State.formatCurrency(pnl);
             const timeStr = t.trade_time || '--:--';
 
             const curr = t.raw_currency || t.currency || '';
@@ -99,7 +105,7 @@ const DayModal = {
                     <td class="mono">${Math.abs(t.quantity)}</td>
                     <td class="mono" title="${curr ? `Currency: ${curr}` : ''}">${priceDisplay}</td>
                     <td class="mono" ${commTitle ? `title="${commTitle}"` : ''}>${State.currency}${t.ib_commission.toFixed(2)}</td>
-                    <td class="mono ${pnlClass}" style="font-weight: 700;" ${pnlTitle ? `title="${pnlTitle}"` : ''}>${State.formatCurrency(pnl)}</td>
+                    <td class="mono ${pnlClass}" style="font-weight: 700;" ${pnlTitle ? `title="${pnlTitle}"` : ''}>${pnlDisplay}</td>
                 </tr>
             `;
         }).join('');

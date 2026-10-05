@@ -44,6 +44,9 @@ const App = {
         // 7. Initialize Modals & Top Stats Polling
         DayModal.init();
         ImportModal.init();
+        if (typeof CashModal !== 'undefined' && CashModal.init) {
+            CashModal.init();
+        }
         StatsController.startPolling();
 
         // 8. Restore persisted tab (default to Calendar)

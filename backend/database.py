@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 from contextlib import contextmanager
+from datetime import date, datetime
 from typing import Any, Dict, Generator, List
 
 from backend.config import DB_PATH
@@ -139,6 +140,30 @@ def init_db():
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_gaps_resolved ON sync_gaps(resolved_at);")
 
+        # Cash Transactions Table (Deposits, Withdrawals, Transfers, Dividends)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cash_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id TEXT UNIQUE NOT NULL,
+            account_id TEXT,
+            type TEXT NOT NULL,          -- 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'DIVIDEND', 'INTEREST'
+            amount REAL NOT NULL,        -- Positive for deposit/inflow, negative for withdrawal/outflow (in base currency)
+            raw_amount REAL,
+            currency TEXT DEFAULT 'EUR',
+            raw_currency TEXT DEFAULT 'EUR',
+            base_currency TEXT DEFAULT 'EUR',
+            fx_rate_to_base REAL DEFAULT 1.0,
+            transaction_date TEXT NOT NULL, -- YYYY-MM-DD
+            transaction_time TEXT,
+            description TEXT,
+            is_manual BOOLEAN DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_date ON cash_transactions(transaction_date);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_type ON cash_transactions(type);")
+
         logger.info("Database initialized successfully with WAL mode.")
 
 def upsert_trades(trades: List[Dict[str, Any]]) -> int:
@@ -222,3 +247,127 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         cursor.executemany(sql, sanitized_trades)
         affected = cursor.rowcount
         return affected
+
+def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
+    """
+    Inserts or updates cash transactions (deposits, withdrawals, transfers).
+    Returns count of upserted records.
+    """
+    if not transactions:
+        return 0
+
+    sql = """
+    INSERT INTO cash_transactions (
+        transaction_id, account_id, type, amount, raw_amount,
+        currency, raw_currency, base_currency, fx_rate_to_base,
+        transaction_date, transaction_time, description, is_manual
+    ) VALUES (
+        :transaction_id, :account_id, :type, :amount, :raw_amount,
+        :currency, :raw_currency, :base_currency, :fx_rate_to_base,
+        :transaction_date, :transaction_time, :description, :is_manual
+    )
+    ON CONFLICT(transaction_id) DO UPDATE SET
+        amount = excluded.amount,
+        raw_amount = excluded.raw_amount,
+        currency = excluded.currency,
+        raw_currency = excluded.raw_currency,
+        base_currency = excluded.base_currency,
+        fx_rate_to_base = excluded.fx_rate_to_base,
+        transaction_date = excluded.transaction_date,
+        transaction_time = excluded.transaction_time,
+        description = excluded.description;
+    """
+
+    sanitized = []
+    for tx in transactions:
+        tx_type = (tx.get("type") or "DEPOSIT").upper()
+        raw_val = float(tx.get("amount") if tx.get("amount") is not None else (tx.get("raw_amount") or 0.0))
+        amount = abs(raw_val) if tx_type in ("DEPOSIT", "DIVIDEND") else -abs(raw_val)
+        raw_amount = float(tx.get("raw_amount") if tx.get("raw_amount") is not None else amount)
+        fx = float(tx.get("fx_rate_to_base") or 1.0)
+        sanitized.append({
+            "transaction_id": tx.get("transaction_id", ""),
+            "account_id": tx.get("account_id", ""),
+            "type": tx_type,
+            "amount": amount,
+            "raw_amount": raw_amount,
+            "currency": tx.get("currency", "EUR"),
+            "raw_currency": tx.get("raw_currency", "EUR"),
+            "base_currency": tx.get("base_currency", "EUR"),
+            "fx_rate_to_base": fx,
+            "transaction_date": tx.get("transaction_date", date.today().isoformat()),
+            "transaction_time": tx.get("transaction_time", ""),
+            "description": tx.get("description", ""),
+            "is_manual": 1 if tx.get("is_manual") else 0,
+        })
+
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.executemany(sql, sanitized)
+        return cursor.rowcount
+
+def get_cash_summary() -> Dict[str, Any]:
+    """Returns cash summary metrics and list of transactions."""
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                id, transaction_id, account_id, type, amount, raw_amount,
+                currency, raw_currency, base_currency, fx_rate_to_base,
+                transaction_date, transaction_time, description, is_manual, created_at
+            FROM cash_transactions
+            ORDER BY transaction_date DESC, id DESC
+        """)
+        rows = [dict(r) for r in cursor.fetchall()]
+
+        total_deposits = sum(r["amount"] for r in rows if r["amount"] > 0)
+        total_withdrawals = sum(abs(r["amount"]) for r in rows if r["amount"] < 0)
+        net_cash_flow = total_deposits - total_withdrawals
+
+        return {
+            "total_deposits": round(total_deposits, 2),
+            "total_withdrawals": round(total_withdrawals, 2),
+            "net_cash_flow": round(net_cash_flow, 2),
+            "transactions_count": len(rows),
+            "transactions": rows
+        }
+
+def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Adds a manual deposit or withdrawal."""
+    import hashlib
+    import uuid
+    tx_type = (data.get("type") or "DEPOSIT").upper()
+    amount_val = abs(float(data.get("amount") or 0.0))
+    amount = amount_val if tx_type == "DEPOSIT" else -amount_val
+    tx_date = data.get("transaction_date") or date.today().isoformat()
+    desc = data.get("description") or ("Manual Deposit" if tx_type == "DEPOSIT" else "Manual Withdrawal")
+    curr = (data.get("currency") or "EUR").upper()
+
+    tx_id = f"MAN_{uuid.uuid4().hex[:12]}"
+    record = {
+        "transaction_id": tx_id,
+        "account_id": data.get("account_id", "MANUAL"),
+        "type": tx_type,
+        "amount": amount,
+        "raw_amount": amount,
+        "currency": curr,
+        "raw_currency": curr,
+        "base_currency": curr,
+        "fx_rate_to_base": 1.0,
+        "transaction_date": tx_date,
+        "transaction_time": data.get("transaction_time", "12:00:00"),
+        "description": desc,
+        "is_manual": True
+    }
+    upsert_cash_transactions([record])
+    return record
+
+def delete_cash_transaction(tx_id_or_id: Any) -> bool:
+    """Deletes a cash transaction by id or transaction_id."""
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM cash_transactions
+            WHERE id = ? OR transaction_id = ?
+        """, (str(tx_id_or_id), str(tx_id_or_id)))
+        return cursor.rowcount > 0

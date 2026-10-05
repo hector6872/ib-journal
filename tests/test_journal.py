@@ -394,6 +394,95 @@ Trades,Data,Order,Forex,AUD,EUR.AUD,"2023-12-14, 12:18:41",-77,1.63815,,126.1375
         self.assertEqual(status["cooldown_remaining_seconds"], 0)
         self.assertEqual(scheduler.get_cooldown_remaining_seconds(), 0)
 
+    def test_cash_transactions_and_account_equity(self):
+        """Verifies cash transactions tracking, starting capital, and account balance / ROI calculation."""
+        from backend.database import add_manual_cash_transaction, delete_cash_transaction, get_cash_summary, upsert_cash_transactions
+        from scripts.import_trades import parse_csv_cash_transactions
+
+        # 1. Test CSV parsing of Deposits & Withdrawals
+        csv_sample = [
+            'Statement,Data,Title,Activity Statement',
+            'Account Information,Data,Account,U6920617',
+            'Account Information,Data,Base Currency,EUR',
+            'Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount',
+            'Deposits & Withdrawals,Data,EUR,2023-01-15,"Electronic Funds Transfer",5000.00',
+            'Deposits & Withdrawals,Data,EUR,2023-06-20,"Cash Withdrawal",-1000.00',
+            'Deposits & Withdrawals,Total,,EUR,,4000.00',
+        ]
+        parsed_cash = parse_csv_cash_transactions(csv_sample)
+        self.assertEqual(len(parsed_cash), 2)
+        self.assertEqual(parsed_cash[0]["amount"], 5000.0)
+        self.assertEqual(parsed_cash[0]["type"], "DEPOSIT")
+        self.assertEqual(parsed_cash[1]["amount"], -1000.0)
+        self.assertEqual(parsed_cash[1]["type"], "WITHDRAWAL")
+
+        # Upsert parsed cash
+        upsert_cash_transactions(parsed_cash)
+        summary = get_cash_summary()
+        self.assertEqual(summary["total_deposits"], 5000.0)
+        self.assertEqual(summary["total_withdrawals"], 1000.0)
+        self.assertEqual(summary["net_cash_flow"], 4000.0)
+
+        # 2. Add manual cash transaction
+        manual_record = add_manual_cash_transaction({
+            "type": "DEPOSIT",
+            "amount": 2000.0,
+            "transaction_date": "2023-07-01",
+            "description": "Manual Deposit"
+        })
+        self.assertTrue(manual_record["is_manual"])
+        summary_after_manual = get_cash_summary()
+        self.assertEqual(summary_after_manual["total_deposits"], 7000.0)
+        self.assertEqual(summary_after_manual["net_cash_flow"], 6000.0)
+
+        # 3. Add closed trades to test account balance and ROI
+        upsert_trades([{
+            "ib_exec_id": "TRADE_CASH_1",
+            "symbol": "AAPL",
+            "buy_sell": "SELL",
+            "quantity": 10,
+            "trade_price": 150.0,
+            "ib_commission": 2.0,
+            "realized_pnl": 500.0,
+            "trade_date": "2023-08-01",
+            "open_close_indicator": "C"
+        }])
+
+        # Set starting capital
+        orig_settings_path = settings_mod.SETTINGS_PATH
+        tmp_settings = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        settings_mod.SETTINGS_PATH = Path(tmp_settings.name)
+        tmp_settings.close()
+        try:
+            update_settings({"starting_capital": 10000.0})
+
+            stats = get_overview_stats()
+            self.assertEqual(stats["starting_capital"], 10000.0)
+            self.assertEqual(stats["total_deposits"], 7000.0)
+            self.assertEqual(stats["total_withdrawals"], 1000.0)
+            self.assertEqual(stats["net_cash_flow"], 6000.0)
+            self.assertEqual(stats["net_pnl"], 498.0) # 500 - 2
+            # Account Balance = 10000 + 6000 + 498 = 16498.0
+            self.assertEqual(stats["account_balance"], 16498.0)
+            # Capital Base = 10000 + 7000 = 17000.0
+            # ROI = 498 / 17000 * 100 = 2.93%
+            self.assertEqual(stats["roi_pct"], 2.93)
+
+            # 4. Delete manual transaction
+            del_success = delete_cash_transaction(manual_record["transaction_id"])
+            self.assertTrue(del_success)
+            summary_del = get_cash_summary()
+            self.assertEqual(summary_del["total_deposits"], 5000.0)
+            self.assertEqual(summary_del["net_cash_flow"], 4000.0)
+        finally:
+            if settings_mod.SETTINGS_PATH.exists():
+                try:
+                    settings_mod.SETTINGS_PATH.unlink()
+                except Exception:
+                    pass
+            settings_mod.SETTINGS_PATH = orig_settings_path
+
 
 if __name__ == "__main__":
     unittest.main()
+

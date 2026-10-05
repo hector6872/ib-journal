@@ -71,6 +71,9 @@
                     <button class="btn-import-action" id="btn-open-import" title="Import manual statement (CSV / XML)">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     </button>
+                    <button class="btn-cash-action" id="btn-open-cash" title="Capital & Cash Transfers">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </button>
                 </div>
 
                 <!-- Theme Switcher -->
@@ -225,6 +228,24 @@
         </div>
     </div>
 
+    <!-- Cash & Capital Management Modal -->
+    <div class="modal-backdrop" id="cash-modal-backdrop">
+        <div class="modal-container" style="max-width: 780px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Capital & Cash Management</h3>
+                <button class="btn-ctrl" id="cash-modal-close-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="cash-modal-body">
+                <!-- Dynamically rendered by CashModal -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-pill" id="cash-modal-footer-close-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts in proper load sequence -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="/static/js/strings.js"></script>
@@ -233,6 +254,7 @@
     <script src="/static/js/theme.js"></script>
     <script src="/static/js/day_modal.js"></script>
     <script src="/static/js/import_modal.js"></script>
+    <script src="/static/js/cash_modal.js"></script>
     <script src="/static/js/stats.js"></script>
     <script src="/static/js/calendar_page.js"></script>
     <script src="/static/js/stats_page.js"></script>

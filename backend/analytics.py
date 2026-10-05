@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from backend.database import db_session
+from backend.settings import get_all_settings
 
 
 def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
@@ -146,6 +147,33 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
                         elif pnl < 0:
                             loss_durations.append(sec)
 
+        # Cash summary & Starting Capital
+        cash_query = """
+            SELECT
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) as total_deposits,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0.0) as total_withdrawals
+            FROM cash_transactions
+            WHERE 1=1
+        """
+        cash_params = []
+        if start_date:
+            cash_query += " AND transaction_date >= ?"
+            cash_params.append(start_date)
+        if end_date:
+            cash_query += " AND transaction_date <= ?"
+            cash_params.append(end_date)
+        cursor.execute(cash_query, cash_params)
+        cash_row = cursor.fetchone()
+        total_deposits = float(cash_row["total_deposits"] if cash_row else 0.0)
+        total_withdrawals = float(cash_row["total_withdrawals"] if cash_row else 0.0)
+        net_cash_flow = total_deposits - total_withdrawals
+
+        app_settings = get_all_settings()
+        starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
+        capital_base = starting_capital + total_deposits
+        account_balance = starting_capital + net_cash_flow + net_pnl
+        roi_pct = round((net_pnl / capital_base * 100), 2) if capital_base > 0 else 0.0
+
         def format_duration(dur_list: List[float]) -> str:
             if not dur_list:
                 return "--"
@@ -186,7 +214,14 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "avg_win": round(avg_win, 2),
             "avg_loss": round(avg_loss, 2),
             "avg_win_hold": format_duration(win_durations),
-            "avg_loss_hold": format_duration(loss_durations)
+            "avg_loss_hold": format_duration(loss_durations),
+            "starting_capital": round(starting_capital, 2),
+            "total_deposits": round(total_deposits, 2),
+            "total_withdrawals": round(total_withdrawals, 2),
+            "net_cash_flow": round(net_cash_flow, 2),
+            "capital_base": round(capital_base, 2),
+            "account_balance": round(account_balance, 2),
+            "roi_pct": roi_pct,
         }
 
 def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
@@ -318,8 +353,11 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 max_drawdown_amount = dd_amount
 
             # Percentage calculation
-            # If peak > 0: relative to peak; if peak <= 0: relative to gross loss or capital basis
-            if peak_equity > 0:
+            capital_base = overview.get("capital_base", 0.0) or 0.0
+            if capital_base > 0:
+                account_peak = capital_base + peak_equity
+                dd_pct = (dd_amount / account_peak) * 100.0 if account_peak > 0 else 0.0
+            elif peak_equity > 0:
                 dd_pct = (dd_amount / peak_equity) * 100.0
             else:
                 basis = overview.get("gross_loss", 0.0) or abs(running_cumulative) or 100.0
@@ -346,7 +384,11 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             })
 
         current_dd_amount = running_cumulative - peak_equity
-        if peak_equity > 0:
+        capital_base = overview.get("capital_base", 0.0) or 0.0
+        if capital_base > 0:
+            account_peak = capital_base + peak_equity
+            current_dd_pct = (current_dd_amount / account_peak) * 100.0 if account_peak > 0 else 0.0
+        elif peak_equity > 0:
             current_dd_pct = (current_dd_amount / peak_equity) * 100.0
         else:
             basis = overview.get("gross_loss", 0.0) or abs(running_cumulative) or 100.0

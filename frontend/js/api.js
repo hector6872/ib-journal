@@ -101,11 +101,17 @@ const API = {
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },
             body: content
         });
-        const data = await res.json();
-        if (!res.ok) {
-            throw new Error(data.detail || "Import failed");
+        const text = await res.text();
+        let data = null;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            // Not valid JSON (e.g. server error text)
         }
-        return data;
+        if (!res.ok) {
+            throw new Error(data?.detail || text || `Import failed (HTTP ${res.status})`);
+        }
+        return data || { status: 'success', message: 'Import completed.' };
     },
 
     async resolveSyncGap() {
@@ -114,6 +120,32 @@ const API = {
         if (!res.ok) {
             throw new Error(data.detail || "Failed to resolve sync gap");
         }
+        return data;
+    },
+
+    async fetchCashTransactions() {
+        const res = await fetch('/api/cash/transactions');
+        if (!res.ok) throw new Error("Failed to fetch cash transactions");
+        return await res.json();
+    },
+
+    async addCashTransaction(payload) {
+        const res = await fetch('/api/cash/transactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to add cash transaction");
+        return data;
+    },
+
+    async deleteCashTransaction(id) {
+        const res = await fetch(`/api/cash/transactions/${encodeURIComponent(id)}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to delete cash transaction");
         return data;
     }
 };

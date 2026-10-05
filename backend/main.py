@@ -16,10 +16,19 @@ from backend.analytics import (
     get_overview_stats,
     get_week_calendar,
     get_year_calendar,
+    group_executions_to_trades,
 )
 from backend.config import BASE_DIR, CURRENCY_SYMBOL, HOST, PORT, is_ibkr_configured
 
-from backend.database import init_db
+from backend.database import (
+    add_manual_cash_transaction,
+    db_session,
+    delete_cash_transaction,
+    get_cash_summary,
+    init_db,
+    upsert_cash_transactions,
+    upsert_trades,
+)
 from backend.scheduler import scheduler
 from backend.settings import get_all_settings, update_settings
 
@@ -134,12 +143,15 @@ async def api_calendar_week(date_str: Optional[str] = Query(default=None, alias=
 
 @app.get("/api/trades/day")
 async def api_day_trades(date_str: str = Query(..., alias="date")):
-    """Returns list of executed trades for a specific day."""
+    """Returns list of executed trades and grouped round-trip trades for a specific day."""
     trades = get_day_trades(date_str)
+    grouped_trades = group_executions_to_trades(trades)
     return {
         "date": date_str,
         "trades": trades,
-        "count": len(trades)
+        "count": len(trades),
+        "grouped_trades": grouped_trades,
+        "grouped_count": len(grouped_trades),
     }
 
 @app.get("/api/sync/status")
@@ -148,58 +160,154 @@ async def api_sync_status():
     return scheduler.get_status()
 
 @app.post("/api/trades/import")
+@app.post("/api/import/statement")
 async def api_trades_import(request: Request):
-    """Imports trades from uploaded CSV, XML, or JSON payload."""
-    content_bytes = await request.body()
-    if not content_bytes:
-        raise HTTPException(status_code=400, detail="No content provided for import.")
+    """Imports trades and cash transactions from uploaded CSV, XML, or JSON payload."""
+    try:
+        content_bytes = await request.body()
+        if not content_bytes:
+            raise HTTPException(status_code=400, detail="No content provided for import.")
 
-    text = content_bytes.decode("utf-8-sig", errors="replace")
-    trades = []
+        text = content_bytes.decode("utf-8-sig", errors="replace")
+        trades = []
+        cash_txs = []
 
-    # 1. Check XML
-    if text.strip().startswith("<?xml") or "<FlexStatement" in text or "<Trade" in text:
-        import tempfile
-        from scripts.import_trades import parse_xml_file
-        with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", encoding="utf-8", delete=False) as tmp:
-            tmp.write(text)
-            tmp_path = Path(tmp.name)
-        try:
-            trades = parse_xml_file(tmp_path)
-        finally:
-            if tmp_path.exists():
-                tmp_path.unlink()
-    # 2. Check JSON
-    elif text.strip().startswith("[") or text.strip().startswith("{"):
-        try:
-            import json
-            data = json.loads(text)
-            trades = data if isinstance(data, list) else data.get("trades", [])
-        except Exception:
-            pass
-    # 3. Check CSV
-    if not trades:
-        from scripts.import_trades import parse_ibkr_activity_statement_csv, parse_generic_ibkr_csv
-        lines = text.splitlines()
-        is_activity = any(line_item.startswith("Trades,Header") or line_item.startswith("Trades,Data") for line_item in lines[:50])
-        if is_activity:
+        # 1. Check XML
+        if text.strip().startswith("<?xml") or "<FlexStatement" in text or "<Trade" in text or "<CashTransaction" in text:
+            import tempfile
+            from scripts.import_trades import parse_xml_cash_transactions, parse_xml_file
+            with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", encoding="utf-8", delete=False) as tmp:
+                tmp.write(text)
+                tmp_path = Path(tmp.name)
+            try:
+                trades = parse_xml_file(tmp_path)
+                cash_txs = parse_xml_cash_transactions(tmp_path)
+            finally:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+        # 2. Check JSON
+        elif text.strip().startswith("[") or text.strip().startswith("{"):
+            try:
+                import json
+                data = json.loads(text)
+                trades = data if isinstance(data, list) else data.get("trades", [])
+                cash_txs = data.get("cash_transactions", []) if isinstance(data, dict) else []
+            except Exception:
+                pass
+        # 3. Check CSV
+        if not trades and not cash_txs:
+            from scripts.import_trades import (
+                parse_csv_cash_transactions,
+                parse_generic_ibkr_csv,
+                parse_ibkr_activity_statement_csv,
+            )
+            lines = text.splitlines()
+            is_activity = any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") or line_item.startswith("Deposits & Withdrawals,") for line_item in lines)
+            if is_activity:
+                trades = parse_ibkr_activity_statement_csv(lines)
+                cash_txs = parse_csv_cash_transactions(lines)
+            else:
+                trades = parse_generic_ibkr_csv(lines)
 
-            trades = parse_ibkr_activity_statement_csv(lines)
-        else:
-            trades = parse_generic_ibkr_csv(lines)
-
-    if not trades:
-        raise HTTPException(
-            status_code=400,
-            detail="Could not extract valid trades from provided content. Please ensure it is an IBKR Activity Statement CSV or Flex XML/CSV export."
+        lines = text.splitlines() if not trades and not cash_txs else []
+        is_valid_ibkr_doc = (
+            "<FlexStatement" in text or "<FlexQueryResponse" in text or "<Trade" in text or "<CashTransaction" in text or
+            any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") or line_item.startswith("Deposits & Withdrawals,") or line_item.startswith("Financial Instrument Information,") for line_item in lines)
         )
 
-    from backend.database import upsert_trades
-    count = upsert_trades(trades)
+        if not trades and not cash_txs and not is_valid_ibkr_doc:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract valid trades or cash transactions from provided content. Please ensure it is an IBKR Activity Statement CSV or Flex XML/CSV export."
+            )
+
+        from datetime import datetime, timezone
+        count = upsert_trades(trades) if trades else 0
+        cash_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
+
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE sync_gaps
+                SET resolved_at = CURRENT_TIMESTAMP
+                WHERE resolved_at IS NULL;
+            """)
+            cursor.execute("""
+                INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+                VALUES ('manual_import', 'success', ?, CURRENT_TIMESTAMP);
+            """, (count,))
+
+        scheduler.last_sync_time = datetime.now(timezone.utc)
+        scheduler.last_trades_count = count
+
+        msg_parts = []
+        if count > 0:
+            msg_parts.append(f"{count} trades")
+        if cash_count > 0:
+            msg_parts.append(f"{cash_count} cash transactions")
+        msg_str = " and ".join(msg_parts) if msg_parts else "0 records"
+
+        return {
+            "status": "success",
+            "trades_count": count,
+            "cash_count": cash_count,
+            "message": f"Successfully processed statement. {msg_str} recorded."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error importing statement: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error importing statement: {str(e)}"
+        )
+
+import_historical_statement = api_trades_import
+
+@app.get("/api/cash/transactions")
+async def api_get_cash_transactions():
+    """Returns all cash transactions (deposits, withdrawals, transfers) and summary totals."""
+    return get_cash_summary()
+
+@app.post("/api/cash/transactions")
+async def api_add_cash_transaction(payload: dict):
+    """Adds a manual deposit or withdrawal."""
+    if not payload.get("amount"):
+        raise HTTPException(status_code=400, detail="Amount is required.")
+    record = add_manual_cash_transaction(payload)
+    return {"status": "success", "transaction": record, "summary": get_cash_summary()}
+
+@app.delete("/api/cash/transactions/{tx_id}")
+async def api_delete_cash_transaction(tx_id: str):
+    """Deletes a cash transaction by ID."""
+    success = delete_cash_transaction(tx_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Transaction not found.")
+    return {"status": "success", "summary": get_cash_summary()}
+
+@app.post("/api/sync/gap/resolve")
+async def api_sync_gap_resolve():
+    """Resolves all pending sync gaps and records a checkpoint (e.g. user confirmed no trades during outage/vacation)."""
+    from datetime import datetime, timezone
+    from backend.database import db_session
+
+    now = datetime.now(timezone.utc)
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE sync_gaps
+            SET resolved_at = CURRENT_TIMESTAMP
+            WHERE resolved_at IS NULL;
+        """)
+        cursor.execute("""
+            INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+            VALUES ('gap_dismiss', 'success', 0, CURRENT_TIMESTAMP);
+        """)
+
+    scheduler.last_sync_time = now
     return {
         "status": "success",
-        "trades_count": count,
-        "message": f"Successfully imported {count} trades."
+        "message": "Sync gap marked as resolved."
     }
 
 @app.post("/api/sync/trigger")

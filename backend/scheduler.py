@@ -22,6 +22,7 @@ logger = logging.getLogger("ib-journal.scheduler")
 class SyncScheduler:
     def __init__(self):
         self.last_sync_time: Optional[datetime] = None
+        self.last_api_sync_time: Optional[datetime] = None
         self.last_sync_status: str = "idle"
         self.last_sync_message: str = "No sync performed yet."
         self.last_trades_count: int = 0
@@ -48,11 +49,24 @@ class SyncScheduler:
         return (now.hour > 7 or (now.hour == 7 and now.minute >= 0)) and (now.hour < 21 or (now.hour == 21 and now.minute <= 15))
 
     def get_cooldown_remaining_seconds(self) -> int:
-        """Returns remaining seconds for manual sync cooldown."""
-        if not self.last_sync_time:
+        """Returns remaining seconds for remote Flex API sync cooldown."""
+        last_api = self.last_api_sync_time
+        if not last_api:
+            try:
+                with db_session() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT MAX(completed_at) as last_api FROM sync_history WHERE sync_type IN ('scheduled', 'manual') AND status = 'success';")
+                    row = cursor.fetchone()
+                    if row and row["last_api"]:
+                        last_api = datetime.fromisoformat(row["last_api"])
+            except Exception:
+                pass
+
+        if not last_api:
             return 0
+
         now = datetime.now(timezone.utc)
-        last = self.last_sync_time if self.last_sync_time.tzinfo else self.last_sync_time.replace(tzinfo=timezone.utc)
+        last = last_api if last_api.tzinfo else last_api.replace(tzinfo=timezone.utc)
         elapsed = (now - last).total_seconds()
         remaining = int(SYNC_COOLDOWN_SECONDS - elapsed)
         return max(0, remaining)
@@ -111,7 +125,36 @@ class SyncScheduler:
             trades = client.parse_trades_xml(xml_data)
 
             count = upsert_trades(trades)
-            self.last_sync_time = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc)
+
+            # Check if there is an outage gap between previous sync/import and now
+            with db_session() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT MAX(completed_at) as last_completed FROM sync_history WHERE status = 'success';")
+                sr = cursor.fetchone()
+                if sr and sr["last_completed"]:
+                    try:
+                        prev_dt = datetime.fromisoformat(sr["last_completed"])
+                        prev_tz = prev_dt if prev_dt.tzinfo else prev_dt.replace(tzinfo=timezone.utc)
+                        days_diff = (now - prev_tz).days
+                        if days_diff > 7:
+                            # A gap was created because Flex Query only covers 7 days
+                            cursor.execute("""
+                                INSERT INTO sync_gaps (gap_days, from_date, to_date)
+                                VALUES (?, ?, ?);
+                            """, (days_diff, prev_tz.isoformat(), now.isoformat()))
+                            logger.warning(f"Sync gap of {days_diff} days detected after server downtime/vacation. Created pending sync_gap record.")
+                    except Exception as ex:
+                        logger.debug(f"Error checking previous sync gap: {ex}")
+
+                # Record successful sync
+                cursor.execute("""
+                    INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+                    VALUES (?, 'success', ?, CURRENT_TIMESTAMP);
+                """, (sync_type, count))
+
+            self.last_sync_time = now
+            self.last_api_sync_time = now
             self.last_sync_status = "success"
             self.last_trades_count = count
             self.last_sync_message = f"Synchronized {count} trades successfully."
@@ -127,12 +170,22 @@ class SyncScheduler:
             }
 
         except Exception as e:
+            err_str = str(e)
+            if any(term in err_str for term in ["nodename nor servname", "gaierror", "Failed to resolve", "getaddrinfo"]):
+                clean_msg = "Unable to connect to Interactive Brokers servers. Please check your internet connection."
+            elif "1018" in err_str or "IP address not allowed" in err_str:
+                clean_msg = "IBKR Error (1018): IP address not authorized in IBKR Flex Web Service settings."
+            elif "1014" in err_str or "Token is invalid" in err_str:
+                clean_msg = "IBKR Error (1014): Invalid or expired Flex Token."
+            else:
+                clean_msg = err_str
+
             self.last_sync_status = "failed"
-            self.last_sync_message = str(e)
+            self.last_sync_message = clean_msg
             logger.error(f"Sync failed: {e}")
             return {
                 "status": "failed",
-                "message": str(e)
+                "message": clean_msg
             }
         finally:
             self.is_syncing = False
@@ -183,12 +236,30 @@ class SyncScheduler:
 
         has_sync_gap = False
         gap_days = 0
+        gap_from = None
+        gap_to = None
         last_trade_date = None
         last_sync_dt = self.last_sync_time
 
         try:
             with db_session() as conn:
                 cursor = conn.cursor()
+
+                # 1. Check for unresolved historical downtime gaps (e.g. from vacation/server downtime)
+                cursor.execute("""
+                    SELECT gap_days, from_date, to_date
+                    FROM sync_gaps
+                    WHERE resolved_at IS NULL
+                    ORDER BY id DESC
+                    LIMIT 1;
+                """)
+                unresolved_gap = cursor.fetchone()
+                if unresolved_gap:
+                    has_sync_gap = True
+                    gap_days = unresolved_gap["gap_days"]
+                    gap_from = unresolved_gap["from_date"]
+                    gap_to = unresolved_gap["to_date"]
+
                 cursor.execute("SELECT MAX(trade_date) as max_date FROM trades;")
                 r = cursor.fetchone()
                 if r and r["max_date"]:
@@ -206,21 +277,28 @@ class SyncScheduler:
             logger.debug(f"Could not compute sync gap: {e}")
 
         now = datetime.now(timezone.utc)
+        days_candidates = []
         if last_sync_dt:
             sync_tz = last_sync_dt if last_sync_dt.tzinfo else last_sync_dt.replace(tzinfo=timezone.utc)
             days_since_sync = (now - sync_tz).days
-            if days_since_sync > 7:
-                has_sync_gap = True
-                gap_days = days_since_sync
-        elif last_trade_date:
+            days_candidates.append(days_since_sync)
+        if last_trade_date:
             try:
                 lt_date = date.fromisoformat(last_trade_date)
                 days_since_trade = (now.date() - lt_date).days
-                if days_since_trade > 7:
-                    has_sync_gap = True
-                    gap_days = days_since_trade
+                days_candidates.append(days_since_trade)
             except Exception:
                 pass
+
+        if days_candidates:
+            current_gap = min(days_candidates)
+            if current_gap >= 7:
+                has_sync_gap = True
+                gap_days = max(gap_days, current_gap)
+        elif not has_sync_gap:
+            # Database is empty (no syncs and no trades recorded yet)
+            has_sync_gap = True
+            gap_days = 7
 
         return {
             "is_configured": configured,
@@ -236,6 +314,8 @@ class SyncScheduler:
             "is_market_hours": self.is_market_hours(),
             "has_sync_gap": has_sync_gap,
             "gap_days": gap_days,
+            "gap_from": gap_from,
+            "gap_to": gap_to,
             "last_trade_date": last_trade_date
         }
 

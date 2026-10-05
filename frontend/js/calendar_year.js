@@ -28,6 +28,13 @@ const CalendarYear = {
         const totalNetPnl = data.total_net_pnl || 0;
         const totalTrades = data.total_trades || 0;
 
+        const now = new Date();
+        const nowYear = now.getFullYear();
+        const minDateStr = State.minTradeDate || (State.overviewStats && State.overviewStats.min_trade_date);
+        const minYear = minDateStr ? parseInt(minDateStr.split('-')[0], 10) : nowYear;
+        const canPrevYear = year > minYear;
+        const canNextYear = year < nowYear;
+
         // Render 12 months HTML
         let monthsHtml = '';
         for (let m = 1; m <= 12; m++) {
@@ -48,15 +55,19 @@ const CalendarYear = {
             let daysHtml = '';
             // Empty placeholder cells before 1st of month
             for (let e = 0; e < firstDayOfWeek; e++) {
-                daysHtml += `<div class="mini-day empty"></div>`;
+                const isWeekend = e === 5 || e === 6;
+                daysHtml += `<div class="mini-day empty ${isWeekend ? 'weekend' : ''}"></div>`;
             }
 
             // Days of the month
             for (let d = 1; d <= daysInMonth; d++) {
+                const dow = (firstDayOfWeek + d - 1) % 7;
+                const isWeekend = dow === 5 || dow === 6;
                 const dStr = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const dayData = dailyMap[dStr];
 
                 let dayClass = 'mini-day';
+                if (isWeekend) dayClass += ' weekend';
                 let titleAttr = `${dStr}`;
 
                 if (dayData && dayData.count > 0) {
@@ -76,7 +87,7 @@ const CalendarYear = {
                         <span class="mini-month-pnl mono ${mPnlClass}">${mPnlFormatted}</span>
                     </div>
                     <div class="mini-weekdays">
-                        ${STRINGS.days.shortMonSun.map(d => `<span>${d}</span>`).join('')}
+                        ${STRINGS.days.shortMonSun.map((d, idx) => `<span class="${idx >= 5 ? 'col-weekend' : ''}">${d}</span>`).join('')}
                     </div>
                     <div class="mini-days-matrix">
                         ${daysHtml}
@@ -103,13 +114,14 @@ const CalendarYear = {
             <div class="year-view-container">
                 <div class="year-nav-bar">
                     <div class="nav-controls">
-                        <span class="year-title-label mono">${year}</span>
-                        <button class="btn-icon" id="btn-prev-year">
+                        <button class="btn-icon" id="btn-prev-year" ${!canPrevYear ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                         </button>
-                        <button class="btn-icon" id="btn-next-year">
+                        <span class="year-title-label mono">${year}</span>
+                        <button class="btn-icon" id="btn-next-year" ${!canNextYear ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                         </button>
+                        <button class="btn-secondary" id="btn-this-year" ${year === nowYear ? 'disabled' : ''}>${STRINGS.calendar.thisYear}</button>
                     </div>
                     <div class="year-legend">
                         <span class="legend-dot legend-loss"></span>
@@ -140,10 +152,15 @@ const CalendarYear = {
 
         // Attach Event Listeners
         document.getElementById('btn-prev-year')?.addEventListener('click', () => {
+            if (!canPrevYear) return;
             this.load(year - 1);
         });
         document.getElementById('btn-next-year')?.addEventListener('click', () => {
+            if (!canNextYear) return;
             this.load(year + 1);
+        });
+        document.getElementById('btn-this-year')?.addEventListener('click', () => {
+            this.load(new Date().getFullYear());
         });
 
         // Click on days with trades

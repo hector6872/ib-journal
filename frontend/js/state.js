@@ -11,7 +11,7 @@ const State = {
     currentWeekDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
     
     // App Config & Symbols
-    currency: "€",
+    currency: "$",
 
     // Cached Data
     overviewStats: null,
@@ -48,12 +48,14 @@ const State = {
 /**
  * Application Settings Manager (Local & Cross-Device Persisted)
  */
+const SERVER_SYNC_KEYS = new Set(['starting_capital']);
+
 const SettingsManager = {
     settings: {},
     saveTimeout: null,
 
     async init() {
-        // 1. Read local storage first for instant response
+        // 1. Read local storage first for UI preferences and offline cache
         try {
             const raw = localStorage.getItem('ib_journal_settings');
             if (raw) {
@@ -63,11 +65,15 @@ const SettingsManager = {
             console.warn("Could not read local settings:", e);
         }
 
-        // 2. Fetch remote settings from server (database) to sync cross-device
+        // 2. Fetch server-persisted account settings (like starting_capital) to sync cross-device
         try {
             const remote = await API.fetchSettings();
-            if (remote && Object.keys(remote).length > 0) {
-                this.settings = { ...this.settings, ...remote };
+            if (remote && typeof remote === 'object') {
+                for (const key of SERVER_SYNC_KEYS) {
+                    if (remote[key] !== undefined && remote[key] !== null) {
+                        this.settings[key] = remote[key];
+                    }
+                }
                 localStorage.setItem('ib_journal_settings', JSON.stringify(this.settings));
             }
         } catch (e) {
@@ -90,11 +96,13 @@ const SettingsManager = {
             console.warn("Could not save to localStorage:", e);
         }
 
-        // Debounce sync to server
-        if (this.saveTimeout) clearTimeout(this.saveTimeout);
-        this.saveTimeout = setTimeout(async () => {
-            await API.saveSettings({ [key]: value });
-        }, 300);
+        // Only sync account/portfolio settings to server, keep UI state purely in browser localStorage
+        if (SERVER_SYNC_KEYS.has(key)) {
+            if (this.saveTimeout) clearTimeout(this.saveTimeout);
+            this.saveTimeout = setTimeout(async () => {
+                await API.saveSettings({ [key]: value });
+            }, 300);
+        }
     }
 };
 

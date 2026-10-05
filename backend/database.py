@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 from contextlib import contextmanager
+from datetime import date
 from typing import Any, Dict, Generator, List
 
 from backend.config import DB_PATH
@@ -76,6 +77,11 @@ def init_db():
             open_close_indicator TEXT, -- O, C, O/C
             order_type TEXT DEFAULT 'MKT', -- LMT, MKT, STP, STP LMT
             exchange TEXT DEFAULT 'SMART', -- NASDAQ, NYSE, SMART, etc.
+            raw_currency TEXT DEFAULT 'EUR',
+            base_currency TEXT DEFAULT 'EUR',
+            fx_rate_to_base REAL DEFAULT 1.0,
+            raw_commission REAL DEFAULT 0.0,
+            raw_realized_pnl REAL DEFAULT 0.0,
             notes TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -94,12 +100,22 @@ def init_db():
             cursor.execute("ALTER TABLE trades ADD COLUMN order_type TEXT DEFAULT 'MKT';")
         if "exchange" not in cols:
             cursor.execute("ALTER TABLE trades ADD COLUMN exchange TEXT DEFAULT 'SMART';")
+        if "raw_currency" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN raw_currency TEXT DEFAULT 'EUR';")
+        if "base_currency" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN base_currency TEXT DEFAULT 'EUR';")
+        if "fx_rate_to_base" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN fx_rate_to_base REAL DEFAULT 1.0;")
+        if "raw_commission" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN raw_commission REAL DEFAULT 0.0;")
+        if "raw_realized_pnl" not in cols:
+            cursor.execute("ALTER TABLE trades ADD COLUMN raw_realized_pnl REAL DEFAULT 0.0;")
 
         # Sync History Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS sync_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sync_type TEXT NOT NULL,      -- 'scheduled', 'manual', 'initial'
+            sync_type TEXT NOT NULL,      -- 'scheduled', 'manual', 'initial', 'manual_import', 'cli_import'
             status TEXT NOT NULL,         -- 'success', 'failed', 'in_progress'
             trades_count INTEGER DEFAULT 0,
             error_message TEXT,
@@ -109,6 +125,44 @@ def init_db():
         """)
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_started ON sync_history(started_at);")
+
+        # Sync Gaps Table (Tracks periods of outage/vacation until resolved by full statement import)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sync_gaps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gap_days INTEGER NOT NULL,
+            from_date TEXT,
+            to_date TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resolved_at DATETIME
+        );
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_gaps_resolved ON sync_gaps(resolved_at);")
+
+        # Cash Transactions Table (Deposits, Withdrawals, Transfers, Dividends)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cash_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id TEXT UNIQUE NOT NULL,
+            account_id TEXT,
+            type TEXT NOT NULL,          -- 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'DIVIDEND', 'INTEREST'
+            amount REAL NOT NULL,        -- Positive for deposit/inflow, negative for withdrawal/outflow (in base currency)
+            raw_amount REAL,
+            currency TEXT DEFAULT 'EUR',
+            raw_currency TEXT DEFAULT 'EUR',
+            base_currency TEXT DEFAULT 'EUR',
+            fx_rate_to_base REAL DEFAULT 1.0,
+            transaction_date TEXT NOT NULL, -- YYYY-MM-DD
+            transaction_time TEXT,
+            description TEXT,
+            is_manual BOOLEAN DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_date ON cash_transactions(transaction_date);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_type ON cash_transactions(type);")
 
         logger.info("Database initialized successfully with WAL mode.")
 
@@ -125,12 +179,14 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         ib_exec_id, trade_id, account_id, symbol, description, asset_category,
         currency, buy_sell, quantity, trade_price, trade_money, proceeds,
         ib_commission, realized_pnl, trade_date, trade_time, trade_date_time,
-        open_close_indicator, order_type, exchange
+        open_close_indicator, order_type, exchange,
+        raw_currency, base_currency, fx_rate_to_base, raw_commission, raw_realized_pnl
     ) VALUES (
         :ib_exec_id, :trade_id, :account_id, :symbol, :description, :asset_category,
         :currency, :buy_sell, :quantity, :trade_price, :trade_money, :proceeds,
         :ib_commission, :realized_pnl, :trade_date, :trade_time, :trade_date_time,
-        :open_close_indicator, :order_type, :exchange
+        :open_close_indicator, :order_type, :exchange,
+        :raw_currency, :base_currency, :fx_rate_to_base, :raw_commission, :raw_realized_pnl
     )
     ON CONFLICT(ib_exec_id) DO UPDATE SET
         realized_pnl = excluded.realized_pnl,
@@ -139,11 +195,182 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         open_close_indicator = excluded.open_close_indicator,
         order_type = excluded.order_type,
         exchange = excluded.exchange,
+        raw_currency = excluded.raw_currency,
+        base_currency = excluded.base_currency,
+        fx_rate_to_base = excluded.fx_rate_to_base,
+        raw_commission = excluded.raw_commission,
+        raw_realized_pnl = excluded.raw_realized_pnl,
         notes = trades.notes;
     """
 
+    sanitized_trades = []
+    for t in trades:
+        curr = t.get("currency") or "EUR"
+        raw_curr = t.get("raw_currency") or curr
+        base_curr = t.get("base_currency") or "EUR"
+        fx_rate = float(t.get("fx_rate_to_base") or 1.0)
+        comm = float(t.get("ib_commission") or 0.0)
+        raw_comm_val = t.get("raw_commission")
+        raw_comm = float(raw_comm_val) if raw_comm_val is not None else comm
+        pnl = float(t.get("realized_pnl") or 0.0)
+        raw_pnl_val = t.get("raw_realized_pnl")
+        raw_pnl = float(raw_pnl_val) if raw_pnl_val is not None else pnl
+
+        sanitized_trades.append({
+            "ib_exec_id": t.get("ib_exec_id", ""),
+            "trade_id": t.get("trade_id") or t.get("ib_exec_id", ""),
+            "account_id": t.get("account_id", ""),
+            "symbol": t.get("symbol", ""),
+            "description": t.get("description", ""),
+            "asset_category": t.get("asset_category", "STK"),
+            "currency": curr,
+            "raw_currency": raw_curr,
+            "base_currency": base_curr,
+            "buy_sell": t.get("buy_sell", "BUY"),
+            "quantity": float(t.get("quantity") or 0.0),
+            "trade_price": float(t.get("trade_price") or 0.0),
+            "trade_money": float(t.get("trade_money") or 0.0),
+            "proceeds": float(t.get("proceeds") or 0.0),
+            "fx_rate_to_base": fx_rate,
+            "raw_commission": raw_comm,
+            "raw_realized_pnl": raw_pnl,
+            "ib_commission": comm,
+            "realized_pnl": pnl,
+            "trade_date": t.get("trade_date", ""),
+            "trade_time": t.get("trade_time", ""),
+            "trade_date_time": t.get("trade_date_time", ""),
+            "open_close_indicator": t.get("open_close_indicator", "C"),
+            "order_type": t.get("order_type", "MKT"),
+            "exchange": t.get("exchange", "SMART"),
+        })
+
     with db_session() as conn:
         cursor = conn.cursor()
-        cursor.executemany(sql, trades)
+        cursor.executemany(sql, sanitized_trades)
         affected = cursor.rowcount
         return affected
+
+def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
+    """
+    Inserts or updates cash transactions (deposits, withdrawals, transfers).
+    Returns count of upserted records.
+    """
+    if not transactions:
+        return 0
+
+    sql = """
+    INSERT INTO cash_transactions (
+        transaction_id, account_id, type, amount, raw_amount,
+        currency, raw_currency, base_currency, fx_rate_to_base,
+        transaction_date, transaction_time, description, is_manual
+    ) VALUES (
+        :transaction_id, :account_id, :type, :amount, :raw_amount,
+        :currency, :raw_currency, :base_currency, :fx_rate_to_base,
+        :transaction_date, :transaction_time, :description, :is_manual
+    )
+    ON CONFLICT(transaction_id) DO UPDATE SET
+        amount = excluded.amount,
+        raw_amount = excluded.raw_amount,
+        currency = excluded.currency,
+        raw_currency = excluded.raw_currency,
+        base_currency = excluded.base_currency,
+        fx_rate_to_base = excluded.fx_rate_to_base,
+        transaction_date = excluded.transaction_date,
+        transaction_time = excluded.transaction_time,
+        description = excluded.description;
+    """
+
+    sanitized = []
+    for tx in transactions:
+        tx_type = (tx.get("type") or "DEPOSIT").upper()
+        amt_val = tx.get("amount")
+        raw_amt_val = tx.get("raw_amount")
+        raw_val = float(amt_val) if amt_val is not None else float(raw_amt_val or 0.0)
+        amount = abs(raw_val) if tx_type in ("DEPOSIT", "DIVIDEND") else -abs(raw_val)
+        raw_amount = float(raw_amt_val) if raw_amt_val is not None else amount
+        fx = float(tx.get("fx_rate_to_base") or 1.0)
+        sanitized.append({
+            "transaction_id": tx.get("transaction_id", ""),
+            "account_id": tx.get("account_id", ""),
+            "type": tx_type,
+            "amount": amount,
+            "raw_amount": raw_amount,
+            "currency": tx.get("currency", "EUR"),
+            "raw_currency": tx.get("raw_currency", "EUR"),
+            "base_currency": tx.get("base_currency", "EUR"),
+            "fx_rate_to_base": fx,
+            "transaction_date": tx.get("transaction_date", date.today().isoformat()),
+            "transaction_time": tx.get("transaction_time", ""),
+            "description": tx.get("description", ""),
+            "is_manual": 1 if tx.get("is_manual") else 0,
+        })
+
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.executemany(sql, sanitized)
+        return cursor.rowcount
+
+def get_cash_summary() -> Dict[str, Any]:
+    """Returns cash summary metrics and list of transactions."""
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                id, transaction_id, account_id, type, amount, raw_amount,
+                currency, raw_currency, base_currency, fx_rate_to_base,
+                transaction_date, transaction_time, description, is_manual, created_at
+            FROM cash_transactions
+            ORDER BY transaction_date DESC, id DESC
+        """)
+        rows = [dict(r) for r in cursor.fetchall()]
+
+        total_deposits = sum(r["amount"] for r in rows if r["amount"] > 0)
+        total_withdrawals = sum(abs(r["amount"]) for r in rows if r["amount"] < 0)
+        net_cash_flow = total_deposits - total_withdrawals
+
+        return {
+            "total_deposits": round(total_deposits, 2),
+            "total_withdrawals": round(total_withdrawals, 2),
+            "net_cash_flow": round(net_cash_flow, 2),
+            "transactions_count": len(rows),
+            "transactions": rows
+        }
+
+def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Adds a manual deposit or withdrawal."""
+    import uuid
+    tx_type = (data.get("type") or "DEPOSIT").upper()
+    amount_val = abs(float(data.get("amount") or 0.0))
+    amount = amount_val if tx_type == "DEPOSIT" else -amount_val
+    tx_date = data.get("transaction_date") or date.today().isoformat()
+    desc = data.get("description") or ("Manual Deposit" if tx_type == "DEPOSIT" else "Manual Withdrawal")
+    curr = (data.get("currency") or "EUR").upper()
+
+    tx_id = f"MAN_{uuid.uuid4().hex[:12]}"
+    record = {
+        "transaction_id": tx_id,
+        "account_id": data.get("account_id", "MANUAL"),
+        "type": tx_type,
+        "amount": amount,
+        "raw_amount": amount,
+        "currency": curr,
+        "raw_currency": curr,
+        "base_currency": curr,
+        "fx_rate_to_base": 1.0,
+        "transaction_date": tx_date,
+        "transaction_time": data.get("transaction_time", "12:00:00"),
+        "description": desc,
+        "is_manual": True
+    }
+    upsert_cash_transactions([record])
+    return record
+
+def delete_cash_transaction(tx_id_or_id: Any) -> bool:
+    """Deletes a cash transaction by id or transaction_id."""
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM cash_transactions
+            WHERE id = ? OR transaction_id = ?
+        """, (str(tx_id_or_id), str(tx_id_or_id)))
+        return cursor.rowcount > 0

@@ -7,11 +7,22 @@ const ImportModal = {
         const backdrop = document.getElementById('import-modal-backdrop');
         const closeBtn = document.getElementById('import-modal-close-btn');
         const cancelBtn = document.getElementById('import-modal-cancel-btn');
+        const openBtn = document.getElementById('btn-open-import');
         const browseBtn = document.getElementById('btn-browse-file');
         const fileInput = document.getElementById('import-file-input');
         const dropzone = document.getElementById('import-dropzone');
 
         if (!backdrop) return;
+
+        // Open handler
+        if (openBtn) {
+            openBtn.addEventListener('click', () => {
+                const gapInfo = (typeof State !== 'undefined' && State.syncStatus)
+                    ? { has_gap: State.syncStatus.has_sync_gap, days: State.syncStatus.gap_days }
+                    : null;
+                this.show(gapInfo);
+            });
+        }
 
         // Close handlers
         const closeModal = () => this.hide();
@@ -20,6 +31,40 @@ const ImportModal = {
         backdrop.addEventListener('click', (e) => {
             if (e.target === backdrop) closeModal();
         });
+
+        // Close on ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && backdrop && (backdrop.classList.contains('open') || backdrop.classList.contains('active'))) {
+                closeModal();
+            }
+        });
+
+        // Dismiss Gap Handler
+        const dismissGapBtn = document.getElementById('btn-dismiss-gap');
+        if (dismissGapBtn) {
+            dismissGapBtn.addEventListener('click', async () => {
+                try {
+                    dismissGapBtn.disabled = true;
+                    dismissGapBtn.textContent = "Resolving...";
+                    await API.resolveSyncGap();
+                    const gapAlert = document.getElementById('import-sync-gap-alert');
+                    if (gapAlert) gapAlert.classList.add('hidden');
+                    if (typeof StatsController !== 'undefined') {
+                        await StatsController.updateSyncStatus();
+                    }
+                    this.hide();
+                } catch (err) {
+                    if (typeof App !== 'undefined' && App.showErrorModal) {
+                        App.showErrorModal("Gap Resolution Error", err.message);
+                    } else {
+                        console.error("Could not resolve sync gap:", err);
+                    }
+                } finally {
+                    dismissGapBtn.disabled = false;
+                    dismissGapBtn.textContent = STRINGS.import?.gapDismissBtn || "✓ No trades during this period (Dismiss warning)";
+                }
+            });
+        }
 
         // Browse button
         if (browseBtn && fileInput) {
@@ -80,18 +125,30 @@ const ImportModal = {
         if (gapInfo && gapInfo.has_gap) {
             if (gapAlert) gapAlert.classList.remove('hidden');
             if (gapDesc) {
-                gapDesc.textContent = `Tu última sincronización o trade registrado tiene una brecha de ${gapInfo.days} días. Dado que la Flex Query de IBKR suele cubrir 7 días, importa el extracto CSV o XML para no perder operaciones pasadas.`;
+                if (gapInfo.from && gapInfo.to) {
+                    const fromDate = gapInfo.from.split('T')[0];
+                    const toDate = gapInfo.to.split('T')[0];
+                    gapDesc.textContent = `A ${gapInfo.days}-day desync gap was detected between ${fromDate} and ${toDate}. Automated IBKR Flex Queries only cover recent days. Please import your historical CSV or XML activity statement.`;
+                } else if (gapInfo.days && gapInfo.days > 0) {
+                    gapDesc.textContent = `Your last synchronization or recorded trade has a ${gapInfo.days}-day gap. Please import your CSV or XML statement to prevent missing past trades.`;
+                } else {
+                    gapDesc.textContent = STRINGS.import?.gapDesc || `Please import your historical CSV or XML statement.`;
+                }
             }
         } else {
             if (gapAlert) gapAlert.classList.add('hidden');
         }
 
+        backdrop.classList.add('open');
         backdrop.classList.add('active');
     },
 
     hide() {
         const backdrop = document.getElementById('import-modal-backdrop');
-        if (backdrop) backdrop.classList.remove('active');
+        if (backdrop) {
+            backdrop.classList.remove('open');
+            backdrop.classList.remove('active');
+        }
     },
 
     async handleFiles(files) {
@@ -99,7 +156,7 @@ const ImportModal = {
         if (!statusBox) return;
 
         statusBox.style.display = 'block';
-        statusBox.innerHTML = `<div style="color: var(--color-accent); font-weight: 600;">Importing ${files.length} file(s)...</div>`;
+        statusBox.innerHTML = `<div style="color: var(--color-accent); font-weight: 600;">${STRINGS.import?.importingFiles || 'Importing file(s)...'} (${files.length})</div>`;
 
         let totalImported = 0;
         let errors = [];
@@ -117,7 +174,7 @@ const ImportModal = {
 
         if (errors.length > 0) {
             statusBox.innerHTML = `
-                <div style="color: var(--color-loss); font-weight: 600; margin-bottom: 4px;">Import finished with errors:</div>
+                <div style="color: var(--color-loss); font-weight: 600; margin-bottom: 4px;">${STRINGS.import?.errorsTitle || 'Import finished with errors:'}</div>
                 <ul style="font-size: 11px; color: var(--text-muted); margin-left: 16px;">
                     ${errors.map(e => `<li>${e}</li>`).join('')}
                 </ul>
@@ -125,7 +182,7 @@ const ImportModal = {
         } else {
             statusBox.innerHTML = `
                 <div style="color: var(--color-profit); font-weight: 700;">
-                    ✓ Successfully imported and updated ${totalImported} trades!
+                    ✓ ${STRINGS.import?.successMsg || 'Successfully processed statement.'} (${totalImported} ${STRINGS.calendar?.tradesBadge || 'trades'})
                 </div>
             `;
             // Refresh current view & sync status

@@ -41,8 +41,12 @@ const App = {
         // 6. Setup Sync Button
         this.setupSyncButton();
 
-        // 7. Initialize Day Modal & Top Stats Polling
+        // 7. Initialize Modals & Top Stats Polling
         DayModal.init();
+        ImportModal.init();
+        if (typeof CashModal !== 'undefined' && CashModal.init) {
+            CashModal.init();
+        }
         StatsController.startPolling();
 
         // 8. Restore persisted tab (default to Calendar)
@@ -56,6 +60,20 @@ const App = {
             const value = this.resolveString(key);
             if (value !== undefined) {
                 el.textContent = value;
+            }
+        });
+        document.querySelectorAll('[data-i18n-title]').forEach(el => {
+            const key = el.getAttribute('data-i18n-title');
+            const value = this.resolveString(key);
+            if (value !== undefined) {
+                el.setAttribute('title', value);
+            }
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            const value = this.resolveString(key);
+            if (value !== undefined) {
+                el.setAttribute('placeholder', value);
             }
         });
     },
@@ -107,6 +125,154 @@ const App = {
         }
     },
 
+    formatUserFriendlyError(rawMsg) {
+        if (!rawMsg) return "An unexpected error occurred. Please try again.";
+        const msg = String(rawMsg);
+
+        if (
+            msg.includes("nodename nor servname") ||
+            msg.includes("gaierror") ||
+            msg.includes("Failed to resolve") ||
+            msg.includes("getaddrinfo") ||
+            msg.includes("Name or service not known") ||
+            msg.includes("Network is unreachable") ||
+            msg.includes("Connection refused") ||
+            msg.includes("ConnectError")
+        ) {
+            return "Unable to connect to Interactive Brokers servers. Please check your internet connection and DNS settings.";
+        }
+
+        if (msg.includes("1018") || msg.includes("IP address not allowed") || msg.includes("IP not allowed")) {
+            return "IBKR Server Error (Code 1018): Your current IP address is not authorized in IBKR Account Management. Please ensure 'Allow all IP addresses' is enabled for your Flex Web Service Token.";
+        }
+        if (msg.includes("1014") || msg.includes("Token is invalid") || msg.includes("invalid token")) {
+            return "IBKR Authentication Error: The Flex Web Service Token configured in your .env file is invalid or expired. Please generate a new Token in IBKR Portal.";
+        }
+        if (msg.includes("1019") || msg.includes("Statement is being generated") || msg.includes("timed out")) {
+            return "IBKR Statement Timeout: Interactive Brokers is still generating your report. Please wait a minute and try again.";
+        }
+        if (msg.includes("Rate limit") || msg.includes("cooldown") || msg.includes("Too Many Requests")) {
+            return "IBKR Rate Limit: Interactive Brokers restricts Flex queries to once every few minutes. Please wait before syncing again.";
+        }
+
+        return msg;
+    },
+
+    showErrorModal(title, rawMsg) {
+        this.showAlertModal({
+            title: title || "Error",
+            message: rawMsg,
+            isError: true
+        });
+    },
+
+    showAlertModal({ title = "Notification", message = "", isSuccess = false, isError = false }) {
+        const backdrop = document.getElementById('error-modal-backdrop');
+        const titleWrap = document.getElementById('error-modal-title-wrap');
+        const titleEl = document.getElementById('error-modal-title');
+        const bodyEl = document.getElementById('error-modal-body');
+        const closeBtn = document.getElementById('error-modal-close-btn');
+        const okBtn = document.getElementById('error-modal-ok-btn');
+
+        const friendlyMessage = this.formatUserFriendlyError(message);
+
+        if (!backdrop || !bodyEl) {
+            console.error(title, friendlyMessage, message);
+            return;
+        }
+
+        if (titleEl) titleEl.textContent = title || "Notification";
+        if (titleWrap) {
+            if (isError || title.toLowerCase().includes('error') || title.toLowerCase().includes('failed')) {
+                titleWrap.style.color = 'var(--color-loss)';
+            } else if (isSuccess) {
+                titleWrap.style.color = 'var(--color-profit)';
+            } else {
+                titleWrap.style.color = 'var(--text-main)';
+            }
+        }
+        
+        bodyEl.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <p style="margin: 0; font-size: 13px; font-weight: 500; color: var(--text-main);">${friendlyMessage}</p>
+                ${message && message !== friendlyMessage ? `<div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); background: var(--bg-subtle); padding: 6px 8px; border-radius: var(--radius-xs); word-break: break-word; margin-top: 4px;">Technical details: ${message}</div>` : ''}
+            </div>
+        `;
+
+        const closeModal = () => {
+            backdrop.classList.remove('open');
+            backdrop.classList.remove('active');
+        };
+
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (okBtn) okBtn.onclick = closeModal;
+        backdrop.onclick = (e) => {
+            if (e.target === backdrop) closeModal();
+        };
+
+        const escHandler = (e) => {
+            if (e.key === 'Escape' && (backdrop.classList.contains('open') || backdrop.classList.contains('active'))) {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        backdrop.classList.add('open');
+        backdrop.classList.add('active');
+    },
+
+    showConfirmModal({ title = "Confirm Action", message = "Are you sure?", confirmText = "Confirm", cancelText = "Cancel", isDanger = false } = {}) {
+        return new Promise((resolve) => {
+            const backdrop = document.getElementById('confirm-modal-backdrop');
+            const titleEl = document.getElementById('confirm-modal-title');
+            const titleWrap = document.getElementById('confirm-modal-title-wrap');
+            const bodyEl = document.getElementById('confirm-modal-body');
+            const closeBtn = document.getElementById('confirm-modal-close-btn');
+            const cancelBtn = document.getElementById('confirm-modal-cancel-btn');
+            const okBtn = document.getElementById('confirm-modal-ok-btn');
+
+            if (!backdrop || !bodyEl || !okBtn) {
+                resolve(window.confirm(message));
+                return;
+            }
+
+            if (titleEl) titleEl.textContent = title;
+            if (titleWrap) {
+                titleWrap.style.color = isDanger ? 'var(--color-loss)' : 'var(--text-main)';
+            }
+            bodyEl.innerHTML = `<p style="margin: 0; font-size: 13px; color: var(--text-main); line-height: 1.5;">${message}</p>`;
+
+            if (okBtn) {
+                okBtn.textContent = confirmText;
+                okBtn.className = isDanger ? "btn-pill btn-danger" : "btn-pill btn-accent";
+            }
+            if (cancelBtn) cancelBtn.textContent = cancelText;
+
+            const cleanup = (result) => {
+                backdrop.classList.remove('open', 'active');
+                document.removeEventListener('keydown', escHandler);
+                resolve(result);
+            };
+
+            const escHandler = (e) => {
+                if (e.key === 'Escape' && (backdrop.classList.contains('open') || backdrop.classList.contains('active'))) {
+                    cleanup(false);
+                }
+            };
+
+            if (closeBtn) closeBtn.onclick = () => cleanup(false);
+            if (cancelBtn) cancelBtn.onclick = () => cleanup(false);
+            if (okBtn) okBtn.onclick = () => cleanup(true);
+            backdrop.onclick = (e) => {
+                if (e.target === backdrop) cleanup(false);
+            };
+
+            document.addEventListener('keydown', escHandler);
+            backdrop.classList.add('open', 'active');
+        });
+    },
+
     setupSyncButton() {
         const btnSync = document.getElementById('btn-sync');
         if (!btnSync) return;
@@ -118,7 +284,8 @@ const App = {
             try {
                 btnSync.disabled = true;
                 btnSync.classList.add('spinning');
-                btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncing;
+                const label = btnSync.querySelector('.btn-sync-label');
+                if (label) label.textContent = STRINGS.sync.syncing;
                 
                 await API.triggerSync();
                 
@@ -132,8 +299,10 @@ const App = {
                     StatsPage.load();
                 }
             } catch (err) {
-                alert(`Sync failed: ${err.message}`);
+                this.showErrorModal("Sync Failed", err.message);
                 await StatsController.updateSyncStatus();
+            } finally {
+                btnSync.classList.remove('spinning');
             }
         });
     }

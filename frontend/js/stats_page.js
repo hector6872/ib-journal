@@ -418,6 +418,48 @@ const StatsPage = {
                     </div>
                 </div>
 
+                <!-- Portfolio Capital & Equity Overview Strip -->
+                <div class="stats-section-box">
+                    <div class="stats-section-header">
+                        <div class="stats-section-title-wrap">
+                            <span>${sp.capitalStripTitle || 'Portfolio Capital & Equity Overview'}</span>
+                        </div>
+                        <button type="button" class="btn-pill" id="btn-stats-manage-cash" style="padding: 4px 12px; font-size: 11px;">
+                            ${sp.manageCashBtn || '⚙ Manage Capital & Cash Transfers'}
+                        </button>
+                    </div>
+                    <div class="cash-summary-grid">
+                        <div class="cash-card">
+                            <span class="cash-card-label">${STRINGS.cash?.accountEquity || 'ACCOUNT EQUITY (NAV)'}</span>
+                            <span class="cash-card-value mono ${this.getPnlClass(ov.account_balance)}">
+                                ${State.formatCurrency(ov.account_balance || 0)}
+                            </span>
+                            <span class="cash-card-sub">${STRINGS.cash?.accountEquitySub || 'Starting Capital + Net Flow + Realized P&L'}</span>
+                        </div>
+                        <div class="cash-card">
+                            <span class="cash-card-label">${STRINGS.cash?.startingCapital || 'STARTING CAPITAL'}</span>
+                            <span class="cash-card-value mono pnl-neutral">
+                                ${State.formatCurrency(ov.starting_capital || 0)}
+                            </span>
+                            <span class="cash-card-sub">${STRINGS.cash?.startingCapitalStatsSub || 'Configured baseline capital'}</span>
+                        </div>
+                        <div class="cash-card">
+                            <span class="cash-card-label">${STRINGS.cash?.netTransfersStats || 'NET CASH TRANSFERS'}</span>
+                            <span class="cash-card-value mono ${this.getPnlClass(ov.net_cash_flow)}">
+                                ${State.formatCurrency(ov.net_cash_flow || 0)}
+                            </span>
+                            <span class="cash-card-sub">In: ${State.currency}${(ov.total_deposits || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${(ov.total_withdrawals || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
+                        </div>
+                        <div class="cash-card">
+                            <span class="cash-card-label">${STRINGS.cash?.roi || 'RETURN ON CAPITAL (% ROI)'}</span>
+                            <span class="cash-card-value mono ${this.getPnlClass(ov.roi_pct)}">
+                                ${(ov.roi_pct || 0) > 0 ? '+' : ''}${(ov.roi_pct || 0).toFixed(2)}%
+                            </span>
+                            <span class="cash-card-sub">${STRINGS.cash?.roiSub || 'Realized P&L / Capital Base'}</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 2. Rolling Win Rate Section -->
                 <div class="stats-section-box">
                     <div class="stats-section-header">
@@ -837,6 +879,15 @@ const StatsPage = {
     },
 
     bindEvents() {
+        const btnManageCash = document.getElementById('btn-stats-manage-cash');
+        if (btnManageCash) {
+            btnManageCash.addEventListener('click', () => {
+                if (typeof CashModal !== 'undefined' && CashModal.open) {
+                    CashModal.open();
+                }
+            });
+        }
+
         // Date range filter buttons
         const rangeBtns = document.querySelectorAll('#stats-date-range-filter .segmented-btn');
         rangeBtns.forEach(btn => {
@@ -1341,6 +1392,8 @@ const StatsPage = {
                         ticks: { color: theme.text, font: { family: 'SF Mono, monospace', size: 10 } }
                     },
                     y: {
+                        suggestedMin: 0,
+                        suggestedMax: 0,
                         grid: { color: theme.grid },
                         ticks: {
                             color: theme.text,

@@ -23,7 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.config import DB_PATH  # noqa: E402
-from backend.database import init_db, upsert_trades  # noqa: E402
+from backend.database import db_session, init_db, upsert_cash_transactions, upsert_trades  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,6 +57,13 @@ def generate_deterministic_exec_id(symbol: str, dt_str: str, side: str, qty: flo
     return f"GEN_{h}"
 
 
+def generate_deterministic_cash_id(account_id: str, dt_str: str, tx_type: str, amount: float, desc: str = "") -> str:
+    """Generates a unique deterministic ID for cash transactions without a transaction ID."""
+    raw = f"{account_id}_{dt_str}_{tx_type}_{amount:.2f}_{desc[:20]}"
+    h = hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+    return f"CASH_{h}"
+
+
 def parse_datetime_str(raw: str) -> Tuple[str, str, str]:
     """
     Parses various date/time formats from IBKR statements:
@@ -71,55 +78,65 @@ def parse_datetime_str(raw: str) -> Tuple[str, str, str]:
         today_iso = date.today().isoformat()
         return today_iso, "", today_iso
 
-    cleaned = raw.replace(";", " ").replace(",", " ").replace("T", " ").strip()
-    parts = cleaned.split()
+    try:
+        cleaned = raw.replace(";", " ").replace(",", " ").replace("T", " ").strip()
+        parts = cleaned.split()
 
-    trade_date = ""
-    trade_time = ""
+        trade_date = ""
+        trade_time = ""
 
-    if len(parts) >= 1:
-        d_part = parts[0].strip()
-        # Case 1: YYYYMMDD
-        if len(d_part) == 8 and d_part.isdigit():
-            trade_date = f"{d_part[:4]}-{d_part[4:6]}-{d_part[6:]}"
-        # Case 2: YYYY-MM-DD
-        elif len(d_part) == 10 and d_part.count("-") == 2:
-            trade_date = d_part
-        # Case 3: DD/MM/YYYY or MM/DD/YYYY
-        elif d_part.count("/") == 2:
-            dp = d_part.split("/")
-            if len(dp[2]) == 4: # e.g. 12/05/2023 or 05/12/2023
-                # Assume YYYY at end
-                y = dp[2]
-                m = dp[0].zfill(2)
-                d = dp[1].zfill(2)
-                # If m > 12, it's DD/MM/YYYY
-                if int(dp[0]) > 12:
-                    d, m = dp[0].zfill(2), dp[1].zfill(2)
-                trade_date = f"{y}-{m}-{d}"
-            elif len(dp[0]) == 4: # e.g. 2023/05/12
-                trade_date = f"{dp[0]}-{dp[1].zfill(2)}-{dp[2].zfill(2)}"
-        else:
-            trade_date = d_part
+        if len(parts) >= 1:
+            d_part = parts[0].strip()
+            # Case 1: YYYYMMDD
+            if len(d_part) == 8 and d_part.isdigit():
+                trade_date = f"{d_part[:4]}-{d_part[4:6]}-{d_part[6:]}"
+            # Case 2: YYYY-MM-DD
+            elif len(d_part) == 10 and d_part.count("-") == 2:
+                trade_date = d_part
+            # Case 3: DD/MM/YYYY or MM/DD/YYYY or YYYY/MM/DD
+            elif d_part.count("/") == 2:
+                dp = d_part.split("/")
+                if len(dp) == 3:
+                    if len(dp[2]) == 4:
+                        y = dp[2]
+                        m = dp[0].zfill(2)
+                        d = dp[1].zfill(2)
+                        if int(dp[0]) > 12:
+                            d, m = dp[0].zfill(2), dp[1].zfill(2)
+                        trade_date = f"{y}-{m}-{d}"
+                    elif len(dp[0]) == 4:
+                        trade_date = f"{dp[0]}-{dp[1].zfill(2)}-{dp[2].zfill(2)}"
+                    elif len(dp[2]) == 2:
+                        y = f"20{dp[2]}"
+                        m = dp[0].zfill(2)
+                        d = dp[1].zfill(2)
+                        if int(dp[0]) > 12:
+                            d, m = dp[0].zfill(2), dp[1].zfill(2)
+                        trade_date = f"{y}-{m}-{d}"
+            else:
+                trade_date = d_part
 
-    if len(parts) >= 2:
-        t_part = parts[1].strip()
-        # Case 1: HHMMSS
-        if len(t_part) == 6 and t_part.isdigit():
-            trade_time = f"{t_part[:2]}:{t_part[2:4]}:{t_part[4:]}"
-        # Case 2: HH:MM:SS
-        elif t_part.count(":") >= 1:
-            tp = t_part.split(":")
-            h = tp[0].zfill(2)
-            m = tp[1].zfill(2)
-            s = tp[2].zfill(2) if len(tp) > 2 else "00"
-            trade_time = f"{h}:{m}:{s}"
+        if len(parts) >= 2:
+            t_part = parts[1].strip()
+            # Case 1: HHMMSS
+            if len(t_part) == 6 and t_part.isdigit():
+                trade_time = f"{t_part[:2]}:{t_part[2:4]}:{t_part[4:]}"
+            # Case 2: HH:MM:SS or HH:MM
+            elif ":" in t_part:
+                tp = t_part.split(":")
+                h = tp[0].zfill(2)
+                m = tp[1].zfill(2) if len(tp) > 1 else "00"
+                s = tp[2].zfill(2) if len(tp) > 2 else "00"
+                trade_time = f"{h}:{m}:{s}"
 
-    if not trade_date:
-        trade_date = date.today().isoformat()
+        if not trade_date:
+            trade_date = date.today().isoformat()
 
-    iso_str = f"{trade_date}T{trade_time}" if trade_time else trade_date
-    return trade_date, trade_time, iso_str
+        iso_str = f"{trade_date}T{trade_time}" if trade_time else trade_date
+        return trade_date, trade_time, iso_str
+    except Exception:
+        today_iso = date.today().isoformat()
+        return today_iso, "", today_iso
 
 
 def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
@@ -176,6 +193,90 @@ def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
     return trades
 
 
+def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
+    """Parses cash transactions (deposits, withdrawals, transfers) from IBKR Flex XML."""
+    txs: List[Dict[str, Any]] = []
+    tree = ET.parse(filepath)
+    root = tree.getroot()
+
+    base_currency = "EUR"
+    for node in root.iter("AccountInformation"):
+        base_currency = (node.attrib.get("baseCurrency") or "EUR").upper()
+
+    for node in root.iter("CashTransaction"):
+        attrs = node.attrib
+        tx_type_raw = (attrs.get("type") or "DEPOSIT").upper()
+        amount_raw = clean_num(attrs.get("amount"))
+        if amount_raw == 0:
+            continue
+
+        tx_type = "DEPOSIT"
+        if "WITHDRAW" in tx_type_raw or amount_raw < 0:
+            tx_type = "WITHDRAWAL"
+        elif "DIVIDEND" in tx_type_raw or "WITHHOLDING" in tx_type_raw:
+            tx_type = "DIVIDEND"
+        elif "TRANSFER" in tx_type_raw:
+            tx_type = "TRANSFER"
+
+        date_raw = attrs.get("dateTime") or attrs.get("reportDate") or attrs.get("settleDate") or ""
+        t_date, t_time, t_dt_iso = parse_datetime_str(date_raw)
+        curr = (attrs.get("currency") or base_currency).upper()
+        fx_rate = clean_num(attrs.get("fxRateToBase"), 1.0)
+        amount_base = round(amount_raw * fx_rate, 2)
+
+        desc = attrs.get("description") or attrs.get("type") or ""
+        account_id = attrs.get("accountId") or ""
+        tx_id = attrs.get("transactionID") or attrs.get("id") or generate_deterministic_cash_id(account_id, t_dt_iso, tx_type, amount_raw, desc)
+
+        txs.append({
+            "transaction_id": tx_id,
+            "account_id": account_id,
+            "type": tx_type,
+            "amount": amount_base,
+            "raw_amount": amount_raw,
+            "currency": curr,
+            "raw_currency": curr,
+            "base_currency": base_currency,
+            "fx_rate_to_base": fx_rate,
+            "transaction_date": t_date,
+            "transaction_time": t_time,
+            "description": desc,
+            "is_manual": False
+        })
+
+    for node in root.iter("Transfer"):
+        attrs = node.attrib
+        amount_raw = clean_num(attrs.get("amount") or attrs.get("cashAmount"))
+        if amount_raw == 0:
+            continue
+        tx_type = "DEPOSIT" if amount_raw > 0 else "WITHDRAWAL"
+        date_raw = attrs.get("date") or attrs.get("dateTime") or attrs.get("settleDate") or ""
+        t_date, t_time, t_dt_iso = parse_datetime_str(date_raw)
+        curr = (attrs.get("currency") or base_currency).upper()
+        fx_rate = clean_num(attrs.get("fxRateToBase"), 1.0)
+        desc = attrs.get("description") or attrs.get("type") or "Transfer"
+        account_id = attrs.get("accountId") or ""
+        tx_id = attrs.get("transactionID") or generate_deterministic_cash_id(account_id, t_dt_iso, tx_type, amount_raw, desc)
+
+        txs.append({
+            "transaction_id": tx_id,
+            "account_id": account_id,
+            "type": tx_type,
+            "amount": round(amount_raw * fx_rate, 2),
+            "raw_amount": amount_raw,
+            "currency": curr,
+            "raw_currency": curr,
+            "base_currency": base_currency,
+            "fx_rate_to_base": fx_rate,
+            "transaction_date": t_date,
+            "transaction_time": t_time,
+            "description": desc,
+            "is_manual": False
+        })
+
+    return txs
+
+
 def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
     """
     Parses IBKR CSV exports supporting:
@@ -193,8 +294,7 @@ def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
         return []
 
     # Check if this is an IBKR multi-section Activity Statement
-    is_activity_statement = any(line_item.startswith("Trades,Header") or line_item.startswith("Trades,Data") for line_item in lines[:50])
-
+    is_activity_statement = any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") for line_item in lines)
 
     if is_activity_statement:
         trades = parse_ibkr_activity_statement_csv(lines)
@@ -204,11 +304,172 @@ def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
     return trades
 
 
+def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
+    """Parses Deposits & Withdrawals and Cash Transactions from IBKR Activity CSV."""
+    cash_txs: List[Dict[str, Any]] = []
+    account_id = ""
+    base_currency = "EUR"
+    fx_rates_to_base: Dict[str, float] = {
+        "EUR": 1.0, "USD": 0.906, "CAD": 0.684, "GBP": 1.154,
+        "AUD": 0.617, "CHF": 1.05, "JPY": 0.0061, "NOK": 0.089,
+        "SEK": 0.088, "HKD": 0.116
+    }
+
+    for line in lines:
+        try:
+            row = list(csv.reader([line]))[0] if line else []
+        except Exception:
+            continue
+        if not row or len(row) < 3:
+            continue
+        section = row[0].strip()
+        record_type = row[1].strip()
+
+        if section == "Account Information" and record_type == "Data":
+            if len(row) >= 4:
+                field_name = row[2].strip()
+                field_val = row[3].strip()
+                if field_name == "Account":
+                    account_id = field_val
+                elif field_name == "Base Currency":
+                    base_currency = field_val.upper()
+                    fx_rates_to_base[base_currency] = 1.0
+
+        elif section == "Forex Balances" and record_type == "Data":
+            if len(row) >= 9:
+                curr = row[4].strip().upper()
+                close_price = clean_num(row[8])
+                if curr and close_price > 0:
+                    fx_rates_to_base[curr] = close_price
+
+    dw_headers: List[str] = []
+    for line in lines:
+        try:
+            row = list(csv.reader([line]))[0] if line else []
+        except Exception:
+            continue
+        if not row or len(row) < 3:
+            continue
+        section = row[0].strip()
+        record_type = row[1].strip()
+
+        if section in ("Deposits & Withdrawals", "Transfers") and record_type == "Header":
+            dw_headers = [h.strip().lower() for h in row[2:]]
+        elif section in ("Deposits & Withdrawals", "Transfers") and record_type.lower() == "data" and dw_headers:
+            data = [d.strip() for d in row[2:]]
+            if len(data) < len(dw_headers):
+                data += [""] * (len(dw_headers) - len(data))
+            row_dict = dict(zip(dw_headers, data))
+
+            # Skip summary / total rows
+            disc = row_dict.get("datadiscriminator", "").lower()
+            curr_str = row_dict.get("currency", "").lower()
+            desc_str = (row_dict.get("description") or row_dict.get("type") or "").strip()
+            if "total" in disc or "subtotal" in disc or "total" in curr_str or "total" in desc_str.lower():
+                continue
+
+            amt = clean_num(row_dict.get("amount") or row_dict.get("net amount") or row_dict.get("amount in base") or 0.0)
+            if amt == 0:
+                continue
+
+            dt_raw = row_dict.get("settle date") or row_dict.get("date/time") or row_dict.get("date") or row_dict.get("settledate") or ""
+            # Must have a valid date string (e.g. at least YYYY-MM-DD or 8 chars)
+            if not dt_raw or len(dt_raw.strip()) < 8:
+                continue
+
+            raw_curr = (row_dict.get("currency") or base_currency).upper()
+            if "TOTAL" in raw_curr:
+                continue
+
+            fx_rate = 1.0 if raw_curr == base_currency else fx_rates_to_base.get(raw_curr, 1.0)
+            amt_in_base = round(amt * fx_rate, 2)
+
+            t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw)
+            desc = desc_str or ("Electronic Funds Transfer" if amt > 0 else "Cash Withdrawal")
+
+            # Correctly identify transaction type based on amount sign and description
+            if "DIVIDEND" in desc.upper():
+                tx_type = "DIVIDEND"
+            elif amt > 0:
+                tx_type = "DEPOSIT"
+            else:
+                tx_type = "WITHDRAWAL"
+
+            tx_id = row_dict.get("transaction id") or row_dict.get("transactionid") or row_dict.get("ref #") or generate_deterministic_cash_id(account_id, t_dt_iso, tx_type, amt, desc)
+
+            cash_txs.append({
+                "transaction_id": tx_id,
+                "account_id": row_dict.get("accountid", "") or account_id,
+                "type": tx_type,
+                "amount": abs(amt_in_base) if tx_type == "DEPOSIT" else -abs(amt_in_base),
+                "raw_amount": amt,
+                "currency": raw_curr,
+                "raw_currency": raw_curr,
+                "base_currency": base_currency,
+                "fx_rate_to_base": fx_rate,
+                "transaction_date": t_date,
+                "transaction_time": t_time,
+                "description": desc,
+                "is_manual": False
+            })
+
+    return cash_txs
+
+
 def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
-    """Parses standard IBKR Activity Statement CSV with 'Trades,Header' and 'Trades,Data' lines."""
+    """Parses standard IBKR Activity Statement CSV with multi-currency conversion to Base Currency."""
     trades: List[Dict[str, Any]] = []
     headers: List[str] = []
+    account_id = ""
+    base_currency = "EUR"
 
+    # Default fallback conversion rates to EUR
+    fx_rates_to_base: Dict[str, float] = {
+        "EUR": 1.0,
+        "USD": 0.906,
+        "CAD": 0.684,
+        "GBP": 1.154,
+        "AUD": 0.617,
+        "CHF": 1.05,
+        "JPY": 0.0061,
+        "NOK": 0.089,
+        "SEK": 0.088,
+        "HKD": 0.116,
+    }
+
+    # Pass 1: Extract account Base Currency and FX conversion rates from statement headers/summaries
+    for line in lines:
+        row = list(csv.reader([line]))[0] if line else []
+        if not row or len(row) < 3:
+            continue
+        section = row[0].strip()
+        record_type = row[1].strip()
+
+        if section == "Account Information" and record_type == "Data":
+            if len(row) >= 4:
+                field_name = row[2].strip()
+                field_val = row[3].strip()
+                if field_name == "Account":
+                    account_id = field_val
+                elif field_name == "Base Currency":
+                    base_currency = field_val.upper()
+                    fx_rates_to_base[base_currency] = 1.0
+
+        elif section == "Forex Balances" and record_type == "Data":
+            if len(row) >= 9:
+                curr = row[4].strip().upper()
+                close_price = clean_num(row[8])
+                if curr and close_price > 0:
+                    fx_rates_to_base[curr] = close_price
+
+        elif section == "Mark-to-Market Performance Summary" and record_type == "Data":
+            if len(row) >= 8 and row[2].strip() == "Forex":
+                curr = row[3].strip().upper()
+                curr_price = clean_num(row[7])
+                if curr and curr_price > 0:
+                    fx_rates_to_base[curr] = curr_price
+
+    # Pass 2: Process trade executions and convert P&L / commissions to base currency
     for line in lines:
         row = list(csv.reader([line]))[0] if line else []
         if not row or len(row) < 3:
@@ -218,7 +479,6 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
         record_type = row[1].strip()
 
         if section == "Trades" and record_type == "Header":
-            # Header line: Trades, Header, DataDiscriminator, Asset Category, Currency, Symbol, Date/Time, Quantity, T. Price, C. Price, Proceeds, Comm/Fee, Realized P/L, MTM P/L, Code
             headers = [h.strip().lower() for h in row[2:]]
         elif section == "Trades" and record_type == "Data" and headers:
             data = [d.strip() for d in row[2:]]
@@ -242,8 +502,27 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             qty = clean_num(row_dict.get("quantity") or row_dict.get("qty"))
             price = clean_num(row_dict.get("t. price") or row_dict.get("trade price") or row_dict.get("price"))
             proceeds = clean_num(row_dict.get("proceeds"))
-            comm = abs(clean_num(row_dict.get("comm/fee") or row_dict.get("commission") or row_dict.get("ib commission")))
-            realized_pnl = clean_num(row_dict.get("realized p/l") or row_dict.get("realized pnl") or row_dict.get("realized profit"))
+
+            raw_currency = row_dict.get("currency", base_currency).upper()
+            fx_rate = 1.0 if raw_currency == base_currency else fx_rates_to_base.get(raw_currency, 1.0)
+
+            raw_comm = abs(clean_num(
+                row_dict.get("comm/fee") or
+                row_dict.get("commission") or
+                row_dict.get("ib commission") or
+                row_dict.get("comm in eur") or
+                row_dict.get("comm in usd") or
+                row_dict.get("comm")
+            ))
+            raw_pnl = clean_num(row_dict.get("realized p/l") or row_dict.get("realized pnl") or row_dict.get("realized profit"))
+
+            # Convert commission & realized PnL to base currency
+            if "comm in eur" in headers and base_currency == "EUR" and row_dict.get("comm in eur"):
+                comm_in_base = raw_comm
+            else:
+                comm_in_base = round(raw_comm * fx_rate, 4)
+
+            pnl_in_base = round(raw_pnl * fx_rate, 4)
 
             # Asset category: Stocks, Equity and Index Options, Futures, etc.
             raw_cat = row_dict.get("asset category", "").upper()
@@ -259,7 +538,6 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             elif "BOND" in raw_cat:
                 asset_category = "BOND"
 
-            currency = row_dict.get("currency", "EUR").upper()
             code = (row_dict.get("code") or "C").upper()
             open_close = "O" if "O" in code else ("C" if "C" in code else "C")
             side = "BUY" if qty > 0 else "SELL"
@@ -270,18 +548,23 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             trades.append({
                 "ib_exec_id": exec_id,
                 "trade_id": trade_id or exec_id,
-                "account_id": row_dict.get("accountid", ""),
+                "account_id": row_dict.get("accountid", "") or account_id,
                 "symbol": symbol,
                 "description": row_dict.get("description", ""),
                 "asset_category": asset_category,
-                "currency": currency,
+                "currency": raw_currency,
+                "raw_currency": raw_currency,
+                "base_currency": base_currency,
                 "buy_sell": side,
                 "quantity": qty,
                 "trade_price": price,
-                "trade_money": abs(qty) * price,
+                "trade_money": abs(qty) * price if price else 0.0,
                 "proceeds": proceeds,
-                "ib_commission": comm,
-                "realized_pnl": realized_pnl,
+                "fx_rate_to_base": fx_rate,
+                "raw_commission": raw_comm,
+                "raw_realized_pnl": raw_pnl,
+                "ib_commission": comm_in_base,
+                "realized_pnl": pnl_in_base,
                 "trade_date": t_date,
                 "trade_time": t_time,
                 "trade_date_time": t_dt_iso,
@@ -378,16 +661,21 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
 
     total_parsed = 0
     all_trades: List[Dict[str, Any]] = []
+    all_cash_txs: List[Dict[str, Any]] = []
 
     for f in sorted(files_to_process):
         logger.info(f"Reading file: {f.name} ({f.stat().st_size / 1024:.1f} KB)")
         try:
             if f.suffix.lower() == ".xml":
                 parsed = parse_xml_file(f)
+                cash_parsed = parse_xml_cash_transactions(f)
             else:
                 parsed = parse_csv_file(f)
+                with open(f, "r", encoding="utf-8-sig", errors="replace") as cf:
+                    csv_lines = cf.read().splitlines()
+                cash_parsed = parse_csv_cash_transactions(csv_lines)
 
-            logger.info(f"  -> Extracted {len(parsed)} trade executions.")
+            logger.info(f"  -> Extracted {len(parsed)} trade executions, {len(cash_parsed)} cash transactions.")
             if verbose:
                 for t in parsed[:5]:
                     logger.debug(f"     {t['trade_date']} {t['trade_time']} | {t['symbol']} | {t['buy_sell']} {t['quantity']} @ {t['trade_price']} | PnL: {t['realized_pnl']}")
@@ -395,17 +683,31 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
                     logger.debug(f"     ... and {len(parsed) - 5} more.")
 
             all_trades.extend(parsed)
+            all_cash_txs.extend(cash_parsed)
             total_parsed += len(parsed)
         except Exception as e:
             logger.error(f"Error parsing {f}: {e}")
 
     if dry_run:
-        logger.info(f"[DRY-RUN] Would upsert {len(all_trades)} trades into {DB_PATH.name} (no changes written).")
+        logger.info(f"[DRY-RUN] Would upsert {len(all_trades)} trades and {len(all_cash_txs)} cash transactions into {DB_PATH.name} (no changes written).")
         return total_parsed, 0
 
     init_db()
     upserted_count = upsert_trades(all_trades)
-    logger.info(f"✓ Successfully upserted {upserted_count} trades into SQLite ({DB_PATH.name}).")
+    if all_cash_txs:
+        upsert_cash_transactions(all_cash_txs)
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE sync_gaps
+            SET resolved_at = CURRENT_TIMESTAMP
+            WHERE resolved_at IS NULL;
+        """)
+        cursor.execute("""
+            INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+            VALUES ('cli_import', 'success', ?, CURRENT_TIMESTAMP);
+        """, (upserted_count,))
+    logger.info(f"✓ Successfully upserted {upserted_count} trades and {len(all_cash_txs)} cash transactions into SQLite ({DB_PATH.name}).")
     return total_parsed, upserted_count
 
 

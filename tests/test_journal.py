@@ -592,7 +592,7 @@ class TestTradeGrouping(unittest.TestCase):
         self.assertEqual(len(grouped), 1)
         trade = grouped[0]
         self.assertEqual(trade["symbol"], "QQQ 01OCT26 743 C")
-        self.assertEqual(trade["direction"], "LONG")
+        self.assertEqual(trade["direction"], "BUY CALL")
         self.assertEqual(trade["status"], "CLOSED")
         self.assertEqual(trade["result"], "LOSS")
         self.assertEqual(trade["quantity"], 2.0)
@@ -605,6 +605,68 @@ class TestTradeGrouping(unittest.TestCase):
         self.assertAlmostEqual(trade["commission"], 2.89, places=2)
         self.assertAlmostEqual(trade["net_pnl"], -20.89, places=2)
         self.assertEqual(len(trade["fills"]), 3)
+
+        # Test Forex / Cash conversion (must be BUY/SELL, never SHORT)
+        cash_execs = [
+            {
+                "id": 10,
+                "symbol": "EUR.CAD",
+                "asset_category": "CASH",
+                "currency": "EUR",
+                "raw_currency": "CAD",
+                "buy_sell": "SELL",
+                "quantity": -150.0,
+                "trade_price": 1.48,
+                "ib_commission": 1.50,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "14:00:00",
+                "open_close_indicator": "C"
+            }
+        ]
+        cash_grouped = group_executions_to_trades(cash_execs)
+        self.assertEqual(len(cash_grouped), 1)
+        self.assertEqual(cash_grouped[0]["direction"], "EXCHANGE")
+        self.assertNotEqual(cash_grouped[0]["direction"], "SHORT")
+        self.assertNotEqual(cash_grouped[0]["direction"], "SELL")
+
+        # Test Put Option Sell
+        put_execs = [
+            {
+                "id": 20,
+                "symbol": "SPY 15DEC26 580 P",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "raw_currency": "USD",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 2.50,
+                "ib_commission": 0.80,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "15:30:00",
+                "open_close_indicator": "O"
+            },
+            {
+                "id": 21,
+                "symbol": "SPY 15DEC26 580 P",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "raw_currency": "USD",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 1.00,
+                "ib_commission": 0.80,
+                "realized_pnl": 150.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "16:00:00",
+                "open_close_indicator": "C"
+            }
+        ]
+        put_grouped = group_executions_to_trades(put_execs)
+        self.assertEqual(len(put_grouped), 1)
+        self.assertEqual(put_grouped[0]["direction"], "SELL PUT")
+        self.assertEqual(put_grouped[0]["result"], "WIN")
 
 
 if __name__ == "__main__":

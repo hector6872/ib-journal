@@ -1348,16 +1348,19 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
     overflow: hidden;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: box-shadow 0.15s ease, background-color 0.15s ease;
+    outline: none !important;
 }
 
 .trade-card:hover {
-    border-color: var(--border-active);
+    border-color: var(--border-default);
     box-shadow: var(--shadow-sm);
 }
 
 .trade-card.expanded {
-    border-color: var(--border-active);
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-sm);
+    outline: none !important;
 }
 
 .trade-card-header {
@@ -1370,6 +1373,14 @@
     user-select: none;
     background-color: var(--bg-card);
     transition: background-color 0.15s ease;
+    outline: none !important;
+}
+
+.trade-card-header:focus,
+.trade-card-header:focus-visible,
+.trade-card:focus,
+.trade-card:focus-visible {
+    outline: none !important;
 }
 
 .trade-card-header:hover {
@@ -1570,8 +1581,9 @@
     border-radius: var(--radius-xs);
     font-size: 10px;
     font-weight: 800;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .badge-long {
@@ -1596,6 +1608,32 @@
     background: rgba(192, 132, 252, 0.15);
     color: #c084fc;
     border-color: rgba(192, 132, 252, 0.35);
+}
+
+.badge-buy-call {
+    background: var(--color-profit-bg);
+    color: var(--color-profit);
+    border: 1px solid var(--color-profit-border);
+}
+
+.badge-sell-call {
+    background: var(--color-loss-bg);
+    color: var(--color-loss);
+    border: 1px solid var(--color-loss-border);
+}
+
+.badge-buy-put,
+.badge-sell-put,
+.badge-put {
+    background: var(--color-loss-bg) !important;
+    color: var(--color-loss) !important;
+    border: 1px solid var(--color-loss-border) !important;
+}
+
+.badge-exchange {
+    background: var(--bg-card-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
 }
 
 .badge-result {

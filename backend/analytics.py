@@ -1087,6 +1087,51 @@ def format_trade_duration(start_time_str: Optional[str], end_time_str: Optional[
         return None
 
 
+def detect_option_type(symbol: str, asset_category: str = "") -> Optional[str]:
+    """Detects whether an option contract is a CALL or a PUT."""
+    sym = (symbol or "").strip().upper()
+    cat = (asset_category or "").strip().upper()
+    if cat not in ("OPT", "FOP") and not (" C" in sym or " P" in sym or "CALL" in sym or "PUT" in sym):
+        return None
+
+    # Standard format: e.g. "ABAT 17OCT25 7 C", "QQQ 01OCT26 743 C"
+    if sym.endswith(" C") or " C " in sym or sym.endswith(" CALL") or " CALL " in sym:
+        return "CALL"
+    if sym.endswith(" P") or " P " in sym or sym.endswith(" PUT") or " PUT " in sym:
+        return "PUT"
+
+    # OSI format: e.g. "AAPL  240119C00150000" or "SPY241220P00500000"
+    import re
+    osi_match = re.search(r'\d{6}([CP])\d{8}', sym)
+    if osi_match:
+        return "CALL" if osi_match.group(1) == "C" else "PUT"
+
+    return None
+
+
+def get_trade_direction(asset_category: str, symbol: str, is_buy: bool) -> str:
+    """
+    Determines trade direction based on asset class and initial side:
+    - Equities / Derivatives: LONG / SHORT
+    - Options: BUY CALL / SELL CALL / BUY PUT / SELL PUT
+    - Forex / Cash currency conversions: EXCHANGE
+    """
+    cat = (asset_category or "").strip().upper()
+    sym = (symbol or "").strip().upper()
+
+    # Cash / Forex currency exchange operations
+    if cat in ("CASH", "FX") or ("." in sym and len(sym.split(".")) == 2 and len(sym.split(".")[0]) == 3 and len(sym.split(".")[1]) == 3):
+        return "EXCHANGE"
+
+    # Options contracts
+    opt_type = detect_option_type(sym, cat)
+    if opt_type:
+        return f"BUY {opt_type}" if is_buy else f"SELL {opt_type}"
+
+    # Default equities / standard positions
+    return "LONG" if is_buy else "SHORT"
+
+
 def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Reconstructs round-trip trades / positions from a list of individual execution fills.
@@ -1127,15 +1172,18 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             fx_rate = float(fill.get("fx_rate_to_base") or 1.0)
             raw_comm = float(fill.get("raw_commission") if fill.get("raw_commission") is not None else comm)
             raw_pnl = float(fill.get("raw_realized_pnl") if fill.get("raw_realized_pnl") is not None else pnl)
+            fill_cat = fill.get("asset_category", "STK")
 
             if current_trade is None:
-                direction = "LONG" if qty > 0 or bs == "BUY" else "SHORT"
+                is_initial_buy = (qty > 0 or bs == "BUY")
+                direction = get_trade_direction(fill_cat, symbol, is_initial_buy)
                 current_trade = {
                     "trade_id": f"tr_{date_str}_{symbol}_{trade_idx}",
                     "symbol": symbol,
                     "description": fill.get("description", ""),
-                    "asset_category": fill.get("asset_category", "STK"),
+                    "asset_category": fill_cat,
                     "direction": direction,
+                    "is_initial_buy": is_initial_buy,
                     "currency": fill.get("currency", "EUR"),
                     "raw_currency": raw_curr,
                     "base_currency": base_curr,
@@ -1155,7 +1203,7 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                 }
                 trade_idx += 1
 
-            is_entry = (current_trade["direction"] == "LONG" and qty > 0) or (current_trade["direction"] == "SHORT" and qty < 0)
+            is_entry = (current_trade["is_initial_buy"] and qty > 0) or (not current_trade["is_initial_buy"] and qty < 0)
             fill_abs_qty = abs(qty)
 
             current_trade["fills"].append(fill)
@@ -1215,13 +1263,18 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             current_trade["result"] = "OPEN"
             all_grouped.append(current_trade)
 
-    # Sort all grouped trades chronologically by open_time
-    all_grouped.sort(key=lambda x: (x.get("open_time") or "00:00:00", x.get("symbol") or ""))
+    # Sort child fills inside each grouped trade descending (most recent first)
+    for trade in all_grouped:
+        if "fills" in trade and isinstance(trade["fills"], list):
+            trade["fills"].sort(key=lambda x: (x.get("trade_time") or "00:00:00", x.get("id") or 0), reverse=True)
+
+    # Sort all grouped trades chronologically descending by open_time (most recent first)
+    all_grouped.sort(key=lambda x: (x.get("open_time") or "00:00:00", x.get("symbol") or ""), reverse=True)
     return all_grouped
 
 
 def get_day_trades(target_date_str: str) -> List[Dict[str, Any]]:
-    """Returns detailed individual executions for a given day."""
+    """Returns detailed individual executions for a given day sorted descending (most recent first)."""
     query = """
     SELECT
         id, ib_exec_id, trade_id, symbol, description, asset_category,
@@ -1232,7 +1285,7 @@ def get_day_trades(target_date_str: str) -> List[Dict[str, Any]]:
         trade_date, trade_time, open_close_indicator
     FROM trades
     WHERE trade_date = ?
-    ORDER BY trade_time ASC, id ASC
+    ORDER BY trade_time DESC, id DESC
     """
     with db_session() as conn:
         cursor = conn.cursor()

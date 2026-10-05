@@ -7,7 +7,7 @@ const DayModal = {
     backdrop: null,
     currentData: null,
     currentDate: null,
-    activeView: 'grouped', // 'grouped' | 'executions'
+    activeView: 'executions', // Default to raw executions
     expandedTradeIds: new Set(),
 
     init() {
@@ -35,7 +35,7 @@ const DayModal = {
         if (!this.backdrop) this.init();
 
         this.currentDate = dateStr;
-        this.activeView = 'grouped';
+        this.activeView = 'executions'; // Rule 1: Always default to raw executions
         this.expandedTradeIds.clear();
 
         const titleEl = document.getElementById('modal-date-title');
@@ -50,13 +50,9 @@ const DayModal = {
             const data = await API.fetchDayTrades(dateStr);
             this.currentData = data;
 
-            // By default expand all grouped trades if 4 or fewer, otherwise expand first
+            // Rule 2: Pre-expand all grouped trades by default
             const grouped = this.getGroupedTrades(data);
-            if (grouped.length <= 4) {
-                grouped.forEach((_, idx) => this.expandedTradeIds.add(idx));
-            } else if (grouped.length > 0) {
-                this.expandedTradeIds.add(0);
-            }
+            grouped.forEach((_, idx) => this.expandedTradeIds.add(idx));
 
             this.render();
         } catch (err) {
@@ -72,6 +68,11 @@ const DayModal = {
     setView(view) {
         if (this.activeView === view) return;
         this.activeView = view;
+        // Rule 2: When switching to grouped, expand all by default
+        if (view === 'grouped') {
+            const grouped = this.getGroupedTrades(this.currentData);
+            grouped.forEach((_, idx) => this.expandedTradeIds.add(idx));
+        }
         this.render();
     },
 
@@ -95,13 +96,75 @@ const DayModal = {
         this.render();
     },
 
-    getGroupedTrades(data) {
-        if (data && Array.isArray(data.grouped_trades) && data.grouped_trades.length > 0) {
-            return data.grouped_trades;
+    detectOptionType(symbol, assetCategory = '') {
+        const sym = (symbol || '').trim().toUpperCase();
+        const cat = (assetCategory || '').trim().toUpperCase();
+        if (cat !== 'OPT' && cat !== 'FOP' && !sym.includes(' C') && !sym.includes(' P') && !sym.includes('CALL') && !sym.includes('PUT')) {
+            return null;
         }
-        // Fallback client-side grouping
-        const rawTrades = (data && data.trades) ? data.trades : [];
-        return this.clientGroupTrades(rawTrades);
+        if (sym.endsWith(' C') || sym.includes(' C ') || sym.endsWith(' CALL') || sym.includes(' CALL ')) return 'CALL';
+        if (sym.endsWith(' P') || sym.includes(' P ') || sym.endsWith(' PUT') || sym.includes(' PUT ')) return 'PUT';
+        const osiMatch = sym.match(/\d{6}([CP])\d{8}/);
+        if (osiMatch) return osiMatch[1] === 'C' ? 'CALL' : 'PUT';
+        return null;
+    },
+
+    getTradeDirection(assetCategory, symbol, isBuy) {
+        const cat = (assetCategory || '').trim().toUpperCase();
+        const sym = (symbol || '').trim().toUpperCase();
+        if (cat === 'CASH' || cat === 'FX' || (sym.includes('.') && sym.split('.').length === 2 && sym.split('.')[0].length === 3 && sym.split('.')[1].length === 3)) {
+            return 'EXCHANGE';
+        }
+        const optType = this.detectOptionType(sym, cat);
+        if (optType) {
+            return isBuy ? `BUY ${optType}` : `SELL ${optType}`;
+        }
+        return isBuy ? 'LONG' : 'SHORT';
+    },
+
+    getDirectionBadgeInfo(direction) {
+        const raw = (direction || '').toUpperCase();
+        if (raw === 'BUY CALL') return { badgeClass: 'badge-buy-call', label: STRINGS.modal?.buyCall || 'BUY CALL' };
+        if (raw === 'SELL CALL') return { badgeClass: 'badge-sell-call', label: STRINGS.modal?.sellCall || 'SELL CALL' };
+        if (raw === 'BUY PUT') return { badgeClass: 'badge-buy-put', label: STRINGS.modal?.buyPut || 'BUY PUT' };
+        if (raw === 'SELL PUT') return { badgeClass: 'badge-sell-put', label: STRINGS.modal?.sellPut || 'SELL PUT' };
+        if (raw === 'EXCHANGE') return { badgeClass: 'badge-exchange', label: STRINGS.modal?.exchange || 'EXCHANGE' };
+        if (raw === 'BUY') return { badgeClass: 'badge-buy', label: STRINGS.modal?.buy || 'BUY' };
+        if (raw === 'SELL') return { badgeClass: 'badge-sell', label: STRINGS.modal?.sell || 'SELL' };
+        if (raw === 'SHORT') return { badgeClass: 'badge-short', label: STRINGS.modal?.short || 'SHORT' };
+        return { badgeClass: 'badge-long', label: STRINGS.modal?.long || 'LONG' };
+    },
+
+    getGroupedTrades(data) {
+        let grouped = [];
+        if (data && Array.isArray(data.grouped_trades) && data.grouped_trades.length > 0) {
+            grouped = [...data.grouped_trades];
+        } else {
+            const rawTrades = (data && data.trades) ? data.trades : [];
+            grouped = this.clientGroupTrades(rawTrades);
+        }
+
+        // Sort grouped trades descending by open_time (most recent first)
+        grouped.sort((a, b) => {
+            const timeA = a.open_time || '00:00:00';
+            const timeB = b.open_time || '00:00:00';
+            if (timeA !== timeB) return timeB.localeCompare(timeA);
+            return (a.symbol || '').localeCompare(b.symbol || '');
+        });
+
+        // Ensure child fills inside each grouped trade are also sorted descending (most recent first)
+        grouped.forEach(t => {
+            if (Array.isArray(t.fills)) {
+                t.fills.sort((a, b) => {
+                    const timeA = a.trade_time || '00:00:00';
+                    const timeB = b.trade_time || '00:00:00';
+                    if (timeA !== timeB) return timeB.localeCompare(timeA);
+                    return (b.id || 0) - (a.id || 0);
+                });
+            }
+        });
+
+        return grouped;
     },
 
     clientGroupTrades(trades) {
@@ -115,6 +178,9 @@ const DayModal = {
 
         const allGrouped = [];
         Object.entries(bySymbol).forEach(([symbol, fills]) => {
+            // Sort fills ascending
+            fills.sort((a, b) => (a.trade_time || '00:00:00').localeCompare(b.trade_time || '00:00:00'));
+
             let pos = 0.0;
             let current = null;
             let tradeIdx = 1;
@@ -126,13 +192,16 @@ const DayModal = {
                 const comm = parseFloat(fill.ib_commission || 0);
                 const pnl = parseFloat(fill.realized_pnl || 0);
                 const timeStr = fill.trade_time || '--:--';
+                const fillCat = fill.asset_category || 'STK';
 
                 if (!current) {
+                    const isInitialBuy = (qty > 0 || bs === 'BUY');
                     current = {
                         trade_id: `tr_${fill.trade_date || ''}_${symbol}_${tradeIdx++}`,
                         symbol: symbol,
-                        asset_category: fill.asset_category || 'STK',
-                        direction: (qty > 0 || bs === 'BUY') ? 'LONG' : 'SHORT',
+                        asset_category: fillCat,
+                        direction: this.getTradeDirection(fillCat, symbol, isInitialBuy),
+                        is_initial_buy: isInitialBuy,
                         currency: fill.raw_currency || fill.currency || 'EUR',
                         raw_currency: fill.raw_currency || fill.currency || 'EUR',
                         base_currency: fill.base_currency || 'EUR',
@@ -150,7 +219,7 @@ const DayModal = {
                     };
                 }
 
-                const isEntry = (current.direction === 'LONG' && qty > 0) || (current.direction === 'SHORT' && qty < 0);
+                const isEntry = (current.is_initial_buy && qty > 0) || (!current.is_initial_buy && qty < 0);
                 const absQty = Math.abs(qty);
 
                 current.fills.push(fill);
@@ -192,7 +261,7 @@ const DayModal = {
             }
         });
 
-        allGrouped.sort((a, b) => (a.open_time || '').localeCompare(b.open_time || ''));
+        allGrouped.sort((a, b) => (b.open_time || '').localeCompare(a.open_time || ''));
         return allGrouped;
     },
 
@@ -200,7 +269,14 @@ const DayModal = {
         const bodyEl = document.getElementById('modal-body-content');
         if (!bodyEl || !this.currentData) return;
 
-        const rawTrades = this.currentData.trades || [];
+        // Raw executions sorted descending by time (most recent first)
+        const rawTrades = [...(this.currentData.trades || [])].sort((a, b) => {
+            const timeA = a.trade_time || '00:00:00';
+            const timeB = b.trade_time || '00:00:00';
+            if (timeA !== timeB) return timeB.localeCompare(timeA);
+            return (b.id || 0) - (a.id || 0);
+        });
+
         const groupedTrades = this.getGroupedTrades(this.currentData);
 
         if (rawTrades.length === 0) {
@@ -260,15 +336,15 @@ const DayModal = {
             <!-- Modal Toolbar / View Switcher -->
             <div class="day-modal-toolbar">
                 <div class="segmented-control">
-                    <button class="segmented-btn ${isGroupedView ? 'active' : ''}" id="btn-view-grouped">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                        <span>${STRINGS.modal?.viewGrouped || 'Grouped Trades'}</span>
-                        <span class="badge-count">${groupedTrades.length}</span>
-                    </button>
                     <button class="segmented-btn ${!isGroupedView ? 'active' : ''}" id="btn-view-executions">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
                         <span>${STRINGS.modal?.viewExecutions || 'Raw Executions'}</span>
                         <span class="badge-count">${rawTrades.length}</span>
+                    </button>
+                    <button class="segmented-btn ${isGroupedView ? 'active' : ''}" id="btn-view-grouped">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        <span>${STRINGS.modal?.viewGrouped || 'Grouped Trades'}</span>
+                        <span class="badge-count">${groupedTrades.length}</span>
                     </button>
                 </div>
 
@@ -316,7 +392,7 @@ const DayModal = {
             <div class="grouped-trades-container">
                 ${groupedTrades.map((t, idx) => {
                     const isExpanded = this.expandedTradeIds.has(idx);
-                    const isLong = t.direction === 'LONG';
+                    const dirInfo = this.getDirectionBadgeInfo(t.direction);
                     const isWin = t.result === 'WIN';
                     const isLoss = t.result === 'LOSS';
                     const isOpen = t.status === 'OPEN' || t.result === 'OPEN';
@@ -338,20 +414,25 @@ const DayModal = {
                     const fillsCount = (t.fills || []).length;
                     const fillsLabel = fillsCount === 1 ? `1 ${STRINGS.modal?.fillSingle || 'fill'}` : `${fillsCount} ${STRINGS.modal?.fills || 'fills'}`;
 
-                    // Sub-table of fills
+                    // Sub-table of fills (Rule 4: sorted ascending)
                     const fillsRowsHtml = (t.fills || []).map((f, fIdx) => {
                         const isBuy = (f.buy_sell || '').toUpperCase() === 'BUY';
+                        const isCash = (f.asset_category || t.asset_category || '').toUpperCase() === 'CASH' || (f.asset_category || t.asset_category || '').toUpperCase() === 'FX';
                         const fPnl = (f.realized_pnl || 0) - (f.ib_commission || 0);
                         const fIsOpen = (f.open_close_indicator || '').toUpperCase() === 'O' && (!f.realized_pnl);
                         const fPnlClass = fIsOpen ? 'pnl-neutral' : State.getPnlClass(fPnl);
                         const fPnlDisplay = fIsOpen ? '<span style="color: var(--text-muted); font-size: 11px;">(Entry)</span>' : State.formatCurrency(fPnl);
                         const fPrice = currSym ? `${currSym}${parseFloat(f.trade_price).toFixed(2)}` : parseFloat(f.trade_price).toFixed(2);
 
+                        const sideBadgeHtml = isCash
+                            ? `<span class="badge-side badge-exchange">${STRINGS.modal?.exchange || 'EXCHANGE'}</span>`
+                            : `<span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${f.buy_sell}</span>`;
+
                         return `
                             <tr>
                                 <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${fIdx + 1}</td>
                                 <td class="mono">${f.trade_time || '--:--'}</td>
-                                <td><span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${f.buy_sell}</span></td>
+                                <td>${sideBadgeHtml}</td>
                                 <td class="mono">${Math.abs(f.quantity)}</td>
                                 <td class="mono">${fPrice}</td>
                                 <td class="mono" style="color: var(--text-muted);">${State.currency}${parseFloat(f.ib_commission || 0).toFixed(2)}</td>
@@ -366,7 +447,7 @@ const DayModal = {
                             <div class="trade-card-header" data-trade-idx="${idx}">
                                 <!-- Left: Direction, Symbol & Badges -->
                                 <div class="trade-card-left">
-                                    <span class="badge-direction ${isLong ? 'badge-long' : 'badge-short'}">${isLong ? (STRINGS.modal?.long || 'LONG') : (STRINGS.modal?.short || 'SHORT')}</span>
+                                    <span class="badge-direction ${dirInfo.badgeClass}">${dirInfo.label}</span>
                                     <div class="trade-symbol-block">
                                         <div class="trade-symbol-line">
                                             <span class="trade-symbol-text">${t.symbol}</span>
@@ -443,6 +524,7 @@ const DayModal = {
     renderRawExecutionsHtml(rawTrades) {
         const rowsHtml = rawTrades.map((t, idx) => {
             const isBuy = (t.buy_sell || '').toUpperCase() === 'BUY';
+            const isCash = (t.asset_category || '').toUpperCase() === 'CASH' || (t.asset_category || '').toUpperCase() === 'FX';
             const isOpen = (t.open_close_indicator || '').toUpperCase() === 'O' && (t.realized_pnl === 0 || t.realized_pnl === null);
             const pnl = (t.realized_pnl || 0) - (t.ib_commission || 0);
             const pnlClass = isOpen ? 'pnl-neutral' : State.getPnlClass(pnl);
@@ -466,6 +548,10 @@ const DayModal = {
                 pnlTitle = `Original: ${rawVal >= 0 ? '+' : ''}${rawVal.toFixed(2)} ${t.raw_currency} (FX ${t.fx_rate_to_base || 1})`;
             }
 
+            const sideBadgeHtml = isCash
+                ? `<span class="badge-side badge-exchange">${STRINGS.modal?.exchange || 'EXCHANGE'}</span>`
+                : `<span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${t.buy_sell}</span>`;
+
             return `
                 <tr>
                     <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${idx + 1}</td>
@@ -474,7 +560,7 @@ const DayModal = {
                         <strong>${t.symbol}</strong>
                         <span class="badge-category" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">${t.asset_category}</span>
                     </td>
-                    <td><span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${t.buy_sell}</span></td>
+                    <td>${sideBadgeHtml}</td>
                     <td class="mono">${Math.abs(t.quantity)}</td>
                     <td class="mono" title="${curr ? `Currency: ${curr}` : ''}">${priceDisplay}</td>
                     <td class="mono" ${commTitle ? `title="${commTitle}"` : ''} style="color: var(--text-muted);">${State.currency}${parseFloat(t.ib_commission || 0).toFixed(2)}</td>

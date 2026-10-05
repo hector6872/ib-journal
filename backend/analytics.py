@@ -884,6 +884,17 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
             month_trades_count += row["trades_count"]
             month_wins += row["wins"]
 
+        cursor.execute("""
+            SELECT
+                COALESCE(MAX(CASE WHEN (realized_pnl - ib_commission) > 0 THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_win,
+                COALESCE(MIN(CASE WHEN (realized_pnl - ib_commission) < 0 THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_loss
+            FROM trades
+            WHERE trade_date BETWEEN ? AND ?
+        """, (start_date, end_date))
+        m_ext = cursor.fetchone()
+        largest_win = m_ext["largest_win"] if m_ext else 0.0
+        largest_loss = m_ext["largest_loss"] if m_ext else 0.0
+
     # Fill empty days for complete calendar mapping
     days_list = []
     for day in range(1, last_day + 1):
@@ -911,7 +922,9 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
         "daily_map": daily_map,
         "total_net_pnl": round(month_net_pnl, 2),
         "total_trades": month_trades_count,
-        "win_rate": win_rate
+        "win_rate": win_rate,
+        "largest_win": round(largest_win, 2),
+        "largest_loss": round(largest_loss, 2)
     }
 
 def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
@@ -940,6 +953,7 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
     """
 
     trades_by_date: Dict[str, List[Dict[str, Any]]] = {}
+    all_week_trades: List[Dict[str, Any]] = []
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.execute(query, (monday.isoformat(), sunday.isoformat()))
@@ -947,7 +961,9 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
             d = row["trade_date"]
             if d not in trades_by_date:
                 trades_by_date[d] = []
-            trades_by_date[d].append(dict(row))
+            trade_dict = dict(row)
+            trades_by_date[d].append(trade_dict)
+            all_week_trades.append(trade_dict)
 
     days = []
     week_net_pnl = 0.0
@@ -976,12 +992,17 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
         week_net_pnl += day_pnl
         week_trades_count += len(day_trades)
 
+    largest_win = max([t["net_pnl"] for t in all_week_trades if t["net_pnl"] > 0] or [0.0])
+    largest_loss = min([t["net_pnl"] for t in all_week_trades if t["net_pnl"] < 0] or [0.0])
+
     return {
         "start_date": monday.isoformat(),
         "end_date": friday.isoformat(),
         "days": days,
         "total_net_pnl": round(week_net_pnl, 2),
-        "total_trades": week_trades_count
+        "total_trades": week_trades_count,
+        "largest_win": round(largest_win, 2),
+        "largest_loss": round(largest_loss, 2)
     }
 
 def get_day_trades(target_date_str: str) -> List[Dict[str, Any]]:

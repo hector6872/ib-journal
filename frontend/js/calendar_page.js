@@ -75,7 +75,7 @@ const CalendarPage = {
         });
     },
 
-    computePeriodStats(items, fallbackDays = null) {
+    computePeriodStats(items, fallbackDays = null, extraStats = {}) {
         let totalTrades = 0;
         let totalNetPnl = 0;
         let grossProfit = 0;
@@ -120,6 +120,9 @@ const CalendarPage = {
         const daysDivisor = fallbackDays || (activeDays > 0 ? activeDays : 1);
         const activity = (totalTrades / daysDivisor).toFixed(1);
 
+        const largestWin = extraStats.largestWin !== undefined ? extraStats.largestWin : 0;
+        const largestLoss = extraStats.largestLoss !== undefined ? extraStats.largestLoss : 0;
+
         return {
             totalTrades,
             totalNetPnl: roundVal(totalNetPnl),
@@ -129,6 +132,8 @@ const CalendarPage = {
             profitFactor: profitFactor.toFixed(2),
             avgWin: roundVal(avgWin),
             avgLoss: roundVal(avgLoss),
+            largestWin: roundVal(largestWin),
+            largestLoss: roundVal(largestLoss),
             expectancy: roundVal(expectancy),
             maxDrawdown: roundVal(maxDrawdown),
             activity,
@@ -141,8 +146,61 @@ const CalendarPage = {
     },
 
     buildDockHtml(sectionId, stats) {
-        const pnlSign = stats.totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative';
-        const pnlColorVar = stats.totalNetPnl >= 0 ? 'var(--color-profit)' : 'var(--color-loss)';
+        const hasTrades = stats.totalTrades > 0;
+        let pnlColorVar = 'var(--text-muted)';
+        if (hasTrades) {
+            if (stats.totalNetPnl > 0) pnlColorVar = 'var(--color-profit)';
+            else if (stats.totalNetPnl < 0) pnlColorVar = 'var(--color-loss)';
+        }
+
+        const expClass = State.getPnlClass(stats.expectancy);
+        const winRateClass = !hasTrades ? 'pnl-neutral' : (parseFloat(stats.winRate) > 50 ? 'pnl-positive' : (parseFloat(stats.winRate) < 50 && parseFloat(stats.winRate) > 0 ? 'pnl-negative' : 'pnl-neutral'));
+        const pfClass = !hasTrades ? 'pnl-neutral' : (parseFloat(stats.profitFactor) >= 1 ? 'pnl-positive' : 'pnl-negative');
+
+        const avgWinDisplay = stats.avgWin > 0
+            ? `<span class="pnl-positive">+${State.currency}${stats.avgWin.toFixed(2)}</span>`
+            : `<span class="pnl-neutral">${State.currency}0.00</span>`;
+
+        const avgLossDisplay = stats.avgLoss > 0
+            ? `<span class="pnl-negative">-${State.currency}${stats.avgLoss.toFixed(2)}</span>`
+            : `<span class="pnl-neutral">${State.currency}0.00</span>`;
+
+        let riskStatHtml = '';
+        if (sectionId === 'year') {
+            const maxDdDisplay = stats.maxDrawdown > 0
+                ? `<span class="pnl-negative">-${State.currency}${stats.maxDrawdown.toFixed(2)}</span>`
+                : `<span class="pnl-neutral">${State.currency}0.00</span>`;
+
+            riskStatHtml = `
+                <div class="dock-stat-item">
+                    <span class="dock-stat-label">${STRINGS.calendar.maxDrawdownLabel || "Max Drawdown"}</span>
+                    <span class="dock-stat-val mono">${maxDdDisplay}</span>
+                </div>
+            `;
+        } else {
+            // Week and Month views: Best / Worst Trade
+            const bestWin = stats.largestWin || 0;
+            const worstLoss = stats.largestLoss || 0;
+
+            const bestWinDisplay = bestWin > 0
+                ? `<span class="pnl-positive">+${State.currency}${bestWin.toFixed(2)}</span>`
+                : `<span class="pnl-neutral">${State.currency}0.00</span>`;
+
+            const worstLossDisplay = worstLoss < 0
+                ? `<span class="pnl-negative">-${State.currency}${Math.abs(worstLoss).toFixed(2)}</span>`
+                : (worstLoss > 0
+                    ? `<span class="pnl-negative">-${State.currency}${worstLoss.toFixed(2)}</span>`
+                    : `<span class="pnl-neutral">${State.currency}0.00</span>`);
+
+            riskStatHtml = `
+                <div class="dock-stat-item">
+                    <span class="dock-stat-label">${STRINGS.calendar.bestWorstTradeLabel || "Best / Worst"}</span>
+                    <span class="dock-stat-val mono" style="font-size: 11px;">
+                        ${bestWinDisplay} / ${worstLossDisplay}
+                    </span>
+                </div>
+            `;
+        }
 
         return `
             <div class="section-analytics-dock">
@@ -171,29 +229,26 @@ const CalendarPage = {
                         <div class="dock-stats-grid">
                             <div class="dock-stat-item">
                                 <span class="dock-stat-label">${STRINGS.calendar.expectancyLabel || "Expectancy / Op"}</span>
-                                <span class="dock-stat-val mono ${stats.expectancy >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(stats.expectancy)}</span>
+                                <span class="dock-stat-val mono ${expClass}">${State.formatCurrency(stats.expectancy)}</span>
                             </div>
                             <div class="dock-stat-item">
                                 <span class="dock-stat-label">${STRINGS.calendar.winRateLabel || "Win Rate"}</span>
-                                <span class="dock-stat-val mono ${parseFloat(stats.winRate) >= 50 ? 'pnl-positive' : 'pnl-negative'}">${stats.winRate}%</span>
+                                <span class="dock-stat-val mono ${winRateClass}">${hasTrades ? `${stats.winRate}%` : '0.0%'}</span>
                             </div>
                             <div class="dock-stat-item">
                                 <span class="dock-stat-label">${STRINGS.calendar.profitFactorLabel || "Profit Factor"}</span>
-                                <span class="dock-stat-val mono">${stats.profitFactor}</span>
+                                <span class="dock-stat-val mono ${pfClass}">${hasTrades ? stats.profitFactor : '0.00'}</span>
                             </div>
                             <div class="dock-stat-item">
                                 <span class="dock-stat-label">${STRINGS.calendar.avgWinLossLabel || "Avg Win / Loss"}</span>
                                 <span class="dock-stat-val mono" style="font-size: 11px;">
-                                    <span class="pnl-positive">${State.formatCurrency(stats.avgWin)}</span> / <span class="pnl-negative">-${State.formatCurrency(stats.avgLoss, false)}</span>
+                                    ${avgWinDisplay} / ${avgLossDisplay}
                                 </span>
                             </div>
-                            <div class="dock-stat-item">
-                                <span class="dock-stat-label">${STRINGS.calendar.maxDrawdownLabel || "Max Drawdown"}</span>
-                                <span class="dock-stat-val mono pnl-negative">-${State.formatCurrency(stats.maxDrawdown, false)}</span>
-                            </div>
+                            ${riskStatHtml}
                             <div class="dock-stat-item">
                                 <span class="dock-stat-label">${STRINGS.calendar.activityLabel || "Activity"}</span>
-                                <span class="dock-stat-val mono">${stats.activity} <span style="font-size: 9.5px; color: var(--text-muted); font-weight: 500;">ops/day</span></span>
+                                <span class="dock-stat-val mono ${hasTrades ? '' : 'pnl-neutral'}">${stats.activity} <span style="font-size: 9.5px; color: var(--text-muted); font-weight: 500;">trades/day</span></span>
                             </div>
                         </div>
                     </div>
@@ -215,11 +270,22 @@ const CalendarPage = {
         const textColor = isDark ? '#94a3b8' : '#868e96';
         const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
         
-        const isPositive = totalPnl >= 0;
-        const strokeColor = isPositive ? (isDark ? '#22c55e' : '#00875a') : (isDark ? '#ef4444' : '#d32f2f');
-        const fillColor = isPositive
-            ? (isDark ? 'rgba(34, 197, 94, 0.12)' : 'rgba(0, 135, 90, 0.08)')
-            : (isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(211, 47, 47, 0.08)');
+        const hasTrades = tradesCountArray.some(c => c > 0) || totalPnl !== 0;
+        let strokeColor, fillColor;
+
+        if (!hasTrades) {
+            strokeColor = isDark ? '#64748b' : '#94a3b8'; // Neutral muted gray
+            fillColor = 'transparent';
+        } else if (totalPnl > 0) {
+            strokeColor = isDark ? '#22c55e' : '#00875a'; // Profit green
+            fillColor = isDark ? 'rgba(34, 197, 94, 0.12)' : 'rgba(0, 135, 90, 0.08)';
+        } else if (totalPnl < 0) {
+            strokeColor = isDark ? '#ef4444' : '#d32f2f'; // Loss red
+            fillColor = isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(211, 47, 47, 0.08)';
+        } else {
+            strokeColor = isDark ? '#64748b' : '#94a3b8';
+            fillColor = 'transparent';
+        }
 
         const barBg = isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(0, 102, 204, 0.2)';
         const barBorder = isDark ? 'rgba(56, 189, 248, 0.7)' : 'rgba(0, 102, 204, 0.6)';
@@ -236,7 +302,7 @@ const CalendarPage = {
                         data: cumPnlArray,
                         borderColor: strokeColor,
                         backgroundColor: fillColor,
-                        fill: true,
+                        fill: hasTrades,
                         tension: 0.25,
                         borderWidth: 2,
                         pointRadius: labels.length > 25 ? 0 : 3.5,
@@ -282,7 +348,8 @@ const CalendarPage = {
                                 if (context.dataset.yAxisID === 'yPnl') {
                                     return ` ${STRINGS.calendar.cumPnlLabel || 'Cumulative P&L'}: ${State.formatCurrency(context.parsed.y)}`;
                                 } else {
-                                    return ` ${STRINGS.calendar.tradesLabel || 'Trades'}: ${context.parsed.y} ops`;
+                                    const count = context.parsed.y;
+                                    return ` ${STRINGS.calendar.tradesLabel || 'Trades'}: ${count} ${count === 1 ? 'trade' : 'trades'}`;
                                 }
                             }
                         }
@@ -465,7 +532,7 @@ const CalendarPage = {
             weekTrades.push(d.trades_count || 0);
         });
 
-        const weekStats = this.computePeriodStats(days, 5);
+        const weekStats = this.computePeriodStats(days, 5, { largestWin: data.largest_win, largestLoss: data.largest_loss });
         const dockHtml = this.buildDockHtml('week', weekStats);
 
         container.innerHTML = `
@@ -668,7 +735,7 @@ const CalendarPage = {
             monthItems.push({ pnl, count, wins, losses, date: dStr });
         }
 
-        const monthStats = this.computePeriodStats(monthItems.filter(item => item.count > 0 || item.pnl !== 0), null);
+        const monthStats = this.computePeriodStats(monthItems.filter(item => item.count > 0 || item.pnl !== 0), null, { largestWin: data.largest_win, largestLoss: data.largest_loss });
         const monthDockHtml = this.buildDockHtml('month', monthStats);
 
         container.innerHTML = `

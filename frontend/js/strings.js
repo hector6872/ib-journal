@@ -79,6 +79,7 @@ const STRINGS = {
         winRateLabel: "Win Rate",
         profitFactorLabel: "Profit Factor",
         avgWinLossLabel: "Avg Win / Loss",
+        bestWorstTradeLabel: "Best / Worst",
         maxDrawdownLabel: "Max Drawdown",
         activityLabel: "Activity Rate",
         noTradesPeriod: "No operations recorded for this period."

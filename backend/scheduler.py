@@ -22,6 +22,7 @@ logger = logging.getLogger("ib-journal.scheduler")
 class SyncScheduler:
     def __init__(self):
         self.last_sync_time: Optional[datetime] = None
+        self.last_api_sync_time: Optional[datetime] = None
         self.last_sync_status: str = "idle"
         self.last_sync_message: str = "No sync performed yet."
         self.last_trades_count: int = 0
@@ -48,11 +49,24 @@ class SyncScheduler:
         return (now.hour > 7 or (now.hour == 7 and now.minute >= 0)) and (now.hour < 21 or (now.hour == 21 and now.minute <= 15))
 
     def get_cooldown_remaining_seconds(self) -> int:
-        """Returns remaining seconds for manual sync cooldown."""
-        if not self.last_sync_time:
+        """Returns remaining seconds for remote Flex API sync cooldown."""
+        last_api = self.last_api_sync_time
+        if not last_api:
+            try:
+                with db_session() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT MAX(completed_at) as last_api FROM sync_history WHERE sync_type IN ('scheduled', 'manual') AND status = 'success';")
+                    row = cursor.fetchone()
+                    if row and row["last_api"]:
+                        last_api = datetime.fromisoformat(row["last_api"])
+            except Exception:
+                pass
+
+        if not last_api:
             return 0
+
         now = datetime.now(timezone.utc)
-        last = self.last_sync_time if self.last_sync_time.tzinfo else self.last_sync_time.replace(tzinfo=timezone.utc)
+        last = last_api if last_api.tzinfo else last_api.replace(tzinfo=timezone.utc)
         elapsed = (now - last).total_seconds()
         remaining = int(SYNC_COOLDOWN_SECONDS - elapsed)
         return max(0, remaining)
@@ -140,6 +154,7 @@ class SyncScheduler:
                 """, (sync_type, count))
 
             self.last_sync_time = now
+            self.last_api_sync_time = now
             self.last_sync_status = "success"
             self.last_trades_count = count
             self.last_sync_message = f"Synchronized {count} trades successfully."

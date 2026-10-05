@@ -27,11 +27,13 @@ class TestIBKRJournal(unittest.TestCase):
 
         from backend.scheduler import scheduler
         scheduler.last_sync_time = None
+        scheduler.last_api_sync_time = None
         scheduler.last_trades_count = 0
 
     def tearDown(self):
         from backend.scheduler import scheduler
         scheduler.last_sync_time = None
+        scheduler.last_api_sync_time = None
         scheduler.last_trades_count = 0
 
         config.DB_PATH = self.orig_db_path
@@ -364,6 +366,8 @@ Trades,Data,Order,Equity and Index Options,EUR,SPY 230120C400000,"2023-01-16, 16
         scheduler.last_sync_time = now
         status = scheduler.get_status()
         self.assertFalse(status["has_sync_gap"])
+        self.assertEqual(status["cooldown_remaining_seconds"], 0)
+        self.assertEqual(scheduler.get_cooldown_remaining_seconds(), 0)
 
 
 if __name__ == "__main__":

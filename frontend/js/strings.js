@@ -61,6 +61,7 @@ const STRINGS = {
         tabMonth: "Month",
         tabWeek: "Week",
         today: "Today",
+        thisYear: "This Year",
         thisMonth: "This Month",
         thisWeek: "This Week",
         weekOf: "Week of",
@@ -180,7 +181,7 @@ const STRINGS = {
 
     // Day Trade Modal
     modal: {
-        dayDetailsTitle: "Execution Details for",
+        dayDetailsTitle: "Execution details for",
         summaryPnl: "Net Realized P&L",
         summaryGross: "Gross P&L",
         summaryCommissions: "Commissions",

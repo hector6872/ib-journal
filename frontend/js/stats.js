@@ -62,11 +62,24 @@ const StatsController = {
 
     initScrollDock() {
         const headerMini = document.getElementById('header-mini-kpi');
-        if (!headerMini) return;
+        if (headerMini) {
+            headerMini.addEventListener('click', () => {
+                if (typeof App !== 'undefined' && App.switchTab) {
+                    App.switchTab('stats');
+                }
+            });
+        }
 
-        headerMini.addEventListener('click', () => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
+        const banner = document.getElementById('global-kpi-banner');
+        if (banner) {
+            banner.querySelectorAll('.kpi-banner-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    if (typeof App !== 'undefined' && App.switchTab) {
+                        App.switchTab('stats');
+                    }
+                });
+            });
+        }
 
         const updateVisibility = () => {
             let bannerCard = null;

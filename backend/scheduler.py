@@ -170,12 +170,22 @@ class SyncScheduler:
             }
 
         except Exception as e:
+            err_str = str(e)
+            if any(term in err_str for term in ["nodename nor servname", "gaierror", "Failed to resolve", "getaddrinfo"]):
+                clean_msg = "Unable to connect to Interactive Brokers servers. Please check your internet connection."
+            elif "1018" in err_str or "IP address not allowed" in err_str:
+                clean_msg = "IBKR Error (1018): IP address not authorized in IBKR Flex Web Service settings."
+            elif "1014" in err_str or "Token is invalid" in err_str:
+                clean_msg = "IBKR Error (1014): Invalid or expired Flex Token."
+            else:
+                clean_msg = err_str
+
             self.last_sync_status = "failed"
-            self.last_sync_message = str(e)
+            self.last_sync_message = clean_msg
             logger.error(f"Sync failed: {e}")
             return {
                 "status": "failed",
-                "message": str(e)
+                "message": clean_msg
             }
         finally:
             self.is_syncing = False

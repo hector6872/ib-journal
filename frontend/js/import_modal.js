@@ -54,7 +54,11 @@ const ImportModal = {
                     }
                     this.hide();
                 } catch (err) {
-                    alert(`Could not resolve sync gap: ${err.message}`);
+                    if (typeof App !== 'undefined' && App.showErrorModal) {
+                        App.showErrorModal("Gap Resolution Error", err.message);
+                    } else {
+                        alert(`Could not resolve sync gap: ${err.message}`);
+                    }
                 } finally {
                     dismissGapBtn.disabled = false;
                     dismissGapBtn.textContent = "✓ No trades during this period (Dismiss warning)";

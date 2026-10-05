@@ -108,6 +108,85 @@ const App = {
         }
     },
 
+    formatUserFriendlyError(rawMsg) {
+        if (!rawMsg) return "An unexpected error occurred. Please try again.";
+        const msg = String(rawMsg);
+
+        if (
+            msg.includes("nodename nor servname") ||
+            msg.includes("gaierror") ||
+            msg.includes("Failed to resolve") ||
+            msg.includes("getaddrinfo") ||
+            msg.includes("Name or service not known") ||
+            msg.includes("Network is unreachable") ||
+            msg.includes("Connection refused") ||
+            msg.includes("ConnectError")
+        ) {
+            return "Unable to connect to Interactive Brokers servers. Please check your internet connection and DNS settings.";
+        }
+
+        if (msg.includes("1018") || msg.includes("IP address not allowed") || msg.includes("IP not allowed")) {
+            return "IBKR Server Error (Code 1018): Your current IP address is not authorized in IBKR Account Management. Please ensure 'Allow all IP addresses' is enabled for your Flex Web Service Token.";
+        }
+        if (msg.includes("1014") || msg.includes("Token is invalid") || msg.includes("invalid token")) {
+            return "IBKR Authentication Error: The Flex Web Service Token configured in your .env file is invalid or expired. Please generate a new Token in IBKR Portal.";
+        }
+        if (msg.includes("1019") || msg.includes("Statement is being generated") || msg.includes("timed out")) {
+            return "IBKR Statement Timeout: Interactive Brokers is still generating your report. Please wait a minute and try again.";
+        }
+        if (msg.includes("Rate limit") || msg.includes("cooldown") || msg.includes("Too Many Requests")) {
+            return "IBKR Rate Limit: Interactive Brokers restricts Flex queries to once every few minutes. Please wait before syncing again.";
+        }
+
+        return msg;
+    },
+
+    showErrorModal(title, rawMsg) {
+        const backdrop = document.getElementById('error-modal-backdrop');
+        const titleEl = document.getElementById('error-modal-title');
+        const bodyEl = document.getElementById('error-modal-body');
+        const closeBtn = document.getElementById('error-modal-close-btn');
+        const okBtn = document.getElementById('error-modal-ok-btn');
+
+        const friendlyMessage = this.formatUserFriendlyError(rawMsg);
+
+        if (!backdrop || !bodyEl) {
+            console.error(title, friendlyMessage, rawMsg);
+            return;
+        }
+
+        if (titleEl) titleEl.textContent = title || "Error";
+        
+        bodyEl.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <p style="margin: 0; font-size: 13px; font-weight: 500; color: var(--text-main);">${friendlyMessage}</p>
+                ${rawMsg && rawMsg !== friendlyMessage ? `<div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); background: var(--bg-subtle); padding: 6px 8px; border-radius: var(--radius-xs); word-break: break-word; margin-top: 4px;">Technical details: ${rawMsg}</div>` : ''}
+            </div>
+        `;
+
+        const closeModal = () => {
+            backdrop.classList.remove('open');
+            backdrop.classList.remove('active');
+        };
+
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (okBtn) okBtn.onclick = closeModal;
+        backdrop.onclick = (e) => {
+            if (e.target === backdrop) closeModal();
+        };
+
+        const escHandler = (e) => {
+            if (e.key === 'Escape' && backdrop.classList.contains('open')) {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        backdrop.classList.add('open');
+        backdrop.classList.add('active');
+    },
+
     setupSyncButton() {
         const btnSync = document.getElementById('btn-sync');
         if (!btnSync) return;
@@ -119,7 +198,8 @@ const App = {
             try {
                 btnSync.disabled = true;
                 btnSync.classList.add('spinning');
-                btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncing;
+                const label = btnSync.querySelector('.btn-sync-label');
+                if (label) label.textContent = STRINGS.sync.syncing;
                 
                 await API.triggerSync();
                 
@@ -133,8 +213,10 @@ const App = {
                     StatsPage.load();
                 }
             } catch (err) {
-                alert(`Sync failed: ${err.message}`);
+                this.showErrorModal("Sync Failed", err.message);
                 await StatsController.updateSyncStatus();
+            } finally {
+                btnSync.classList.remove('spinning');
             }
         });
     }

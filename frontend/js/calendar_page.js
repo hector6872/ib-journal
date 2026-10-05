@@ -488,6 +488,7 @@ const CalendarPage = {
                     <button class="btn-ctrl" id="btn-year-next" title="Next Year" ${!canNextYear ? 'disabled' : ''}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
+                    <button class="btn-pill" id="btn-year-today" ${year === bounds.maxYear ? 'disabled' : ''}>${STRINGS.calendar.thisYear}</button>
                 </div>
                 <div class="section-summary-badge">
                     <span class="mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 15px; font-weight: 800;">${State.formatCurrency(totalNetPnl)}</span>
@@ -507,6 +508,9 @@ const CalendarPage = {
         document.getElementById('btn-year-next')?.addEventListener('click', () => {
             if (!canNextYear) return;
             this.loadYear(year + 1);
+        });
+        document.getElementById('btn-year-today')?.addEventListener('click', () => {
+            this.loadYear(new Date().getFullYear());
         });
 
         container.querySelectorAll('.annual-day-dot.has-trades').forEach(el => {

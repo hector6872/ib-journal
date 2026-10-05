@@ -114,13 +114,14 @@ const CalendarYear = {
             <div class="year-view-container">
                 <div class="year-nav-bar">
                     <div class="nav-controls">
-                        <span class="year-title-label mono">${year}</span>
                         <button class="btn-icon" id="btn-prev-year" ${!canPrevYear ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                         </button>
+                        <span class="year-title-label mono">${year}</span>
                         <button class="btn-icon" id="btn-next-year" ${!canNextYear ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                         </button>
+                        <button class="btn-secondary" id="btn-this-year" ${year === nowYear ? 'disabled' : ''}>${STRINGS.calendar.thisYear}</button>
                     </div>
                     <div class="year-legend">
                         <span class="legend-dot legend-loss"></span>
@@ -157,6 +158,9 @@ const CalendarYear = {
         document.getElementById('btn-next-year')?.addEventListener('click', () => {
             if (!canNextYear) return;
             this.load(year + 1);
+        });
+        document.getElementById('btn-this-year')?.addEventListener('click', () => {
+            this.load(new Date().getFullYear());
         });
 
         // Click on days with trades

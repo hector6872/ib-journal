@@ -40,11 +40,13 @@
     /* IBKR Profit & Loss Colors */
     --color-profit: #00875a;
     --color-profit-bg: #eaf7ed;
+    --color-profit-hover-bg: #d7f0df;
     --color-profit-border: #c3e6cb;
     --color-profit-badge: #00875a;
 
     --color-loss: #d32f2f;
     --color-loss-bg: #fdeded;
+    --color-loss-hover-bg: #fadcdc;
     --color-loss-border: #f5c6cb;
     --color-loss-badge: #d32f2f;
 
@@ -81,11 +83,13 @@
 
     --color-profit: #22c55e;
     --color-profit-bg: rgba(34, 197, 94, 0.12);
+    --color-profit-hover-bg: rgba(34, 197, 94, 0.22);
     --color-profit-border: rgba(34, 197, 94, 0.3);
     --color-profit-badge: #16a34a;
 
     --color-loss: #ef4444;
     --color-loss-bg: rgba(239, 68, 68, 0.12);
+    --color-loss-hover-bg: rgba(239, 68, 68, 0.22);
     --color-loss-border: rgba(239, 68, 68, 0.3);
     --color-loss-badge: #dc2626;
 

@@ -11,7 +11,7 @@ const State = {
     currentWeekDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
     
     // App Config & Symbols
-    currency: "€",
+    currency: "$",
 
     // Cached Data
     overviewStats: null,

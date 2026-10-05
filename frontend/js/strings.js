@@ -201,7 +201,7 @@ const STRINGS = {
     common: {
         loading: "Loading trading data...",
         errorLoading: "Failed to load data. Please verify your backend connection.",
-        currency: "€"
+        currency: "$"
     }
 };
 

@@ -42,38 +42,52 @@ const CalendarMonth = {
 
         // Empty cells before start of month
         for (let e = 0; e < firstDayOfWeek; e++) {
-            daysGridHtml += `<div class="month-day-cell empty"></div>`;
+            const isWeekend = e === 5 || e === 6;
+            daysGridHtml += `<div class="month-day-cell empty ${isWeekend ? 'weekend-cell' : ''}"></div>`;
         }
 
         // Real day cells
         for (let d = 1; d <= daysInMonth; d++) {
+            const dow = (firstDayOfWeek + d - 1) % 7;
+            const isWeekend = dow === 5 || dow === 6;
             const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const dayData = dailyMap[dStr];
             const isToday = dStr === todayStr;
 
-            let tradePill = '';
-            let pnlHtml = '';
+            if (isWeekend) {
+                daysGridHtml += `
+                    <div class="month-day-cell weekend-cell ${isToday ? 'today' : ''}" data-date="${dStr}">
+                        <div class="day-cell-header" style="justify-content: center; width: 100%;">
+                            <span class="day-number mono">${d}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                let tradePill = '';
+                let pnlHtml = '';
 
-            if (dayData && dayData.count > 0) {
-                const pnl = dayData.pnl;
-                const pnlClass = pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
-                tradePill = `<span class="day-trade-pill mono">${dayData.count}</span>`;
-                pnlHtml = `
-                    <div class="day-pnl-summary">
-                        <span class="day-pnl-amount mono ${pnlClass}">${State.formatCurrency(pnl)}</span>
+                if (dayData && dayData.count > 0) {
+                    const pnl = dayData.pnl;
+                    const pnlClass = pnl > 0 ? 'pnl-positive' : (pnl < 0 ? 'pnl-negative' : 'pnl-neutral');
+                    const tradeCountText = `${dayData.count} ${dayData.count === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
+                    tradePill = `<span class="day-trade-pill mono">${tradeCountText}</span>`;
+                    pnlHtml = `
+                        <div class="day-pnl-summary">
+                            <span class="day-pnl-amount mono ${pnlClass}">${State.formatCurrency(pnl)}</span>
+                        </div>
+                    `;
+                }
+
+                daysGridHtml += `
+                    <div class="month-day-cell ${isToday ? 'today' : ''}" data-date="${dStr}">
+                        <div class="day-cell-header">
+                            <span class="day-number mono">${d}</span>
+                            ${tradePill}
+                        </div>
+                        ${pnlHtml}
                     </div>
                 `;
             }
-
-            daysGridHtml += `
-                <div class="month-day-cell ${isToday ? 'today' : ''}" data-date="${dStr}">
-                    <div class="day-cell-header">
-                        <span class="day-number mono">${d}</span>
-                        ${tradePill}
-                    </div>
-                    ${pnlHtml}
-                </div>
-            `;
         }
 
         container.innerHTML = `
@@ -97,7 +111,7 @@ const CalendarMonth = {
 
                 <div class="month-grid-container">
                     <div class="month-weekdays-header">
-                        ${STRINGS.days.short3.map(d => `<span>${d}</span>`).join('')}
+                        ${STRINGS.days.short3.map((d, idx) => `<span class="${idx >= 5 ? 'col-weekend' : ''}">${d}</span>`).join('')}
                     </div>
                     <div class="month-days-grid">
                         ${daysGridHtml}
@@ -126,7 +140,7 @@ const CalendarMonth = {
             this.load(now.getFullYear(), now.getMonth() + 1);
         });
 
-        container.querySelectorAll('.month-day-cell:not(.empty)').forEach(cell => {
+        container.querySelectorAll('.month-day-cell:not(.empty):not(.weekend-cell)').forEach(cell => {
             cell.addEventListener('click', () => {
                 const dStr = cell.getAttribute('data-date');
                 if (dStr) DayModal.open(dStr);

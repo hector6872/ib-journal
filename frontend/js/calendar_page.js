@@ -204,42 +204,55 @@ const CalendarPage = {
             let rowTradesCount = 0;
 
             for (let dow = 0; dow < 7; dow++) {
+                const isWeekend = dow === 5 || dow === 6;
+
                 if (weekRowIndex === 1 && dow < firstDayOfWeek) {
                     // Empty placeholder before start of month
-                    rowDaysHtml += `<div class="month-day-cell empty"></div>`;
+                    rowDaysHtml += `<div class="month-day-cell empty ${isWeekend ? 'weekend-cell' : ''}"></div>`;
                 } else if (currentDay > daysInMonth) {
                     // Empty placeholder after end of month
-                    rowDaysHtml += `<div class="month-day-cell empty"></div>`;
+                    rowDaysHtml += `<div class="month-day-cell empty ${isWeekend ? 'weekend-cell' : ''}"></div>`;
                 } else {
                     const dStr = `${year}-${String(month).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
                     const dayData = dailyMap[dStr];
                     const isToday = dStr === todayStr;
 
-                    let badgeHtml = '';
-                    let pnlHtml = '';
-                    let cellTintClass = '';
+                    if (isWeekend) {
+                        rowDaysHtml += `
+                            <div class="month-day-cell weekend-cell ${isToday ? 'today' : ''}" data-date="${dStr}">
+                                <div class="cell-top" style="justify-content: center; width: 100%;">
+                                    <span class="cell-day-num mono">${currentDay}</span>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        let badgeHtml = '';
+                        let pnlHtml = '';
+                        let cellTintClass = '';
 
-                    if (dayData && dayData.count > 0) {
-                        const pnl = dayData.pnl;
-                        const pnlClass = State.getPnlClass(pnl);
-                        cellTintClass = pnl > 0 ? 'cell-win' : (pnl < 0 ? 'cell-loss' : '');
-                        badgeHtml = `<span class="cell-badge-count mono">${dayData.count}</span>`;
-                        pnlHtml = `<span class="cell-pnl-val mono ${pnlClass}">${State.formatCurrency(pnl)}</span>`;
-                        rowNetPnl += pnl;
-                        rowTradesCount += dayData.count;
+                        if (dayData && dayData.count > 0) {
+                            const pnl = dayData.pnl;
+                            const pnlClass = State.getPnlClass(pnl);
+                            cellTintClass = pnl > 0 ? 'cell-win' : (pnl < 0 ? 'cell-loss' : '');
+                            const tradeCountText = `${dayData.count} ${dayData.count === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
+                            badgeHtml = `<span class="cell-badge-count mono">${tradeCountText}</span>`;
+                            pnlHtml = `<span class="cell-pnl-val mono ${pnlClass}">${State.formatCurrency(pnl)}</span>`;
+                            rowNetPnl += pnl;
+                            rowTradesCount += dayData.count;
+                        }
+
+                        rowDaysHtml += `
+                            <div class="month-day-cell ${isToday ? 'today' : ''} ${cellTintClass}" data-date="${dStr}">
+                                <div class="cell-top">
+                                    <span class="cell-day-num mono">${currentDay}</span>
+                                    ${badgeHtml}
+                                </div>
+                                <div class="cell-bottom">
+                                    ${pnlHtml}
+                                </div>
+                            </div>
+                        `;
                     }
-
-                    rowDaysHtml += `
-                        <div class="month-day-cell ${isToday ? 'today' : ''} ${cellTintClass}" data-date="${dStr}">
-                            <div class="cell-top">
-                                <span class="cell-day-num mono">${currentDay}</span>
-                                ${badgeHtml}
-                            </div>
-                            <div class="cell-bottom">
-                                ${pnlHtml}
-                            </div>
-                        </div>
-                    `;
                     currentDay++;
                 }
             }
@@ -284,7 +297,7 @@ const CalendarPage = {
             </div>
             <div class="month-grid-wrapper">
                 <div class="month-weekdays-row">
-                    ${STRINGS.days.short3.map(d => `<span>${d}</span>`).join('')}
+                    ${STRINGS.days.short3.map((d, idx) => `<span class="${idx >= 5 ? 'col-weekend' : ''}">${d}</span>`).join('')}
                     <span class="col-week">${STRINGS.calendar.weekCol}</span>
                 </div>
                 <div class="month-days-matrix">
@@ -308,7 +321,7 @@ const CalendarPage = {
             this.loadMonth(now.getFullYear(), now.getMonth() + 1);
         });
 
-        container.querySelectorAll('.month-day-cell:not(.empty):not(.week-total-cell)').forEach(cell => {
+        container.querySelectorAll('.month-day-cell:not(.empty):not(.week-total-cell):not(.weekend-cell)').forEach(cell => {
             cell.addEventListener('click', () => {
                 const dStr = cell.getAttribute('data-date');
                 if (dStr) DayModal.open(dStr);

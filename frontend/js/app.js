@@ -41,8 +41,9 @@ const App = {
         // 6. Setup Sync Button
         this.setupSyncButton();
 
-        // 7. Initialize Day Modal & Top Stats Polling
+        // 7. Initialize Modals & Top Stats Polling
         DayModal.init();
+        ImportModal.init();
         StatsController.startPolling();
 
         // 8. Restore persisted tab (default to Calendar)

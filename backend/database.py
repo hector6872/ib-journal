@@ -99,7 +99,7 @@ def init_db():
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS sync_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sync_type TEXT NOT NULL,      -- 'scheduled', 'manual', 'initial'
+            sync_type TEXT NOT NULL,      -- 'scheduled', 'manual', 'initial', 'manual_import', 'cli_import'
             status TEXT NOT NULL,         -- 'success', 'failed', 'in_progress'
             trades_count INTEGER DEFAULT 0,
             error_message TEXT,
@@ -109,6 +109,20 @@ def init_db():
         """)
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_started ON sync_history(started_at);")
+
+        # Sync Gaps Table (Tracks periods of outage/vacation until resolved by full statement import)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sync_gaps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gap_days INTEGER NOT NULL,
+            from_date TEXT,
+            to_date TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resolved_at DATETIME
+        );
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_gaps_resolved ON sync_gaps(resolved_at);")
 
         logger.info("Database initialized successfully with WAL mode.")
 

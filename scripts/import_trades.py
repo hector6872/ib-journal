@@ -23,7 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.config import DB_PATH  # noqa: E402
-from backend.database import init_db, upsert_trades  # noqa: E402
+from backend.database import db_session, init_db, upsert_trades  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -405,6 +405,17 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
 
     init_db()
     upserted_count = upsert_trades(all_trades)
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE sync_gaps
+            SET resolved_at = CURRENT_TIMESTAMP
+            WHERE resolved_at IS NULL;
+        """)
+        cursor.execute("""
+            INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+            VALUES ('cli_import', 'success', ?, CURRENT_TIMESTAMP);
+        """, (upserted_count,))
     logger.info(f"✓ Successfully upserted {upserted_count} trades into SQLite ({DB_PATH.name}).")
     return total_parsed, upserted_count
 

@@ -183,23 +183,70 @@ async def api_trades_import(request: Request):
         lines = text.splitlines()
         is_activity = any(line_item.startswith("Trades,Header") or line_item.startswith("Trades,Data") for line_item in lines[:50])
         if is_activity:
-
             trades = parse_ibkr_activity_statement_csv(lines)
         else:
             trades = parse_generic_ibkr_csv(lines)
 
-    if not trades:
+    lines = text.splitlines() if not trades else []
+    is_valid_ibkr_doc = (
+        "<FlexStatement" in text or "<FlexQueryResponse" in text or "<Trade" in text or
+        any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") or line_item.startswith("Financial Instrument Information,") for line_item in lines[:50])
+    )
+
+    if not trades and not is_valid_ibkr_doc:
         raise HTTPException(
             status_code=400,
             detail="Could not extract valid trades from provided content. Please ensure it is an IBKR Activity Statement CSV or Flex XML/CSV export."
         )
 
-    from backend.database import upsert_trades
-    count = upsert_trades(trades)
+    from datetime import datetime, timezone
+    from backend.database import db_session, upsert_trades
+    count = upsert_trades(trades) if trades else 0
+
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE sync_gaps
+            SET resolved_at = CURRENT_TIMESTAMP
+            WHERE resolved_at IS NULL;
+        """)
+        cursor.execute("""
+            INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+            VALUES ('manual_import', 'success', ?, CURRENT_TIMESTAMP);
+        """, (count,))
+
+    scheduler.last_sync_time = datetime.now(timezone.utc)
+    scheduler.last_trades_count = count
+
     return {
         "status": "success",
         "trades_count": count,
-        "message": f"Successfully imported {count} trades."
+        "message": f"Successfully processed statement. {count} trades recorded."
+    }
+
+@app.post("/api/sync/gap/resolve")
+async def api_sync_gap_resolve():
+    """Resolves all pending sync gaps and records a checkpoint (e.g. user confirmed no trades during outage/vacation)."""
+    from datetime import datetime, timezone
+    from backend.database import db_session
+
+    now = datetime.now(timezone.utc)
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE sync_gaps
+            SET resolved_at = CURRENT_TIMESTAMP
+            WHERE resolved_at IS NULL;
+        """)
+        cursor.execute("""
+            INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+            VALUES ('gap_dismiss', 'success', 0, CURRENT_TIMESTAMP);
+        """)
+
+    scheduler.last_sync_time = now
+    return {
+        "status": "success",
+        "message": "Sync gap marked as resolved."
     }
 
 @app.post("/api/sync/trigger")

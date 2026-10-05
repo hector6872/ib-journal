@@ -46,6 +46,8 @@ const STRINGS = {
         success: "Sync completed successfully",
         error: "Sync error",
         devMode: "Dev Mode (Manual only)",
+        importBtn: "Import",
+        desync: "Desync",
     },
 
     // Calendar Section Headers

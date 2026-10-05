@@ -25,7 +25,15 @@ class TestIBKRJournal(unittest.TestCase):
         database.DB_PATH = self.test_db_path
         init_db()
 
+        from backend.scheduler import scheduler
+        scheduler.last_sync_time = None
+        scheduler.last_trades_count = 0
+
     def tearDown(self):
+        from backend.scheduler import scheduler
+        scheduler.last_sync_time = None
+        scheduler.last_trades_count = 0
+
         config.DB_PATH = self.orig_db_path
         database.DB_PATH = self.orig_db_path
         if self.test_db_path.exists():
@@ -216,6 +224,146 @@ Trades,Data,Order,Equity and Index Options,EUR,SPY 230120C400000,"2023-01-16, 16
             config.ENVIRONMENT = orig_env
             config.DEBUG = orig_debug
 
+    def test_sync_gap_detection(self):
+        """Verifies 7-day sync gap detection for old trades or sync history."""
+        from datetime import datetime, timedelta, timezone
+        from backend.scheduler import scheduler
+
+        # 1. No data in DB => has_sync_gap True (prompts initial import)
+        status = scheduler.get_status()
+        self.assertTrue(status["has_sync_gap"])
+        self.assertGreaterEqual(status["gap_days"], 7)
+
+        # 2. Add a trade from 10 days ago
+        ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()
+        upsert_trades([
+            {
+                "ib_exec_id": "EXEC_OLD_1",
+                "trade_id": "T_OLD",
+                "account_id": "U123456",
+                "symbol": "AAPL",
+                "description": "APPLE INC",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 150.0,
+                "trade_money": 150.0,
+                "proceeds": -150.0,
+                "ib_commission": 1.0,
+                "realized_pnl": 0.0,
+                "trade_date": ten_days_ago,
+                "trade_time": "10:00:00",
+                "trade_date_time": f"{ten_days_ago}T10:00:00",
+                "open_close_indicator": "O",
+                "order_type": "MKT",
+                "exchange": "NASDAQ",
+            }
+        ])
+
+        status = scheduler.get_status()
+        self.assertTrue(status["has_sync_gap"])
+        self.assertGreaterEqual(status["gap_days"], 7)
+
+        # 3. Add recent manual import to sync_history => gap cleared
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+                VALUES ('manual_import', 'success', 1, CURRENT_TIMESTAMP);
+            """)
+
+        status = scheduler.get_status()
+        self.assertFalse(status["has_sync_gap"])
+        self.assertLess(status["gap_days"], 7)
+
+    def test_vacation_and_downtime_sync_gap(self):
+        """
+        Tests the vacation scenario (>31 days away):
+        1. Last sync was 35 days ago.
+        2. Flex sync runs today (fetching only last 7 days).
+        3. A sync_gaps record is created and persists has_sync_gap = True despite recent sync.
+        4. Manual statement import resolves the gap.
+        """
+        from datetime import datetime, timedelta, timezone
+        from backend.scheduler import scheduler
+
+        now = datetime.now(timezone.utc)
+        thirty_five_days_ago = (now - timedelta(days=35)).isoformat()
+
+        # Previous sync was 35 days ago
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+                VALUES ('scheduled', 'success', 10, ?);
+            """, (thirty_five_days_ago,))
+
+        # Simulate fresh Flex sync running today
+        with db_session() as conn:
+            cursor = conn.cursor()
+            # Gap detection simulates what execute_sync does
+            cursor.execute("SELECT MAX(completed_at) as last_completed FROM sync_history WHERE status = 'success';")
+            sr = cursor.fetchone()
+            prev_dt = datetime.fromisoformat(sr["last_completed"])
+            prev_tz = prev_dt if prev_dt.tzinfo else prev_dt.replace(tzinfo=timezone.utc)
+            days_diff = (now - prev_tz).days
+            if days_diff > 7:
+                cursor.execute("""
+                    INSERT INTO sync_gaps (gap_days, from_date, to_date)
+                    VALUES (?, ?, ?);
+                """, (days_diff, prev_tz.isoformat(), now.isoformat()))
+
+            cursor.execute("""
+                INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
+                VALUES ('scheduled', 'success', 2, CURRENT_TIMESTAMP);
+            """)
+
+        scheduler.last_sync_time = now
+
+        # Gap is detected despite having just synced!
+        status = scheduler.get_status()
+        self.assertTrue(status["has_sync_gap"])
+        self.assertEqual(status["gap_days"], 35)
+        self.assertIsNotNone(status["gap_from"])
+        self.assertIsNotNone(status["gap_to"])
+
+        # Manual CSV/XML statement import resolves the gap
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE sync_gaps SET resolved_at = CURRENT_TIMESTAMP WHERE resolved_at IS NULL;")
+            cursor.execute("INSERT INTO sync_history (sync_type, status, trades_count, completed_at) VALUES ('manual_import', 'success', 50, CURRENT_TIMESTAMP);")
+
+        status = scheduler.get_status()
+        self.assertFalse(status["has_sync_gap"])
+
+    def test_dismiss_sync_gap_when_no_trades(self):
+        """Verifies dismissing sync gap when user had 0 trades during vacation/outage."""
+        from datetime import datetime, timedelta, timezone
+        from backend.scheduler import scheduler
+
+        now = datetime.now(timezone.utc)
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO sync_gaps (gap_days, from_date, to_date)
+                VALUES (40, ?, ?);
+            """, ((now - timedelta(days=40)).isoformat(), now.isoformat()))
+
+        # Gap is active
+        status = scheduler.get_status()
+        self.assertTrue(status["has_sync_gap"])
+        self.assertEqual(status["gap_days"], 40)
+
+        # User dismisses gap (0 trades)
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE sync_gaps SET resolved_at = CURRENT_TIMESTAMP WHERE resolved_at IS NULL;")
+            cursor.execute("INSERT INTO sync_history (sync_type, status, trades_count, completed_at) VALUES ('gap_dismiss', 'success', 0, CURRENT_TIMESTAMP);")
+
+        scheduler.last_sync_time = now
+        status = scheduler.get_status()
+        self.assertFalse(status["has_sync_gap"])
 
 
 if __name__ == "__main__":

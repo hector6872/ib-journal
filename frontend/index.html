@@ -68,8 +68,9 @@
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                         <span class="btn-sync-label" data-i18n="sync.syncNow">Sync Now</span>
                     </button>
-                    <button class="btn-ctrl" id="btn-open-import" title="Import manual statement (CSV / XML)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <button class="btn-import-action" id="btn-open-import" title="Import manual statement (CSV / XML)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span class="btn-import-label" data-i18n="sync.importBtn">Import</span>
                     </button>
                 </div>
 
@@ -179,6 +180,9 @@
                     <div class="sync-gap-alert-content">
                         <strong>Desynchronization detected (>7 days without recorded trades)</strong>
                         <p id="import-gap-desc">Your last sync or recorded trade was over 7 days ago. If your IBKR Flex Query covers 7 days, please import your CSV or XML statement to prevent missing past trades.</p>
+                        <button type="button" class="btn-dismiss-gap" id="btn-dismiss-gap">
+                            ✓ No trades during this period (Dismiss warning)
+                        </button>
                     </div>
                 </div>
 

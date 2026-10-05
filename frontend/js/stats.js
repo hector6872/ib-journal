@@ -133,22 +133,17 @@ const StatsController = {
 
         if (!btnSync || !status) return;
 
-        // 1. Unconfigured State
+        // 1. Sync Button & Status Text State
         if (status.is_configured === false || status.status === 'unconfigured') {
             if (elLast) elLast.textContent = STRINGS.sync.notConfiguredTitle;
             if (elNext) elNext.textContent = STRINGS.sync.notConfiguredSubtitle;
             btnSync.disabled = true;
             btnSync.classList.add('disabled');
             btnSync.classList.remove('spinning');
-            btnSync.title = "Configure IBKR_TOKEN and IBKR_QUERY_ID in .env to enable sync";
+            btnSync.title = "Configure IBKR_TOKEN and IBKR_QUERY_ID in .env to enable automated sync";
             btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncNow;
-            return;
-        }
-
-        btnSync.classList.remove('disabled');
-
-        // 2. Failed State (Configured, but last sync failed)
-        if (status.status === 'failed') {
+        } else if (status.status === 'failed') {
+            btnSync.classList.remove('disabled');
             btnSync.title = status.message || "Sync failed";
             if (elLast) {
                 if (status.last_sync_time) {
@@ -163,7 +158,8 @@ const StatsController = {
                 elNext.textContent = errMsg.length > 25 ? errMsg.slice(0, 25) + '...' : errMsg;
             }
         } else {
-            // 3. Normal / Success / Idle State
+            // Normal / Success / Idle State
+            btnSync.classList.remove('disabled');
             btnSync.title = "";
             if (elLast) {
                 if (status.last_sync_time) {
@@ -187,7 +183,7 @@ const StatsController = {
             }
         }
 
-        // Desync Gap Warning Badge
+        // 2. Desync Gap Warning Badge (Always evaluated regardless of configuration)
         const btnGap = document.getElementById('btn-sync-gap');
         const gapLabel = document.getElementById('sync-gap-label');
         if (btnGap) {
@@ -196,7 +192,12 @@ const StatsController = {
                 if (gapLabel) gapLabel.textContent = `Desync (${status.gap_days}d)`;
                 btnGap.onclick = () => {
                     if (typeof ImportModal !== 'undefined') {
-                        ImportModal.show({ has_gap: true, days: status.gap_days });
+                        ImportModal.show({ 
+                            has_gap: true, 
+                            days: status.gap_days,
+                            from: status.gap_from,
+                            to: status.gap_to
+                        });
                     }
                 };
             } else {
@@ -204,32 +205,40 @@ const StatsController = {
             }
         }
 
+        // 3. Manual Import Button Handler
         const btnOpenImport = document.getElementById('btn-open-import');
         if (btnOpenImport) {
             btnOpenImport.onclick = () => {
                 if (typeof ImportModal !== 'undefined') {
-                    ImportModal.show({ has_gap: status.has_sync_gap, days: status.gap_days });
+                    ImportModal.show({ 
+                        has_gap: status.has_sync_gap, 
+                        days: status.gap_days,
+                        from: status.gap_from,
+                        to: status.gap_to
+                    });
                 }
             };
         }
 
-        // Cooldown button handling
-        const cooldownSec = status.cooldown_remaining_seconds || 0;
-        if (status.is_syncing) {
-            btnSync.disabled = true;
-            btnSync.classList.add('spinning');
-            btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncing;
-        } else if (cooldownSec > 0) {
-            btnSync.disabled = true;
-            btnSync.classList.remove('spinning');
-            const mins = Math.floor(cooldownSec / 60);
-            const secs = cooldownSec % 60;
-            const formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-            btnSync.querySelector('.btn-sync-label').textContent = `${STRINGS.sync.cooldownPrefix} ${formatted}`;
-        } else {
-            btnSync.disabled = false;
-            btnSync.classList.remove('spinning');
-            btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncNow;
+        // 4. Cooldown handling for Sync Now button (only when configured)
+        if (status.is_configured !== false && status.status !== 'unconfigured') {
+            const cooldownSec = status.cooldown_remaining_seconds || 0;
+            if (status.is_syncing) {
+                btnSync.disabled = true;
+                btnSync.classList.add('spinning');
+                btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncing;
+            } else if (cooldownSec > 0) {
+                btnSync.disabled = true;
+                btnSync.classList.remove('spinning');
+                const mins = Math.floor(cooldownSec / 60);
+                const secs = cooldownSec % 60;
+                const formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                btnSync.querySelector('.btn-sync-label').textContent = `${STRINGS.sync.cooldownPrefix} ${formatted}`;
+            } else {
+                btnSync.disabled = false;
+                btnSync.classList.remove('spinning');
+                btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncNow;
+            }
         }
     },
 

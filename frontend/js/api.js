@@ -106,6 +106,15 @@ const API = {
             throw new Error(data.detail || "Import failed");
         }
         return data;
+    },
+
+    async resolveSyncGap() {
+        const res = await fetch('/api/sync/gap/resolve', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || "Failed to resolve sync gap");
+        }
+        return data;
     }
 };
 

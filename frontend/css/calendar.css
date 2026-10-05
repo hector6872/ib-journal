@@ -890,7 +890,8 @@
     transition: opacity 0.15s ease;
 }
 
-.modal-backdrop.open {
+.modal-backdrop.open,
+.modal-backdrop.active {
     opacity: 1;
     pointer-events: auto;
 }

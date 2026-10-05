@@ -357,6 +357,28 @@ body {
     to { transform: rotate(360deg); }
 }
 
+.btn-import-action {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    color: var(--text-main);
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-import-action:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
 /* Desync Gap Warning Badge in Header */
 .btn-sync-gap {
     background-color: rgba(245, 158, 11, 0.12);
@@ -397,6 +419,27 @@ body {
 .sync-gap-alert-icon {
     font-size: 18px;
     line-height: 1;
+}
+
+.btn-dismiss-gap {
+    margin-top: 8px;
+    background-color: transparent;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: var(--text-main);
+    padding: 5px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-dismiss-gap:hover {
+    background-color: rgba(245, 158, 11, 0.2);
+    border-color: #d97706;
 }
 
 .import-dropzone {

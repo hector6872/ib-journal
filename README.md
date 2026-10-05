@@ -15,10 +15,10 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 
 - **⚡ Pure Vanilla Web Stack**: 100% pure HTML5, modern CSS, and vanilla ES6+ JavaScript. No React, no Node.js, no npm dependencies, no build step.
 - **💰 Capital & Cash Management**:
-  - **Account Equity (NAV)** tracking: $\text{Starting Capital} + \text{Net Cash Flow} + \text{Realized P\&L}$.
+  - **Account Equity (NAV)** tracking: `Starting Capital + Net Cash Flow + Realized P&L`.
   - **Starting Capital**: Set your baseline portfolio capital with cross-device SQLite synchronization.
   - **Automatic & Manual Cash Transfers**: Auto-imports deposits and withdrawals from IBKR activity statements and allows manual cash entries.
-  - **Return on Capital (% ROI)**: Accurate performance returns based on active capital ($\text{Realized P\&L} / \text{Capital Base}$).
+  - **Return on Capital (% ROI)**: Accurate performance returns based on active capital (`Realized P&L / Capital Base`).
 - **🛡️ MicroSD Safe & Flash Protected**: Configured with SQLite Write-Ahead Logging (`WAL`), in-memory temporary tables (`temp_store=MEMORY`), and minimal disk I/O to protect your Raspberry Pi storage.
 - **🔄 Smart Market-Hours Synchronization**: Automatically ingests trade executions and realized P&L via IBKR Flex Query Web Service during market sessions, skipping redundant queries at night and on weekends.
 - **⏱️ Rate-Limit Guard**: Enforced cooldown protection on the manual *"Sync Now"* button with live UI countdown timers to protect your IBKR API rate limits.

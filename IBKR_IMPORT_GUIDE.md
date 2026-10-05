@@ -85,9 +85,9 @@ To download previous years' activity statements:
 When you import an IBKR Activity Statement or Flex Query:
 * **Deposits and Withdrawals** in the statement (`Deposits & Withdrawals` section) are automatically parsed and saved to your SQLite database.
 * **Account Equity (NAV)** is dynamically calculated as:
-  $$\text{Account Equity} = \text{Starting Capital} + \text{Net Cash Flow} + \text{Realized P\&L}$$
+  `Account Equity = Starting Capital + Net Cash Flow + Realized P&L`
 * **Return on Capital (% ROI)** is calculated against your cumulative capital base:
-  $$\text{ROI \%} = \frac{\text{Net Realized P\&L}}{\text{Starting Capital} + \text{Total Deposits}} \times 100$$
+  `ROI % = (Net Realized P&L / (Starting Capital + Total Deposits)) * 100`
 * You can configure your **Starting Capital** or add manual adjustments any time via the **Capital & Cash Management** modal.
 
 ---

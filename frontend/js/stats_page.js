@@ -1392,6 +1392,8 @@ const StatsPage = {
                         ticks: { color: theme.text, font: { family: 'SF Mono, monospace', size: 10 } }
                     },
                     y: {
+                        suggestedMin: 0,
+                        suggestedMax: 0,
                         grid: { color: theme.grid },
                         ticks: {
                             color: theme.text,

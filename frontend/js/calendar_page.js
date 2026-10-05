@@ -304,7 +304,11 @@ const CalendarPage = {
                         fill: hasTrades,
                         tension: 0.25,
                         borderWidth: 2,
-                        pointRadius: labels.length > 25 ? 0 : 3.5,
+                        spanGaps: false,
+                        pointRadius: function(context) {
+                            const validPoints = cumPnlArray.filter(v => v !== null && v !== undefined);
+                            return validPoints.length <= 1 ? 4 : (labels.length > 25 ? 2.5 : 3.5);
+                        },
                         pointHoverRadius: 5.5,
                         pointBackgroundColor: strokeColor,
                         yAxisID: 'yPnl',
@@ -345,6 +349,7 @@ const CalendarPage = {
                         callbacks: {
                             label: function(context) {
                                 if (context.dataset.yAxisID === 'yPnl') {
+                                    if (context.parsed.y === null || context.parsed.y === undefined) return null;
                                     return ` ${STRINGS.calendar.cumPnlLabel || 'Cumulative P&L'}: ${State.formatCurrency(context.parsed.y)}`;
                                 } else {
                                     const count = context.parsed.y;
@@ -364,6 +369,8 @@ const CalendarPage = {
                     },
                     yPnl: {
                         position: 'left',
+                        suggestedMin: 0,
+                        suggestedMax: 0,
                         grid: {
                             color: gridColor,
                             drawBorder: false
@@ -523,12 +530,19 @@ const CalendarPage = {
         const weekCumPnl = [];
         const weekTrades = [];
         let runningPnl = 0;
+        const todayIso = new Date().toISOString().split('T')[0];
 
         days.forEach(d => {
             weekLabels.push(`${STRINGS.days.short3[d.weekday_index]} ${d.day_number}`);
-            runningPnl += (d.pnl || 0);
-            weekCumPnl.push(Math.round(runningPnl * 100) / 100);
             weekTrades.push(d.trades_count || 0);
+
+            const isFuture = d.date > todayIso;
+            if (!isFuture) {
+                runningPnl += (d.pnl || 0);
+                weekCumPnl.push(Math.round(runningPnl * 100) / 100);
+            } else {
+                weekCumPnl.push(null);
+            }
         });
 
         const weekStats = this.computePeriodStats(days, null, { largestWin: data.largest_win, largestLoss: data.largest_loss });
@@ -717,6 +731,7 @@ const CalendarPage = {
         const monthTrades = [];
         let runningMonthPnl = 0;
         const monthItems = [];
+        const todayIso = new Date().toISOString().split('T')[0];
 
         for (let d = 1; d <= daysInMonth; d++) {
             const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -727,9 +742,15 @@ const CalendarPage = {
             const losses = dayData ? (dayData.losses || 0) : 0;
 
             monthLabels.push(`${d}`);
-            runningMonthPnl += pnl;
-            monthCumPnl.push(Math.round(runningMonthPnl * 100) / 100);
             monthTrades.push(count);
+
+            const isFuture = dStr > todayIso;
+            if (!isFuture) {
+                runningMonthPnl += pnl;
+                monthCumPnl.push(Math.round(runningMonthPnl * 100) / 100);
+            } else {
+                monthCumPnl.push(null);
+            }
 
             monthItems.push({ pnl, count, wins, losses, date: dStr });
         }
@@ -904,14 +925,23 @@ const CalendarPage = {
         const yearTrades = [];
         let runningYearPnl = 0;
         const yearItems = [];
+        const nowObj = new Date();
+        const currentYearNum = nowObj.getFullYear();
+        const currentMonthNum = nowObj.getMonth() + 1;
 
         for (let m = 1; m <= 12; m++) {
             const mTotal = monthlyTotals.find(item => item.month === m) || { net_pnl: 0, trades_count: 0 };
             const pnl = mTotal.net_pnl || 0;
             const count = mTotal.trades_count || 0;
 
-            runningYearPnl += pnl;
-            yearCumPnl.push(Math.round(runningYearPnl * 100) / 100);
+            const isFutureMonth = (year > currentYearNum) || (year === currentYearNum && m > currentMonthNum);
+            if (!isFutureMonth) {
+                runningYearPnl += pnl;
+                yearCumPnl.push(Math.round(runningYearPnl * 100) / 100);
+            } else {
+                yearCumPnl.push(null);
+            }
+
             yearTrades.push(count);
             yearItems.push({ pnl, count, month: m });
         }

@@ -70,11 +70,12 @@ const CashModal = {
             this.render(body, cashSummary, settings, overview);
         } catch (err) {
             console.error("Error loading cash management data:", err);
-            body.innerHTML = `<div style="color: var(--color-loss); padding: 30px; text-align:center;">Failed to load cash management details.</div>`;
+            body.innerHTML = `<div style="color: var(--color-loss); padding: 30px; text-align:center;">${STRINGS.cash?.loadErrorMsg || 'Failed to load cash management details.'}</div>`;
         }
     },
 
     render(container, cashSummary, settings, overview) {
+        const sc = STRINGS.cash || {};
         const startingCapital = Number(settings?.starting_capital || 0.0);
         const totalDeposits = Number(cashSummary?.total_deposits || 0.0);
         const totalWithdrawals = Number(cashSummary?.total_withdrawals || 0.0);
@@ -92,23 +93,23 @@ const CashModal = {
                 <!-- 1. Executive Account Balance & Capital Basis Summary Cards -->
                 <div class="cash-summary-grid">
                     <div class="cash-card">
-                        <span class="cash-card-label">ACCOUNT EQUITY (NAV)</span>
+                        <span class="cash-card-label">${sc.accountEquity || 'ACCOUNT EQUITY (NAV)'}</span>
                         <span class="cash-card-value mono ${State.getPnlClass(accountBalance)}">
                             ${State.formatCurrency(accountBalance)}
                         </span>
-                        <span class="cash-card-sub">Capital + Net Flow + Realized P&L</span>
+                        <span class="cash-card-sub">${sc.accountEquitySub || 'Capital + Net Flow + Realized P&L'}</span>
                     </div>
 
                     <div class="cash-card">
-                        <span class="cash-card-label">STARTING CAPITAL</span>
+                        <span class="cash-card-label">${sc.startingCapital || 'STARTING CAPITAL'}</span>
                         <span class="cash-card-value mono pnl-neutral">
                             ${State.formatCurrency(startingCapital)}
                         </span>
-                        <span class="cash-card-sub">Initial configured balance</span>
+                        <span class="cash-card-sub">${sc.startingCapitalSub || 'Initial configured balance'}</span>
                     </div>
 
                     <div class="cash-card">
-                        <span class="cash-card-label">NET TRANSFERS IN/OUT</span>
+                        <span class="cash-card-label">${sc.netTransfers || 'NET TRANSFERS IN/OUT'}</span>
                         <span class="cash-card-value mono ${State.getPnlClass(netCashFlow)}">
                             ${State.formatCurrency(netCashFlow)}
                         </span>
@@ -116,80 +117,80 @@ const CashModal = {
                     </div>
 
                     <div class="cash-card">
-                        <span class="cash-card-label">RETURN ON CAPITAL (% ROI)</span>
+                        <span class="cash-card-label">${sc.roi || 'RETURN ON CAPITAL (% ROI)'}</span>
                         <span class="cash-card-value mono ${State.getPnlClass(Number(roiPct))}">
                             ${Number(roiPct) > 0 ? '+' : ''}${roiPct}%
                         </span>
-                        <span class="cash-card-sub">Realized P&L / Capital Base</span>
+                        <span class="cash-card-sub">${sc.roiSub || 'Realized P&L / Capital Base'}</span>
                     </div>
                 </div>
 
                 <!-- 2. Starting Capital Configuration Form -->
                 <div class="cash-section-box">
                     <div class="cash-section-header">
-                        <strong>Starting Capital Configuration</strong>
-                        <span style="font-size: 11px; color: var(--text-muted);">Set your baseline portfolio balance before recorded transfers.</span>
+                        <strong>${sc.configSectionTitle || 'Starting Capital Configuration'}</strong>
+                        <span style="font-size: 11px; color: var(--text-muted);">${sc.configSectionSubtitle || 'Set your baseline portfolio balance before recorded transfers.'}</span>
                     </div>
                     <form id="starting-capital-form" class="cash-form-inline">
                         <div class="form-group" style="flex: 1;">
-                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">STARTING CAPITAL (${State.currency})</label>
-                            <input type="number" step="0.01" min="0" id="input-starting-capital" class="cash-input" value="${startingCapital}" placeholder="e.g. 10000.00">
+                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">${sc.inputCapitalLabel || 'STARTING CAPITAL'} (${State.currency})</label>
+                            <input type="number" step="0.01" min="0" id="input-starting-capital" class="cash-input" value="${startingCapital}" placeholder="10000.00">
                         </div>
-                        <button type="submit" class="btn-pill btn-accent" style="margin-top: 18px; white-space: nowrap;">Save Capital</button>
+                        <button type="submit" class="btn-pill btn-accent" style="margin-top: 18px; white-space: nowrap;">${sc.saveCapitalBtn || 'Save Capital'}</button>
                     </form>
                 </div>
 
                 <!-- 3. Add Manual Deposit / Withdrawal Form -->
                 <div class="cash-section-box">
                     <div class="cash-section-header">
-                        <strong>Add Manual Cash Transfer</strong>
-                        <span style="font-size: 11px; color: var(--text-muted);">Transfers in IBKR statements are automatically imported. Use this for manual adjustments.</span>
+                        <strong>${sc.addTransferTitle || 'Add Manual Cash Transfer'}</strong>
+                        <span style="font-size: 11px; color: var(--text-muted);">${sc.addTransferSubtitle || 'Transfers in IBKR statements are automatically imported. Use this for manual adjustments.'}</span>
                     </div>
                     <form id="add-cash-tx-form" class="cash-form-row">
                         <div class="form-group" style="width: 130px;">
-                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">TYPE</label>
+                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">${sc.typeLabel || 'TYPE'}</label>
                             <select id="cash-tx-type" class="cash-input">
-                                <option value="DEPOSIT">Deposit (+)</option>
-                                <option value="WITHDRAWAL">Withdrawal (-)</option>
+                                <option value="DEPOSIT">${sc.deposit || 'Deposit (+)'}</option>
+                                <option value="WITHDRAWAL">${sc.withdrawal || 'Withdrawal (-)'}</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex: 1;">
-                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">AMOUNT (${State.currency})</label>
+                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">${sc.amountLabel || 'AMOUNT'} (${State.currency})</label>
                             <input type="number" step="0.01" min="0.01" id="cash-tx-amount" class="cash-input" placeholder="5000.00" required>
                         </div>
                         <div class="form-group" style="width: 140px;">
-                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">DATE</label>
+                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">${sc.dateLabel || 'DATE'}</label>
                             <input type="date" id="cash-tx-date" class="cash-input" value="${today}" required>
                         </div>
                         <div class="form-group" style="flex: 1.5;">
-                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">DESCRIPTION</label>
-                            <input type="text" id="cash-tx-desc" class="cash-input" placeholder="e.g. Bank wire deposit">
+                            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">${sc.descLabel || 'DESCRIPTION'}</label>
+                            <input type="text" id="cash-tx-desc" class="cash-input" placeholder="${sc.descPlaceholder || 'e.g. Bank wire deposit'}">
                         </div>
-                        <button type="submit" class="btn-pill btn-accent" style="margin-top: 18px; white-space: nowrap;">Add Transfer</button>
+                        <button type="submit" class="btn-pill btn-accent" style="margin-top: 18px; white-space: nowrap;">${sc.addTransferBtn || 'Add Transfer'}</button>
                     </form>
                 </div>
 
                 <!-- 4. Transactions List Table -->
                 <div class="cash-section-box">
                     <div class="cash-section-header">
-                        <strong>Recorded Transfers & Cash Movements (${txs.length})</strong>
+                        <strong>${sc.tableTitle || 'Recorded Transfers & Cash Movements'} (${txs.length})</strong>
                     </div>
 
                     ${txs.length === 0 ? `
                         <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
-                            No deposits or withdrawals recorded yet. Transfers in IBKR activity statements are auto-imported or can be added manually above.
+                            ${sc.emptyTransfers || 'No deposits or withdrawals recorded yet.'}
                         </div>
                     ` : `
                         <div class="cash-table-wrap">
                             <table class="cash-table">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Type</th>
-                                        <th>Description</th>
-                                        <th>Source</th>
-                                        <th style="text-align: right;">Amount</th>
-                                        <th style="text-align: center; width: 60px;">Action</th>
+                                        <th>${sc.colDate || 'Date'}</th>
+                                        <th>${sc.colType || 'Type'}</th>
+                                        <th>${sc.colDesc || 'Description'}</th>
+                                        <th>${sc.colSource || 'Source'}</th>
+                                        <th style="text-align: right;">${sc.colAmount || 'Amount'}</th>
+                                        <th style="text-align: center; width: 60px;">${sc.colAction || 'Action'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -197,7 +198,7 @@ const CashModal = {
                                         const isDeposit = Number(tx.amount) >= 0;
                                         const badgeClass = isDeposit ? 'badge-deposit' : 'badge-withdrawal';
                                         const amountClass = isDeposit ? 'pnl-positive' : 'pnl-negative';
-                                        const sourceLabel = tx.is_manual ? 'Manual' : 'IBKR Auto';
+                                        const sourceLabel = tx.is_manual ? (sc.sourceManual || 'Manual') : (sc.sourceIbkr || 'IBKR Auto');
                                         const sourceClass = tx.is_manual ? 'source-manual' : 'source-ibkr';
 
                                         return `
@@ -210,7 +211,7 @@ const CashModal = {
                                                     ${State.formatCurrency(tx.amount)}
                                                 </td>
                                                 <td style="text-align: center;">
-                                                    <button type="button" class="btn-delete-tx" data-id="${tx.id || tx.transaction_id}" title="Delete this transfer">
+                                                    <button type="button" class="btn-delete-tx" data-id="${tx.id || tx.transaction_id}" title="${sc.deleteTooltip || 'Delete this transfer'}">
                                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                                     </button>
                                                 </td>
@@ -238,14 +239,14 @@ const CashModal = {
                     if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
                     if (typeof App !== 'undefined' && App.showAlertModal) {
                         App.showAlertModal({
-                            title: "Starting Capital Saved",
-                            message: `Starting capital set to ${State.formatCurrency(inputVal)}. Your account equity and returns have been updated.`,
+                            title: sc.capitalSavedTitle || "Starting Capital Saved",
+                            message: `${sc.capitalSavedMsg || 'Starting capital successfully updated.'} (${State.formatCurrency(inputVal)})`,
                             isSuccess: true
                         });
                     }
                 } catch (err) {
                     if (typeof App !== 'undefined' && App.showErrorModal) {
-                        App.showErrorModal("Save Capital Error", err.message);
+                        App.showErrorModal(sc.saveErrorTitle || "Save Capital Error", err.message);
                     } else {
                         console.error("Failed to save starting capital:", err);
                     }
@@ -266,8 +267,8 @@ const CashModal = {
                 if (!amt || amt <= 0) {
                     if (typeof App !== 'undefined' && App.showAlertModal) {
                         App.showAlertModal({
-                            title: "Invalid Transfer Amount",
-                            message: "Please enter a valid transfer amount greater than 0.",
+                            title: sc.invalidAmountTitle || "Invalid Transfer Amount",
+                            message: sc.invalidAmountMsg || "Please enter a valid transfer amount greater than 0.",
                             isError: true
                         });
                     }
@@ -287,14 +288,14 @@ const CashModal = {
                     if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
                     if (typeof App !== 'undefined' && App.showAlertModal) {
                         App.showAlertModal({
-                            title: "Transfer Recorded",
-                            message: `${txType === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'} of ${State.formatCurrency(amt)} successfully recorded.`,
+                            title: sc.transferRecordedTitle || "Transfer Recorded",
+                            message: `${txType === 'DEPOSIT' ? (sc.deposit || 'Deposit') : (sc.withdrawal || 'Withdrawal')} (${State.formatCurrency(amt)}) ${sc.capitalSavedMsg || 'successfully recorded.'}`,
                             isSuccess: true
                         });
                     }
                 } catch (err) {
                     if (typeof App !== 'undefined' && App.showErrorModal) {
-                        App.showErrorModal("Record Transfer Error", err.message);
+                        App.showErrorModal(sc.recordErrorTitle || "Record Transfer Error", err.message);
                     } else {
                         console.error("Failed to record cash transfer:", err);
                     }
@@ -311,10 +312,10 @@ const CashModal = {
                 let confirmed = false;
                 if (typeof App !== 'undefined' && App.showConfirmModal) {
                     confirmed = await App.showConfirmModal({
-                        title: "Delete Cash Transfer",
-                        message: "Are you sure you want to delete this cash transfer? Your account equity and returns will be automatically recalculated.",
-                        confirmText: "Delete",
-                        cancelText: "Cancel",
+                        title: sc.deleteConfirmTitle || "Delete Cash Transfer",
+                        message: sc.deleteConfirmMsg || "Are you sure you want to delete this cash transfer? Your account equity and returns will be automatically recalculated.",
+                        confirmText: sc.deleteBtn || "Delete",
+                        cancelText: STRINGS.dialog?.cancel || "Cancel",
                         isDanger: true
                     });
                 } else {
@@ -330,7 +331,7 @@ const CashModal = {
                     if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
                 } catch (err) {
                     if (typeof App !== 'undefined' && App.showErrorModal) {
-                        App.showErrorModal("Delete Transfer Error", err.message);
+                        App.showErrorModal(sc.deleteErrorTitle || "Delete Transfer Error", err.message);
                     } else {
                         console.error("Failed to delete cash transaction:", err);
                     }

@@ -247,7 +247,7 @@ const CalendarPage = {
                             ${riskStatHtml}
                             <div class="dock-stat-item">
                                 <span class="dock-stat-label">${STRINGS.calendar.activityLabel || "Activity"}</span>
-                                <span class="dock-stat-val mono ${hasTrades ? '' : 'pnl-neutral'}">${stats.activity} <span style="font-size: 9.5px; color: var(--text-muted); font-weight: 500;">trades/day</span></span>
+                                <span class="dock-stat-val mono ${hasTrades ? '' : 'pnl-neutral'}">${stats.activity} <span style="font-size: 9.5px; color: var(--text-muted); font-weight: 500;">${STRINGS.calendar?.tradesPerDayUnit || 'trades/day'}</span></span>
                             </div>
                         </div>
                     </div>

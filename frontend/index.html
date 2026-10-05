@@ -26,29 +26,29 @@
             </div>
 
             <!-- Center: Docked Mini KPI Banner (Visible on scroll in Calendar view) -->
-            <div class="header-mini-kpi" id="header-mini-kpi" title="Click to scroll to top">
+            <div class="header-mini-kpi" id="header-mini-kpi" data-i18n-title="kpi.clickToTop" title="Click to scroll to top">
                 <div class="mini-kpi-item">
-                    <span class="mini-kpi-label">NET P&L</span>
+                    <span class="mini-kpi-label" data-i18n="kpi.netPnl">NET P&L</span>
                     <span class="mini-kpi-value mono" id="mini-net-pnl">--</span>
                 </div>
                 <div class="mini-kpi-divider"></div>
                 <div class="mini-kpi-item">
-                    <span class="mini-kpi-label">WR</span>
+                    <span class="mini-kpi-label" data-i18n="statsPage.winRateMetric">WIN %</span>
                     <span class="mini-kpi-value mono" id="mini-wr">--%</span>
                 </div>
                 <div class="mini-kpi-divider"></div>
                 <div class="mini-kpi-item">
-                    <span class="mini-kpi-label">PF</span>
+                    <span class="mini-kpi-label" data-i18n="kpi.profitFactor">PROFIT FACTOR</span>
                     <span class="mini-kpi-value mono" id="mini-pf">--</span>
                 </div>
                 <div class="mini-kpi-divider"></div>
                 <div class="mini-kpi-item">
-                    <span class="mini-kpi-label">EXP</span>
+                    <span class="mini-kpi-label" data-i18n="kpi.expectancy">EXPECTANCY</span>
                     <span class="mini-kpi-value mono" id="mini-expectancy">--</span>
                 </div>
                 <div class="mini-kpi-divider"></div>
                 <div class="mini-kpi-item">
-                    <span class="mini-kpi-label">TRADES</span>
+                    <span class="mini-kpi-label" data-i18n="kpi.totalTrades">TOTAL TRADES</span>
                     <span class="mini-kpi-value mono" id="mini-trades">--</span>
                 </div>
             </div>
@@ -57,8 +57,8 @@
             <div class="header-right">
                 <!-- Sync Controls -->
                 <div class="sync-section">
-                    <button class="btn-sync-gap hidden" id="btn-sync-gap" title="Desync detected. Click to import manual statement.">
-                        <span>⚠️</span> <span id="sync-gap-label">Desync</span>
+                    <button class="btn-sync-gap hidden" id="btn-sync-gap" data-i18n-title="sync.desyncTitle" title="Desync detected. Click to import manual statement.">
+                        <span>⚠️</span> <span id="sync-gap-label" data-i18n="sync.desync">Desync</span>
                     </button>
                     <div class="sync-status-text">
                         <span class="sync-updated" id="sync-last-time">Last update at --:--</span>
@@ -68,23 +68,23 @@
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                         <span class="btn-sync-label" data-i18n="sync.syncNow">Sync Now</span>
                     </button>
-                    <button class="btn-import-action" id="btn-open-import" title="Import manual statement (CSV / XML)">
+                    <button class="btn-import-action" id="btn-open-import" data-i18n-title="sync.importTitle" title="Import manual statement (CSV / XML)">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     </button>
-                    <button class="btn-cash-action" id="btn-open-cash" title="Capital & Cash Transfers">
+                    <button class="btn-cash-action" id="btn-open-cash" data-i18n-title="sync.cashTitle" title="Capital & Cash Transfers">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                     </button>
                 </div>
 
                 <!-- Theme Switcher -->
                 <div class="theme-switch-group">
-                    <button class="theme-btn active" data-theme-val="light" title="Light Theme">
+                    <button class="theme-btn active" data-theme-val="light" data-i18n-title="theme.lightTitle" title="Light Theme">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                     </button>
-                    <button class="theme-btn" data-theme-val="dark" title="Dark Theme">
+                    <button class="theme-btn" data-theme-val="dark" data-i18n-title="theme.darkTitle" title="Dark Theme">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                     </button>
-                    <button class="theme-btn" data-theme-val="system" title="Follow System">
+                    <button class="theme-btn" data-theme-val="system" data-i18n-title="theme.systemTitle" title="Follow System">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
                     </button>
                 </div>
@@ -99,23 +99,23 @@
             <!-- Executive KPI Summary Banner (5 Cards in Calendar view) -->
             <div class="kpi-summary-banner" id="global-kpi-banner">
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">NET REALIZED P&L</span>
+                    <span class="kpi-banner-label" data-i18n="kpi.netRealizedPnl">NET REALIZED P&L</span>
                     <span class="kpi-banner-value mono" id="banner-net-pnl">--</span>
                 </div>
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">WIN RATE</span>
+                    <span class="kpi-banner-label" data-i18n="kpi.winRate">WIN RATE</span>
                     <span class="kpi-banner-value mono" id="banner-wr">--%</span>
                 </div>
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">PROFIT FACTOR</span>
+                    <span class="kpi-banner-label" data-i18n="kpi.profitFactor">PROFIT FACTOR</span>
                     <span class="kpi-banner-value mono" id="banner-pf">--</span>
                 </div>
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">EXPECTANCY</span>
+                    <span class="kpi-banner-label" data-i18n="kpi.expectancy">EXPECTANCY</span>
                     <span class="kpi-banner-value mono" id="banner-expectancy">--</span>
                 </div>
                 <div class="kpi-banner-item">
-                    <span class="kpi-banner-label">TOTAL TRADES</span>
+                    <span class="kpi-banner-label" data-i18n="kpi.totalTrades">TOTAL TRADES</span>
                     <span class="kpi-banner-value mono" id="banner-trades">--</span>
                 </div>
             </div>
@@ -123,17 +123,17 @@
             <div class="page-view" id="calendar-page-inner">
                 <!-- 1. Week Section -->
                 <div class="section-week-container" id="sec-week-container">
-                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">Loading trading data...</div>
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);" data-i18n="common.loading">Loading trading data...</div>
                 </div>
 
                 <!-- 2. Month Section -->
                 <div class="section-month-container" id="sec-month-container">
-                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">Loading trading data...</div>
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);" data-i18n="common.loading">Loading trading data...</div>
                 </div>
 
                 <!-- 3. Year Section -->
                 <div class="section-year-container" id="sec-year-container">
-                    <div style="text-align:center; padding: 20px; color: var(--text-muted);">Loading trading data...</div>
+                    <div style="text-align:center; padding: 20px; color: var(--text-muted);" data-i18n="common.loading">Loading trading data...</div>
                 </div>
             </div>
         </div>
@@ -144,13 +144,11 @@
         </div>
     </main>
 
-
-
     <!-- Day Trades Execution Modal -->
     <div class="modal-backdrop" id="day-modal-backdrop">
         <div class="modal-container">
             <div class="modal-header">
-                <h3 class="modal-title" id="modal-date-title">Execution Details</h3>
+                <h3 class="modal-title" id="modal-date-title" data-i18n="modal.dayDetailsTitle">Execution Details</h3>
                 <button class="btn-ctrl" id="modal-close-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
@@ -168,7 +166,7 @@
     <div class="modal-backdrop" id="import-modal-backdrop">
         <div class="modal-container" style="max-width: 580px;">
             <div class="modal-header">
-                <h3 class="modal-title" id="import-modal-title">Import Historical IBKR Statements</h3>
+                <h3 class="modal-title" id="import-modal-title" data-i18n="import.title">Import Historical IBKR Statements</h3>
                 <button class="btn-ctrl" id="import-modal-close-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
@@ -177,9 +175,9 @@
                 <div id="import-sync-gap-alert" class="sync-gap-alert-box hidden">
                     <div class="sync-gap-alert-icon">⚠️</div>
                     <div class="sync-gap-alert-content">
-                        <strong>Desynchronization detected (>7 days without recorded trades)</strong>
-                        <p id="import-gap-desc">Your last sync or recorded trade was over 7 days ago. If your IBKR Flex Query covers 7 days, please import your CSV or XML statement to prevent missing past trades.</p>
-                        <button type="button" class="btn-dismiss-gap" id="btn-dismiss-gap">
+                        <strong data-i18n="import.gapTitle">Desynchronization detected (>7 days without recorded trades)</strong>
+                        <p id="import-gap-desc" data-i18n="import.gapDesc">Your last sync or recorded trade was over 7 days ago. If your IBKR Flex Query covers 7 days, please import your CSV or XML statement to prevent missing past trades.</p>
+                        <button type="button" class="btn-dismiss-gap" id="btn-dismiss-gap" data-i18n="import.gapDismissBtn">
                             ✓ No trades during this period (Dismiss warning)
                         </button>
                     </div>
@@ -189,21 +187,21 @@
                 <div class="import-dropzone" id="import-dropzone">
                     <input type="file" id="import-file-input" accept=".csv,.xml,.CSV,.XML" style="display: none;" multiple>
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--color-accent); margin-bottom: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <div style="font-weight: 700; margin-bottom: 4px;">Drag and drop your IBKR CSV or XML files here</div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">Compatible with Activity Statements and Flex Queries (multi-year)</div>
-                    <button class="btn-pill" type="button" id="btn-browse-file">Select Files</button>
+                    <div style="font-weight: 700; margin-bottom: 4px;" data-i18n="import.dropzoneTitle">Drag and drop your IBKR CSV or XML files here</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;" data-i18n="import.dropzoneSubtitle">Compatible with Activity Statements and Flex Queries (multi-year)</div>
+                    <button class="btn-pill" type="button" id="btn-browse-file" data-i18n="import.selectFilesBtn">Select Files</button>
                 </div>
 
                 <div id="import-status-box" style="margin-top: 12px; display: none;"></div>
 
                 <!-- Terminal CLI Command Hint -->
                 <div class="cli-import-box" style="margin-top: 16px;">
-                    <span class="cli-label">Or import via Terminal CLI:</span>
+                    <span class="cli-label" data-i18n="import.cliLabel">Or import via Terminal CLI:</span>
                     <pre class="cli-code-block"><code>python3 scripts/import_trades.py /path/to/ibkr_statements/</code></pre>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-pill" id="import-modal-cancel-btn">Close</button>
+                <button class="btn-pill" id="import-modal-cancel-btn" data-i18n="import.closeBtn">Close</button>
             </div>
         </div>
     </div>
@@ -213,7 +211,7 @@
         <div class="modal-container" style="max-width: 480px;">
             <div class="modal-header">
                 <h3 class="modal-title" id="error-modal-title-wrap">
-                    <span id="error-modal-title">Notification</span>
+                    <span id="error-modal-title" data-i18n="dialog.notification">Notification</span>
                 </h3>
                 <button class="btn-ctrl" id="error-modal-close-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -223,7 +221,7 @@
                 <!-- Content -->
             </div>
             <div class="modal-footer">
-                <button class="btn-pill" id="error-modal-ok-btn" style="min-width: 80px;">OK</button>
+                <button class="btn-pill" id="error-modal-ok-btn" style="min-width: 80px;" data-i18n="dialog.ok">OK</button>
             </div>
         </div>
     </div>
@@ -233,7 +231,7 @@
         <div class="modal-container" style="max-width: 440px;">
             <div class="modal-header">
                 <h3 class="modal-title" id="confirm-modal-title-wrap">
-                    <span id="confirm-modal-title">Confirm Action</span>
+                    <span id="confirm-modal-title" data-i18n="dialog.confirmAction">Confirm Action</span>
                 </h3>
                 <button class="btn-ctrl" id="confirm-modal-close-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -243,8 +241,8 @@
                 <!-- Confirm prompt -->
             </div>
             <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
-                <button class="btn-pill" id="confirm-modal-cancel-btn">Cancel</button>
-                <button class="btn-pill btn-accent" id="confirm-modal-ok-btn" style="min-width: 80px;">Confirm</button>
+                <button class="btn-pill" id="confirm-modal-cancel-btn" data-i18n="dialog.cancel">Cancel</button>
+                <button class="btn-pill btn-accent" id="confirm-modal-ok-btn" style="min-width: 80px;" data-i18n="dialog.confirm">Confirm</button>
             </div>
         </div>
     </div>
@@ -253,7 +251,7 @@
     <div class="modal-backdrop" id="cash-modal-backdrop">
         <div class="modal-container" style="max-width: 780px;">
             <div class="modal-header">
-                <h3 class="modal-title">Capital & Cash Management</h3>
+                <h3 class="modal-title" data-i18n="cash.title">Capital & Cash Management</h3>
                 <button class="btn-ctrl" id="cash-modal-close-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
@@ -262,7 +260,7 @@
                 <!-- Dynamically rendered by CashModal -->
             </div>
             <div class="modal-footer">
-                <button class="btn-pill" id="cash-modal-footer-close-btn">Close</button>
+                <button class="btn-pill" id="cash-modal-footer-close-btn" data-i18n="dialog.close">Close</button>
             </div>
         </div>
     </div>

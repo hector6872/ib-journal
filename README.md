@@ -14,6 +14,11 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 ## ✨ Key Features
 
 - **⚡ Pure Vanilla Web Stack**: 100% pure HTML5, modern CSS, and vanilla ES6+ JavaScript. No React, no Node.js, no npm dependencies, no build step.
+- **💰 Capital & Cash Management**:
+  - **Account Equity (NAV)** tracking: $\text{Starting Capital} + \text{Net Cash Flow} + \text{Realized P\&L}$.
+  - **Starting Capital**: Set your baseline portfolio capital with cross-device SQLite synchronization.
+  - **Automatic & Manual Cash Transfers**: Auto-imports deposits and withdrawals from IBKR activity statements and allows manual cash entries.
+  - **Return on Capital (% ROI)**: Accurate performance returns based on active capital ($\text{Realized P\&L} / \text{Capital Base}$).
 - **🛡️ MicroSD Safe & Flash Protected**: Configured with SQLite Write-Ahead Logging (`WAL`), in-memory temporary tables (`temp_store=MEMORY`), and minimal disk I/O to protect your Raspberry Pi storage.
 - **🔄 Smart Market-Hours Synchronization**: Automatically ingests trade executions and realized P&L via IBKR Flex Query Web Service during market sessions, skipping redundant queries at night and on weekends.
 - **⏱️ Rate-Limit Guard**: Enforced cooldown protection on the manual *"Sync Now"* button with live UI countdown timers to protect your IBKR API rate limits.
@@ -23,12 +28,14 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
   - **Week Breakdown**: 7-day cards view (Monday–Sunday) with volume and executions.
 - **📊 In-Depth Trading Analytics**:
   - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Expectancy, Net Realized P&L, Total Trades, Commissions).
+  - Portfolio Capital & Equity Overview strip in Statistics.
   - Risk & Drawdown analysis (Max Drawdown, Current Drawdown, Winning/Losing Streaks).
   - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL).
   - Equity Curve & Metric Evolution charts (Daily, Weekly, Monthly aggregations).
   - Detailed breakdowns by Symbol, Tag/Setup, Day of Week, Time of Day, Holding Duration, and Order Type.
 - **📥 Historical Multi-Year Import**: Drag & drop IBKR Activity Statements (CSV / XML) directly in the browser or import bulk files via CLI with zero duplicate risk (`INSERT ON CONFLICT`).
-- **🌐 Centralized Copy & Translations (`strings.js`)**: Edit any title, label, metric name, or translation in a single dedicated dictionary file.
+- **💬 Custom Institutional Dialogs**: Sleek modal dialogs for confirmations, notifications, and error feedback (no standard browser alerts).
+- **🌐 Centralized Copy & Translations (`strings.js`)**: 100% of UI copy, labels, metrics, and messages are centralized in a single dictionary file with automatic DOM attribute bindings (`data-i18n`, `data-i18n-title`, `data-i18n-placeholder`).
 - **🌓 Light / Dark / System Themes**: Instant theme toggling with smooth transitions and persistent user preferences.
 
 ---
@@ -37,7 +44,8 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 
 - **Executive KPI Bar**: Real-time Net Realized P&L, Win Rate %, Profit Factor, Expectancy, and Trade counts.
 - **Calendar Tab**: Week, Month, and Year calendar views with instant execution breakdown modals on any trading day.
-- **Statistics Tab**: Interactive equity curves, drawdown charts, rolling metrics, and breakdown tables.
+- **Statistics Tab**: Portfolio equity overview, interactive equity curves, drawdown charts, rolling metrics, and breakdown tables.
+- **Capital & Cash Management Modal**: Manage starting capital, view automated and manual cash transfers, and review NAV equity.
 - **Day Execution Modal**: Detailed view of all trades (Time, Symbol, Side, Volume, Price, Commission, Realized P&L).
 - **Import Modal & Desync Alert**: Automatic notification if you have been offline for >7 days, allowing instant drag & drop statement ingestion.
 
@@ -112,10 +120,8 @@ To enable automated trade ingestion from Interactive Brokers:
    - **Query Name**: `Trading Journal Sync`
    - **Date Period**: *Last 7 Calendar Days* (for regular sync) or *Last 365 Calendar Days* (for initial backfill).
    - **Format**: `XML`
-   - **Sections**: Select **Trades** (ensure *Executions / Closed Lots* and *Realized P&L* are enabled).
+   - **Sections**: Select **Trades** (ensure *Executions / Closed Lots* and *Realized P&L* are enabled). Optionally select **Cash Transactions** to auto-sync deposits and withdrawals.
    - Save the query and copy the generated **Query ID** to `IBKR_QUERY_ID` in `.env`.
-
-> 💡 **Note**: You only need the **Trades** section enabled. Cash transactions (deposits/withdrawals) are not required.
 
 ---
 
@@ -124,7 +130,7 @@ To enable automated trade ingestion from Interactive Brokers:
 IBKR's Flex Query API has a **365-day maximum window**. For importing older historical years or recovering gaps after being offline (>7 days):
 
 ### 1. Browser UI Drag & Drop
-Click the **Import** 📥 button in the top navigation bar (or the `⚠️ Desync` alert banner) to drag and drop your CSV/XML statement files directly into the browser.
+Click the **Import** 📥 button in the top navigation bar (or the `⚠️ Desync` alert banner) to drag and drop your CSV/XML statement files directly into the browser. Both trades and cash movements are ingested automatically.
 
 ### 2. CLI Multi-File Importer (`scripts/import_trades.py`)
 Import any number of IBKR Activity Statement CSVs, Flex XMLs, or trade reports safely (idempotent, zero duplicate risk):
@@ -186,12 +192,15 @@ To keep the journal running automatically when your Raspberry Pi or Linux server
 
 ---
 
-## 🎨 Customizing Text & UI Copy (`strings.js`)
+## 🎨 Centralized Text & Copy System (`strings.js`)
 
-All UI text, labels, tab titles, days of the week, months, and messages are centralized in:
+All UI text, labels, tab titles, days of the week, months, badges, tooltips, and modal messages are centralized in:
 👉 **[`frontend/js/strings.js`](frontend/js/strings.js)**
 
-To change any wording or translate the interface into another language, simply edit the values in `STRINGS`. No build or compilation step is needed—just refresh your browser!
+To change any wording, customize labels, or translate the entire interface into another language:
+1. Open [`frontend/js/strings.js`](frontend/js/strings.js).
+2. Edit the dictionary strings.
+3. Refresh your browser (no compilation or build step required).
 
 ---
 
@@ -200,14 +209,16 @@ To change any wording or translate the interface into another language, simply e
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/config` | `GET` | Frontend runtime configuration (currency symbol, IBKR setup status). |
-| `/api/settings` | `GET` / `POST` | User settings persisted in SQLite for cross-device synchronization. |
-| `/api/stats/overview` | `GET` | Global KPIs: Win Rate %, Profit Factor, Expectancy, Total Trades, Net Realized P&L. |
+| `/api/settings` | `GET` / `POST` | User settings (e.g. Starting Capital) persisted in SQLite for cross-device synchronization. |
+| `/api/cash/transactions` | `GET` / `POST` | Retrieve cash summary / records, or record manual deposit/withdrawal. |
+| `/api/cash/transactions/{id}` | `DELETE` | Remove a manual or imported cash transaction. |
+| `/api/stats/overview` | `GET` | Global KPIs: Win Rate %, Profit Factor, Expectancy, Total Trades, Net Realized P&L, NAV Equity, ROI %. |
 | `/api/stats/detailed` | `GET` | Comprehensive trading analytics (drawdowns, rolling win rates, metric evolution, breakdowns). |
 | `/api/calendar/year?year=2026` | `GET` | 12-month calendar matrix and monthly summary array. |
 | `/api/calendar/month?year=2026&month=10` | `GET` | Monthly calendar grid data with daily P&L and trade counts. |
 | `/api/calendar/week?date=2026-10-01` | `GET` | 7-day card data with individual execution breakdown. |
 | `/api/trades/day?date=2026-10-01` | `GET` | Detailed trade executions for a specific date. |
-| `/api/trades/import` | `POST` | Upload and import historical CSV / XML / JSON statement payloads. |
+| `/api/import/statement` | `POST` | Upload and import historical CSV / XML / JSON statement payloads. |
 | `/api/sync/status` | `GET` | Real-time sync status (last sync, next sync countdown, rate-limit cooldown). |
 | `/api/sync/trigger` | `POST` | Manually triggers IBKR Flex Query synchronization. |
 
@@ -217,11 +228,8 @@ To change any wording or translate the interface into another language, simply e
 
 ### Running Tests
 ```bash
-# Run pytest test suite
-pytest -v
-
-# Or use Python's built-in test runner
-python -m unittest discover tests
+# Run test suite
+python3 -m unittest discover -s tests
 ```
 
 ### Running Code Quality Checks

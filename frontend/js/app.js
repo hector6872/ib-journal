@@ -62,6 +62,20 @@ const App = {
                 el.textContent = value;
             }
         });
+        document.querySelectorAll('[data-i18n-title]').forEach(el => {
+            const key = el.getAttribute('data-i18n-title');
+            const value = this.resolveString(key);
+            if (value !== undefined) {
+                el.setAttribute('title', value);
+            }
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            const value = this.resolveString(key);
+            if (value !== undefined) {
+                el.setAttribute('placeholder', value);
+            }
+        });
     },
 
     resolveString(path) {

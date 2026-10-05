@@ -57,11 +57,11 @@ const ImportModal = {
                     if (typeof App !== 'undefined' && App.showErrorModal) {
                         App.showErrorModal("Gap Resolution Error", err.message);
                     } else {
-                        alert(`Could not resolve sync gap: ${err.message}`);
+                        console.error("Could not resolve sync gap:", err);
                     }
                 } finally {
                     dismissGapBtn.disabled = false;
-                    dismissGapBtn.textContent = "✓ No trades during this period (Dismiss warning)";
+                    dismissGapBtn.textContent = STRINGS.import?.gapDismissBtn || "✓ No trades during this period (Dismiss warning)";
                 }
             });
         }
@@ -128,11 +128,11 @@ const ImportModal = {
                 if (gapInfo.from && gapInfo.to) {
                     const fromDate = gapInfo.from.split('T')[0];
                     const toDate = gapInfo.to.split('T')[0];
-                    gapDesc.textContent = `A ${gapInfo.days}-day desync gap was detected between ${fromDate} and ${toDate} (due to server downtime or vacation). Because automated IBKR Flex Queries only retrieve the last 7 days, trades during that period are missing. Please import your historical CSV or XML activity statement to complete your journal.`;
+                    gapDesc.textContent = `A ${gapInfo.days}-day desync gap was detected between ${fromDate} and ${toDate}. Automated IBKR Flex Queries only cover recent days. Please import your historical CSV or XML activity statement.`;
                 } else if (gapInfo.days && gapInfo.days > 0) {
-                    gapDesc.textContent = `Your last synchronization or recorded trade has a ${gapInfo.days}-day gap. Since automated IBKR Flex Query usually covers the last 7 days, please import your CSV or XML statement to prevent missing past trades.`;
+                    gapDesc.textContent = `Your last synchronization or recorded trade has a ${gapInfo.days}-day gap. Please import your CSV or XML statement to prevent missing past trades.`;
                 } else {
-                    gapDesc.textContent = `No historical statements or trades have been recorded yet. Please import your CSV or XML statement to populate your trading journal.`;
+                    gapDesc.textContent = STRINGS.import?.gapDesc || `Please import your historical CSV or XML statement.`;
                 }
             }
         } else {
@@ -156,7 +156,7 @@ const ImportModal = {
         if (!statusBox) return;
 
         statusBox.style.display = 'block';
-        statusBox.innerHTML = `<div style="color: var(--color-accent); font-weight: 600;">Importing ${files.length} file(s)...</div>`;
+        statusBox.innerHTML = `<div style="color: var(--color-accent); font-weight: 600;">${STRINGS.import?.importingFiles || 'Importing file(s)...'} (${files.length})</div>`;
 
         let totalImported = 0;
         let errors = [];
@@ -174,7 +174,7 @@ const ImportModal = {
 
         if (errors.length > 0) {
             statusBox.innerHTML = `
-                <div style="color: var(--color-loss); font-weight: 600; margin-bottom: 4px;">Import finished with errors:</div>
+                <div style="color: var(--color-loss); font-weight: 600; margin-bottom: 4px;">${STRINGS.import?.errorsTitle || 'Import finished with errors:'}</div>
                 <ul style="font-size: 11px; color: var(--text-muted); margin-left: 16px;">
                     ${errors.map(e => `<li>${e}</li>`).join('')}
                 </ul>
@@ -182,7 +182,7 @@ const ImportModal = {
         } else {
             statusBox.innerHTML = `
                 <div style="color: var(--color-profit); font-weight: 700;">
-                    ✓ Successfully imported and updated ${totalImported} trades!
+                    ✓ ${STRINGS.import?.successMsg || 'Successfully processed statement.'} (${totalImported} ${STRINGS.calendar?.tradesBadge || 'trades'})
                 </div>
             `;
             // Refresh current view & sync status

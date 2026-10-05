@@ -216,13 +216,13 @@ Trades,Data,Order,Forex,AUD,EUR.AUD,"2023-12-14, 12:18:41",-77,1.63815,,126.1375
         settings_mod.SETTINGS_PATH = settings_file
 
         try:
-            updated = update_settings({"theme": "dark", "stats_date_range": "3M"})
-            self.assertEqual(updated["theme"], "dark")
-            self.assertEqual(updated["stats_date_range"], "3M")
+            updated = update_settings({"starting_capital": 50000.0, "ignore_ui_key": "val"})
+            self.assertEqual(updated["starting_capital"], 50000.0)
+            self.assertNotIn("ignore_ui_key", updated)
 
             loaded = get_all_settings()
-            self.assertEqual(loaded["theme"], "dark")
-            self.assertEqual(loaded["stats_date_range"], "3M")
+            self.assertEqual(loaded["starting_capital"], 50000.0)
+            self.assertNotIn("ignore_ui_key", loaded)
         finally:
             settings_mod.SETTINGS_PATH = orig_path
             if settings_file.exists():

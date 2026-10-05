@@ -92,18 +92,70 @@ When you import an IBKR Activity Statement or Flex Query:
 
 ---
 
-## 🔄 Daily Flex Query Setup (7 Days)
+## 🔄 IBKR Automated Synchronization (Flex Query Setup)
 
-To keep your journal running optimally without overloading the IBKR API or your Raspberry Pi storage:
+Automated synchronization requires **two values** in your `.env` file:
+1. `IBKR_TOKEN`: Your private Flex Web Service authentication token.
+2. `IBKR_QUERY_ID`: The unique numeric ID of your Activity Flex Query.
 
-1. In the IBKR Client Portal, go to **Performance & Reports** > **Flex Queries**.
-2. Edit or create your **Trades** Flex Query (`IBKR_QUERY_ID` in `.env`):
-   - **Date Period**: `Last 7 Calendar Days`.
-   - **Format**: `XML`.
-   - **Sections**: Select `Trades` (include Executions, Orders, and Realized P&L). Optionally enable `Cash Transactions` for automated transfer sync.
-3. Save your query.
+---
 
-The server will automatically poll this query during active market sessions (07:00 to 21:15 UTC, Monday through Friday).
+### Step 1: Generate your Flex Web Service Token (`IBKR_TOKEN`)
+
+1. Log into your **[IBKR Client Portal](https://www.interactivebrokers.com/)**.
+2. Navigate to **Performance & Reports** > **Flex Queries** (or **Reports** > **Flex Queries** depending on your portal language/layout).
+3. On the right side, find the **Flex Web Service Status** panel and click the **Gear (⚙️) icon** / **Configure**.
+4. Check the box **Enable Flex Web Service**.
+5. Set token expiration (e.g., 1 year / maximum available) and click **Generate Token** / **Save**.
+6. Copy the generated alphanumeric token string and paste it into your `.env`:
+   ```ini
+   IBKR_TOKEN=123456789012345678901234
+   ```
+
+---
+
+### Step 2: Create the Activity Flex Query (`IBKR_QUERY_ID`)
+
+1. On the **Flex Queries** page, locate the **Activity Flex Query** section and click the **+ (Create / Add)** icon.
+2. Configure the general query parameters:
+   - **Query Name**: `Trading Journal Sync`
+   - **Date Period**: Choose `Last 7 Calendar Days` (recommended for lightweight hourly background polling) or `Last 365 Calendar Days` (for initial sync).
+   - **Format**: Select **`XML`**.
+   - **Accounts**: Ensure your trading account is selected.
+3. In the **Sections** configuration list:
+   - Click on **Trades**:
+     - **Top Options (Boxes)**: Ensure **`Execution`** and **`Order`** are selected (blue checkmark). You can optionally select **`Closed Lots`** as well.
+     - **Columns (Checkboxes)**: Check the **`Select All`** checkbox at the top of the column list (above *Account ID*). This automatically includes all necessary fields: `FIFO P/L Realized` (P&L), `IB Commission`, `Trade Price`, `FX Rate To Base`, `Date/Time`, `Symbol`, etc., without needing to find each field manually.
+     - Click **Save** at the bottom of the modal.
+   - *(Recommended)* Click on **Cash Transactions**:
+     - Check the **`Select All`** checkbox (or enable *Deposits & Withdrawals*) to automatically sync deposits and withdrawals.
+     - Click **Save** at the bottom of the modal.
+4. In the **General Configuration** section (optional settings):
+   - You can leave all settings with their **default values**:
+     - **Date Format**: `yyyyMMdd`
+     - **Time Format**: `HHmmss`
+     - **Date/Time Separator**: `; (semi-colon)`
+     - **Profit and Loss**: `Default` (or `FIFO`)
+     - **Include Currency Rates?**: `No` *(No es necesario activarlo, ya que cada operación ya incluye su tipo de cambio individual en `fxRateToBase`)*.
+     - **Include Offsetting Trade/Cancel Pairs?**: `No`
+     - **Breakout by Day?**: `No`
+5. Scroll down to the bottom of the main query creation page and click **Save Changes** / **Continue** / **Create**.
+6. You will return to the Flex Queries list. Look for your newly created query and locate the numeric **Query ID** column (e.g., `987654`).
+7. Copy this numeric ID into your `.env`:
+   ```ini
+   IBKR_QUERY_ID=987654
+   ```
+
+---
+
+* **Why don't trades I just placed appear immediately? (Intraday Delay)**:
+  IBKR Flex Web Service is a batch-based reporting engine, not a live tick-by-tick websocket feed. Interactive Brokers consolidates and updates executions in their Flex reporting database periodically throughout the trading session (typically with a **10 to 30 minute delay** after order execution). Once IBKR flushes the batch, the next sync (or clicking *Sync Now*) will ingest them automatically.
+* **Where is Realized P&L in the Trades modal?**
+  In the IBKR Trades modal, Realized P&L is listed further down the column list as **`FIFO P/L Realized`** (or `Realized P/L`). The easiest and safest way is to simply check the **`Select All`** checkbox at the top of the column list, ensuring all execution, price, commission, and P&L fields are exported.
+* **Token Activation Delay**:
+  IBKR's API gateways take **5 to 15 minutes** to propagate a newly generated token. If your first sync attempt fails with an authentication error, wait a few minutes and try again.
+* **XML vs CSV for Flex Query**:
+  Always choose **`XML`** for the Flex Query configuration. The automated background sync parser (`backend/flex_client.py`) expects XML responses from IBKR. For manual file drag-and-drop, both CSV and XML are supported.
 
 ---
 

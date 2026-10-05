@@ -16,21 +16,25 @@ from backend.config import IBKR_QUERY_ID, IBKR_TOKEN
 
 logger = logging.getLogger("ib-journal.flex")
 
-SEND_REQUEST_URL = "https://gdcdp.interactivebrokers.com/Universal/servlet/FlexStatementService.SendRequest"
-GET_STATEMENT_URL = "https://gdcdp.interactivebrokers.com/Universal/servlet/FlexStatementService.GetStatement"
+IBKR_BASE_ENDPOINTS = [
+    "https://ndcdyn.interactivebrokers.com/Universal/servlet",
+    "https://gdcdyn.interactivebrokers.com/Universal/servlet",
+    "https://www.interactivebrokers.com/Universal/servlet",
+]
 
 class IBKRFlexClient:
     def __init__(self, token: str = IBKR_TOKEN, query_id: str = IBKR_QUERY_ID):
         self.token = token
         self.query_id = query_id
+        self._active_endpoint = IBKR_BASE_ENDPOINTS[0]
 
     async def _http_get(self, url: str, params: Dict[str, str]) -> Tuple[int, str]:
-        """Performs GET request via httpx or urllib."""
+        """Performs GET request via httpx or urllib with redirect following."""
         query_string = urlencode(params)
         full_url = f"{url}?{query_string}"
 
         if httpx is not None:
-            async with httpx.AsyncClient(timeout=30.0, headers={"User-Agent": "IB-Journal/1.0"}) as client:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers={"User-Agent": "IB-Journal/1.0"}) as client:
                 resp = await client.get(full_url)
                 return resp.status_code, resp.text
         else:
@@ -46,18 +50,37 @@ class IBKRFlexClient:
     async def fetch_statement_xml(self) -> str:
         """
         Executes the two-step IBKR Flex Query Web Service protocol:
-        1. SendRequest with Token & Query ID -> get ReferenceCode
+        1. SendRequest with Token & Query ID -> get ReferenceCode (with fallback endpoints)
         2. Poll GetStatement with ReferenceCode & Token -> get final XML statement
         """
         if not self.token or not self.query_id:
             raise ValueError("IBKR_TOKEN and IBKR_QUERY_ID must be set in .env file.")
 
-        # Step 1: Send Request
+        # Step 1: Send Request with endpoint fallback
         logger.info(f"Initiating IBKR Flex Query request for query ID: {self.query_id}")
-        status_code, resp_text = await self._http_get(
-            SEND_REQUEST_URL,
-            {"t": self.token, "q": self.query_id, "v": "3"}
-        )
+        last_network_error: Optional[Exception] = None
+        status_code = 0
+        resp_text = ""
+
+        for endpoint in IBKR_BASE_ENDPOINTS:
+            send_url = f"{endpoint}/FlexStatementService.SendRequest"
+            try:
+                status_code, resp_text = await self._http_get(
+                    send_url,
+                    {"t": self.token, "q": self.query_id, "v": "3"}
+                )
+                self._active_endpoint = endpoint
+                last_network_error = None
+                break
+            except Exception as e:
+                logger.warning(f"Could not connect to IBKR endpoint {endpoint}: {e}")
+                last_network_error = e
+
+        if last_network_error is not None:
+            raise ConnectionError(
+                f"Failed to connect to Interactive Brokers servers ({last_network_error}). "
+                "Please verify your internet connection, DNS settings, or VPN."
+            )
 
         if status_code != 200:
             raise RuntimeError(f"IBKR SendRequest HTTP error: {status_code} - {resp_text}")
@@ -79,15 +102,16 @@ class IBKRFlexClient:
             raise RuntimeError("IBKR did not return a valid ReferenceCode.")
 
         ref_code = ref_elem.text.strip()
-        logger.info(f"Received ReferenceCode: {ref_code}. Polling statement...")
+        logger.info(f"Received ReferenceCode: {ref_code}. Polling statement from {self._active_endpoint}...")
 
         # Step 2: Poll for statement ready
+        get_url = f"{self._active_endpoint}/FlexStatementService.GetStatement"
         max_attempts = 15
         for attempt in range(1, max_attempts + 1):
             await asyncio.sleep(attempt * 1.5)  # Progressive backoff
 
             s_code, stmt_text = await self._http_get(
-                GET_STATEMENT_URL,
+                get_url,
                 {"t": self.token, "q": ref_code, "v": "3"}
             )
 

@@ -111,17 +111,25 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 
 ## 🔄 IBKR Flex Query Configuration Guide
 
-To enable automated trade ingestion from Interactive Brokers:
+To enable automated trade ingestion from Interactive Brokers, you need two values in `.env`: `IBKR_TOKEN` and `IBKR_QUERY_ID`.
 
-1. Log into your **[IBKR Client Portal](https://www.interactivebrokers.com/)**.
-2. Navigate to **Performance & Reports** > **Flex Queries**.
-3. Under **Flex Web Service Status**, click the gear icon to **Enable Flex Web Service** and generate your **Flex Token** (copy this to `IBKR_TOKEN` in `.env`).
-4. Under **Trade Confirmation Flex Query** or **Activity Flex Query**, click **+ (Create New)**:
-   - **Query Name**: `Trading Journal Sync`
-   - **Date Period**: *Last 7 Calendar Days* (for regular sync) or *Last 365 Calendar Days* (for initial backfill).
-   - **Format**: `XML`
-   - **Sections**: Select **Trades** (ensure *Executions / Closed Lots* and *Realized P&L* are enabled). Optionally select **Cash Transactions** to auto-sync deposits and withdrawals.
-   - Save the query and copy the generated **Query ID** to `IBKR_QUERY_ID` in `.env`.
+1. **Get your Token (`IBKR_TOKEN`)**:
+   - Log into **[IBKR Client Portal](https://www.interactivebrokers.com/)**.
+   - Navigate to **Performance & Reports** (or **Reports**) > **Flex Queries**.
+   - In the **Flex Web Service Status** panel on the right, click the **Gear (⚙️) icon**.
+   - Enable Flex Web Service, generate a new token, and copy it to `IBKR_TOKEN` in `.env`.
+
+2. **Create the Query & get Query ID (`IBKR_QUERY_ID`)**:
+   - In the **Activity Flex Query** section, click **+ (Create New)**:
+     - **Query Name**: `Trading Journal Sync`
+     - **Date Period**: `Last 7 Calendar Days` (or `Last 365 Calendar Days` for initial backfill)
+     - **Format**: `XML`
+     - **Sections**:
+       - Click **Trades**: ensure **`Execution`** and **`Order`** are selected at the top, and check the **`Select All`** checkbox (includes `FIFO P/L Realized`, commissions, prices, etc.).
+       - *(Optional)* Click **Cash Transactions**: check **`Select All`** to sync deposits/withdrawals.
+   - Save the query. Look at the **Query ID** column next to your new query and copy this number to `IBKR_QUERY_ID` in `.env`.
+
+> 💡 **Detailed guide & FAQ**: See [IBKR_IMPORT_GUIDE.md](IBKR_IMPORT_GUIDE.md#--ibkr-automated-synchronization-flex-query-setup) for step-by-step screenshots and troubleshooting.
 
 ---
 

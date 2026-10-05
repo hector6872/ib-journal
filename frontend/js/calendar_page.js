@@ -206,7 +206,6 @@ const CalendarPage = {
             <div class="section-analytics-dock">
                 <div class="analytics-dock-header">
                     <div class="analytics-dock-title">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-6 6"/></svg>
                         <span>${STRINGS.calendar.evolutionTitle || "Performance & Volume Evolution"}</span>
                     </div>
                     <div class="analytics-dock-legend">

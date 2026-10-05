@@ -112,7 +112,7 @@ const DayModal = {
                 </div>
                 <div class="summary-block">
                     <span class="summary-block-label">${STRINGS.modal.summaryGross}</span>
-                    <span class="summary-block-val mono ${grossPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(grossPnl)}</span>
+                    <span class="summary-block-val mono ${State.getPnlClass(grossPnl)}">${State.formatCurrency(grossPnl)}</span>
                 </div>
                 <div class="summary-block">
                     <span class="summary-block-label">${STRINGS.modal.summaryCommissions}</span>
@@ -120,7 +120,7 @@ const DayModal = {
                 </div>
                 <div class="summary-block" style="margin-left: auto;">
                     <span class="summary-block-label">${STRINGS.modal.summaryPnl}</span>
-                    <span class="summary-block-val mono ${netPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-size: 18px;">${State.formatCurrency(netPnl)}</span>
+                    <span class="summary-block-val mono ${State.getPnlClass(netPnl)}" style="font-size: 18px;">${State.formatCurrency(netPnl)}</span>
                 </div>
             </div>
 

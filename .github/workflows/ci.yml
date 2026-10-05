@@ -104,7 +104,7 @@ jobs:
           pytest -v
 
       - name: Set up Node.js for Frontend JS Syntax Validation
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 

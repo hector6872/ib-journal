@@ -707,14 +707,16 @@
 
 .analytics-dock-body {
     display: grid;
-    grid-template-columns: 1fr 310px;
+    grid-template-columns: minmax(0, 1fr) 310px;
     gap: 14px;
     align-items: stretch;
+    min-width: 0;
+    width: 100%;
 }
 
 @media (max-width: 1024px) {
     .analytics-dock-body {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -722,6 +724,15 @@
     position: relative;
     height: 140px;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.dock-chart-wrapper canvas {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    display: block;
 }
 
 .dock-stats-panel {
@@ -1010,7 +1021,15 @@
 .chart-canvas-box {
     position: relative;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     height: 280px;
+    overflow: hidden;
+}
+.chart-canvas-box canvas {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    display: block;
 }
 .chart-canvas-box.tall {
     height: 320px;
@@ -1152,8 +1171,8 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(2px);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(3px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1173,9 +1192,9 @@
     background-color: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
-    width: 90%;
-    max-width: 860px;
-    max-height: 85vh;
+    width: 92%;
+    max-width: 920px;
+    max-height: 88vh;
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-md);
@@ -1188,11 +1207,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    background: var(--bg-card);
 }
 
 .modal-title {
     font-size: 14px;
     font-weight: 700;
+    letter-spacing: -0.2px;
 }
 
 .modal-body {
@@ -1203,32 +1224,481 @@
     gap: 14px;
 }
 
-.modal-summary-bar {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 10px 14px;
-    background-color: var(--bg-card-secondary);
-    border-radius: var(--radius-xs);
-    border: 1px solid var(--border-default);
+/* Modal KPI Summary Banner */
+.modal-summary-banner {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
 }
 
-.summary-block {
+@media (max-width: 860px) {
+    .modal-summary-banner {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+    }
+}
+
+.modal-kpi-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-sm);
+}
+
+.modal-kpi-card.primary {
+    border-color: var(--border-default);
+    background-color: var(--bg-card);
+}
+
+.modal-kpi-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.modal-kpi-val {
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.modal-kpi-sub {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* Toolbar & View Switcher */
+.day-modal-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 2px;
+}
+
+.day-modal-toolbar .segmented-control {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    padding: 2px;
+    gap: 2px;
+}
+
+.day-modal-toolbar .segmented-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-xs);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.day-modal-toolbar .segmented-btn:hover {
+    color: var(--text-main);
+}
+
+.day-modal-toolbar .segmented-btn.active {
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    box-shadow: var(--shadow-sm);
+    font-weight: 700;
+}
+
+.day-modal-toolbar .badge-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    background: var(--bg-card-secondary);
+    color: var(--text-muted);
+}
+
+.day-modal-toolbar .segmented-btn.active .badge-count {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+}
+
+/* Grouped Trades List */
+.grouped-trades-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.trade-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.trade-card:hover {
+    border-color: var(--border-active);
+    box-shadow: var(--shadow-sm);
+}
+
+.trade-card.expanded {
+    border-color: var(--border-active);
+}
+
+.trade-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    background-color: var(--bg-card);
+    transition: background-color 0.15s ease;
+}
+
+.trade-card-header:hover {
+    background-color: var(--bg-card-secondary);
+}
+
+.trade-card-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 220px;
+}
+
+.trade-symbol-block {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
-.summary-block-label {
+.trade-symbol-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.trade-symbol-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.2px;
+}
+
+.trade-meta-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.trade-time-chip {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.meta-dot {
+    color: var(--border-default);
+    font-weight: bold;
+}
+
+/* Center Progress */
+.trade-card-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.price-flow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 10px;
+    background: var(--bg-card-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+}
+
+.price-label {
     font-size: 9px;
     color: var(--text-muted);
     text-transform: uppercase;
     font-weight: 700;
+    margin-right: 2px;
 }
 
-.summary-block-val {
-    font-size: 13px;
+.price-arrow {
+    color: var(--text-muted);
+    font-weight: bold;
+}
+
+/* Right Financials */
+.trade-card-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: right;
+}
+
+.trade-pnl-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.trade-pnl-val {
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.trade-pnl-breakdown {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.chevron-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.chevron-icon.rotated {
+    transform: rotate(180deg);
+}
+
+/* Accordion Child Fills Body */
+.trade-card-body {
+    border-top: 1px solid var(--border-subtle);
+    background-color: var(--bg-card-secondary);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: modalBodyFadeIn 0.15s ease-in;
+}
+
+.trade-fills-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.fills-title {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+.trade-fills-table-wrap,
+.trades-table-wrapper {
+    overflow-x: auto;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-default);
+    background: var(--bg-card);
+}
+
+.trade-fills-table,
+.trades-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    text-align: left;
+}
+
+.trade-fills-table th,
+.trades-table th {
+    background-color: var(--bg-card-secondary);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.trade-fills-table td,
+.trades-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-main);
+}
+
+.trade-fills-table tr:last-child td,
+.trades-table tr:last-child td {
+    border-bottom: none;
+}
+
+.trade-fills-table tr:hover td,
+.trades-table tr:hover td {
+    background-color: var(--bg-hover);
+}
+
+/* Badges */
+.badge-direction {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.badge-long {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    border: 1px solid rgba(0, 102, 204, 0.25);
+}
+
+[data-theme="dark"] .badge-long {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    border-color: rgba(56, 189, 248, 0.35);
+}
+
+.badge-short {
+    background: rgba(168, 85, 247, 0.12);
+    color: #9333ea;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+[data-theme="dark"] .badge-short {
+    background: rgba(192, 132, 252, 0.15);
+    color: #c084fc;
+    border-color: rgba(192, 132, 252, 0.35);
+}
+
+.badge-result {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.badge-res-win {
+    background: var(--color-profit-bg);
+    color: var(--color-profit);
+    border: 1px solid var(--color-profit-border);
+}
+
+.badge-res-loss {
+    background: var(--color-loss-bg);
+    color: var(--color-loss);
+    border: 1px solid var(--color-loss-border);
+}
+
+.badge-res-be {
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    border: 1px solid var(--border-default);
+}
+
+.badge-res-open {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+[data-theme="dark"] .badge-res-open {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.badge-category {
+    display: inline-flex;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 9px;
     font-weight: 700;
+    background: var(--bg-card-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+}
+
+.badge-side {
+    display: inline-flex;
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.badge-buy {
+    background: var(--color-profit-bg);
+    color: var(--color-profit);
+}
+
+.badge-sell {
+    background: var(--color-loss-bg);
+    color: var(--color-loss);
+}
+
+.badge-indicator {
+    display: inline-flex;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--bg-card-secondary);
+    color: var(--text-muted);
+}
+
+.modal-empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-muted);
+}
+
+.modal-empty-state .empty-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.modal-empty-state h4 {
+    font-size: 14px;
+    color: var(--text-main);
+    margin: 0 0 6px 0;
+}
+
+.modal-empty-state p {
+    font-size: 12px;
+    margin: 0;
 }
 
 .modal-footer {
@@ -1236,4 +1706,10 @@
     border-top: 1px solid var(--border-default);
     display: flex;
     justify-content: flex-end;
+    background: var(--bg-card);
+}
+
+@keyframes modalBodyFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
 }

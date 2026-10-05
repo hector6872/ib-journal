@@ -530,6 +530,83 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
 
 
 
+class TestTradeGrouping(unittest.TestCase):
+    def test_group_executions_to_trades(self):
+        from backend.analytics import group_executions_to_trades, format_trade_duration
+
+        # Test duration formatting
+        self.assertEqual(format_trade_duration("10:00:00", "10:05:30"), "5m 30s")
+        self.assertEqual(format_trade_duration("10:00:00", "11:05:30"), "1h 05m 30s")
+        self.assertEqual(format_trade_duration("10:00:00", "10:00:45"), "45s")
+
+        # Test round-trip trade grouping (Buy 2 QQQ, Sell 1 QQQ, Sell 1 QQQ -> 1 grouped trade)
+        executions = [
+            {
+                "id": 1,
+                "symbol": "QQQ 01OCT26 743 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "raw_currency": "USD",
+                "buy_sell": "BUY",
+                "quantity": 2.0,
+                "trade_price": 0.54,
+                "ib_commission": 1.20,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "11:20:38",
+                "open_close_indicator": "O"
+            },
+            {
+                "id": 2,
+                "symbol": "QQQ 01OCT26 743 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "raw_currency": "USD",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.40,
+                "ib_commission": 0.76,
+                "realized_pnl": -13.80,
+                "trade_date": "2026-10-01",
+                "trade_time": "11:23:42",
+                "open_close_indicator": "C"
+            },
+            {
+                "id": 3,
+                "symbol": "QQQ 01OCT26 743 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "raw_currency": "USD",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.51,
+                "ib_commission": 0.93,
+                "realized_pnl": -4.20,
+                "trade_date": "2026-10-01",
+                "trade_time": "11:27:52",
+                "open_close_indicator": "C"
+            }
+        ]
+
+        grouped = group_executions_to_trades(executions)
+        self.assertEqual(len(grouped), 1)
+        trade = grouped[0]
+        self.assertEqual(trade["symbol"], "QQQ 01OCT26 743 C")
+        self.assertEqual(trade["direction"], "LONG")
+        self.assertEqual(trade["status"], "CLOSED")
+        self.assertEqual(trade["result"], "LOSS")
+        self.assertEqual(trade["quantity"], 2.0)
+        self.assertEqual(trade["open_time"], "11:20:38")
+        self.assertEqual(trade["close_time"], "11:27:52")
+        self.assertEqual(trade["duration"], "7m 14s")
+        self.assertAlmostEqual(trade["avg_entry_price"], 0.54, places=2)
+        self.assertAlmostEqual(trade["avg_exit_price"], 0.455, places=3)
+        self.assertAlmostEqual(trade["gross_pnl"], -18.00, places=2)
+        self.assertAlmostEqual(trade["commission"], 2.89, places=2)
+        self.assertAlmostEqual(trade["net_pnl"], -20.89, places=2)
+        self.assertEqual(len(trade["fills"]), 3)
+
+
 if __name__ == "__main__":
     unittest.main()
 

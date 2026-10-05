@@ -16,6 +16,7 @@ from backend.analytics import (
     get_overview_stats,
     get_week_calendar,
     get_year_calendar,
+    group_executions_to_trades,
 )
 from backend.config import BASE_DIR, CURRENCY_SYMBOL, HOST, PORT, is_ibkr_configured
 
@@ -142,12 +143,15 @@ async def api_calendar_week(date_str: Optional[str] = Query(default=None, alias=
 
 @app.get("/api/trades/day")
 async def api_day_trades(date_str: str = Query(..., alias="date")):
-    """Returns list of executed trades for a specific day."""
+    """Returns list of executed trades and grouped round-trip trades for a specific day."""
     trades = get_day_trades(date_str)
+    grouped_trades = group_executions_to_trades(trades)
     return {
         "date": date_str,
         "trades": trades,
-        "count": len(trades)
+        "count": len(trades),
+        "grouped_trades": grouped_trades,
+        "grouped_count": len(grouped_trades),
     }
 
 @app.get("/api/sync/status")

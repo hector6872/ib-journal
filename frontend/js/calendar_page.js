@@ -331,6 +331,7 @@ const CalendarPage = {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                resizeDelay: 50,
                 interaction: {
                     mode: 'index',
                     intersect: false

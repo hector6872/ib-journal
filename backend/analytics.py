@@ -1064,12 +1064,170 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
         "largest_loss": round(largest_loss, 2)
     }
 
+def format_trade_duration(start_time_str: Optional[str], end_time_str: Optional[str]) -> Optional[str]:
+    """Formats the holding time duration between start and end trade times."""
+    if not start_time_str or not end_time_str:
+        return None
+    try:
+        t1 = datetime.strptime(start_time_str.strip()[:8], "%H:%M:%S")
+        t2 = datetime.strptime(end_time_str.strip()[:8], "%H:%M:%S")
+        diff_sec = int((t2 - t1).total_seconds())
+        if diff_sec < 0:
+            diff_sec += 86400  # Crossed midnight
+        hrs = diff_sec // 3600
+        mins = (diff_sec % 3600) // 60
+        secs = diff_sec % 60
+        if hrs > 0:
+            return f"{hrs}h {mins:02d}m {secs:02d}s"
+        elif mins > 0:
+            return f"{mins}m {secs:02d}s"
+        else:
+            return f"{secs}s"
+    except Exception:
+        return None
+
+
+def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Reconstructs round-trip trades / positions from a list of individual execution fills.
+    Matches opens and closes chronologically per symbol.
+    """
+    if not executions:
+        return []
+
+    from collections import defaultdict
+
+    # Sort executions chronologically
+    sorted_execs = sorted(
+        executions,
+        key=lambda x: (x.get("trade_time") or "00:00:00", x.get("id") or 0)
+    )
+
+    trades_by_symbol = defaultdict(list)
+    for fill in sorted_execs:
+        trades_by_symbol[fill.get("symbol", "")].append(fill)
+
+    all_grouped: List[Dict[str, Any]] = []
+
+    for symbol, fills in trades_by_symbol.items():
+        pos = 0.0
+        current_trade: Optional[Dict[str, Any]] = None
+        trade_idx = 1
+
+        for fill in fills:
+            qty = float(fill.get("quantity") or 0.0)
+            bs = (fill.get("buy_sell") or "").upper()
+            price = float(fill.get("trade_price") or 0.0)
+            comm = float(fill.get("ib_commission") or 0.0)
+            pnl = float(fill.get("realized_pnl") or 0.0)
+            time_str = fill.get("trade_time") or "--:--"
+            date_str = fill.get("trade_date") or ""
+            raw_curr = fill.get("raw_currency") or fill.get("currency") or "EUR"
+            base_curr = fill.get("base_currency") or "EUR"
+            fx_rate = float(fill.get("fx_rate_to_base") or 1.0)
+            raw_comm = float(fill.get("raw_commission") if fill.get("raw_commission") is not None else comm)
+            raw_pnl = float(fill.get("raw_realized_pnl") if fill.get("raw_realized_pnl") is not None else pnl)
+
+            if current_trade is None:
+                direction = "LONG" if qty > 0 or bs == "BUY" else "SHORT"
+                current_trade = {
+                    "trade_id": f"tr_{date_str}_{symbol}_{trade_idx}",
+                    "symbol": symbol,
+                    "description": fill.get("description", ""),
+                    "asset_category": fill.get("asset_category", "STK"),
+                    "direction": direction,
+                    "currency": fill.get("currency", "EUR"),
+                    "raw_currency": raw_curr,
+                    "base_currency": base_curr,
+                    "fx_rate_to_base": fx_rate,
+                    "open_time": time_str,
+                    "close_time": None,
+                    "duration": None,
+                    "entry_qty": 0.0,
+                    "entry_val": 0.0,
+                    "exit_qty": 0.0,
+                    "exit_val": 0.0,
+                    "gross_pnl": 0.0,
+                    "commission": 0.0,
+                    "raw_gross_pnl": 0.0,
+                    "raw_commission": 0.0,
+                    "fills": []
+                }
+                trade_idx += 1
+
+            is_entry = (current_trade["direction"] == "LONG" and qty > 0) or (current_trade["direction"] == "SHORT" and qty < 0)
+            fill_abs_qty = abs(qty)
+
+            current_trade["fills"].append(fill)
+            current_trade["commission"] += comm
+            current_trade["gross_pnl"] += pnl
+            current_trade["raw_commission"] += raw_comm
+            current_trade["raw_gross_pnl"] += raw_pnl
+
+            if is_entry:
+                current_trade["entry_qty"] += fill_abs_qty
+                current_trade["entry_val"] += fill_abs_qty * price
+            else:
+                current_trade["exit_qty"] += fill_abs_qty
+                current_trade["exit_val"] += fill_abs_qty * price
+                current_trade["close_time"] = time_str
+
+            pos += qty
+
+            if abs(pos) < 1e-6:
+                # Closed round-trip
+                current_trade["status"] = "CLOSED"
+                current_trade["duration"] = format_trade_duration(current_trade["open_time"], current_trade["close_time"])
+                current_trade["net_pnl"] = round(current_trade["gross_pnl"] - current_trade["commission"], 2)
+                current_trade["gross_pnl"] = round(current_trade["gross_pnl"], 2)
+                current_trade["commission"] = round(current_trade["commission"], 2)
+                current_trade["raw_gross_pnl"] = round(current_trade["raw_gross_pnl"], 2)
+                current_trade["raw_commission"] = round(current_trade["raw_commission"], 2)
+                current_trade["raw_net_pnl"] = round(current_trade["raw_gross_pnl"] - current_trade["raw_commission"], 2)
+                current_trade["avg_entry_price"] = round(current_trade["entry_val"] / current_trade["entry_qty"], 4) if current_trade["entry_qty"] > 0 else 0.0
+                current_trade["avg_exit_price"] = round(current_trade["exit_val"] / current_trade["exit_qty"], 4) if current_trade["exit_qty"] > 0 else 0.0
+                current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
+
+                if current_trade["net_pnl"] > 0.005:
+                    current_trade["result"] = "WIN"
+                elif current_trade["net_pnl"] < -0.005:
+                    current_trade["result"] = "LOSS"
+                else:
+                    current_trade["result"] = "BREAKEVEN"
+
+                all_grouped.append(current_trade)
+                current_trade = None
+                pos = 0.0
+
+        if current_trade is not None:
+            # Partially open position
+            current_trade["status"] = "OPEN"
+            current_trade["duration"] = format_trade_duration(current_trade["open_time"], current_trade["close_time"]) if current_trade["close_time"] else None
+            current_trade["net_pnl"] = round(current_trade["gross_pnl"] - current_trade["commission"], 2)
+            current_trade["gross_pnl"] = round(current_trade["gross_pnl"], 2)
+            current_trade["commission"] = round(current_trade["commission"], 2)
+            current_trade["raw_gross_pnl"] = round(current_trade["raw_gross_pnl"], 2)
+            current_trade["raw_commission"] = round(current_trade["raw_commission"], 2)
+            current_trade["raw_net_pnl"] = round(current_trade["raw_gross_pnl"] - current_trade["raw_commission"], 2)
+            current_trade["avg_entry_price"] = round(current_trade["entry_val"] / current_trade["entry_qty"], 4) if current_trade["entry_qty"] > 0 else 0.0
+            current_trade["avg_exit_price"] = round(current_trade["exit_val"] / current_trade["exit_qty"], 4) if current_trade["exit_qty"] > 0 else 0.0
+            current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
+            current_trade["result"] = "OPEN"
+            all_grouped.append(current_trade)
+
+    # Sort all grouped trades chronologically by open_time
+    all_grouped.sort(key=lambda x: (x.get("open_time") or "00:00:00", x.get("symbol") or ""))
+    return all_grouped
+
+
 def get_day_trades(target_date_str: str) -> List[Dict[str, Any]]:
     """Returns detailed individual executions for a given day."""
     query = """
     SELECT
         id, ib_exec_id, trade_id, symbol, description, asset_category,
-        currency, buy_sell, quantity, trade_price, trade_money, proceeds,
+        currency, raw_currency, base_currency, fx_rate_to_base,
+        raw_commission, raw_realized_pnl,
+        buy_sell, quantity, trade_price, trade_money, proceeds,
         ib_commission, realized_pnl, (realized_pnl - ib_commission) as net_pnl,
         trade_date, trade_time, open_close_indicator
     FROM trades

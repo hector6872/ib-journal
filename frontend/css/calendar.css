@@ -53,6 +53,15 @@
     border-color: var(--border-active);
 }
 
+.btn-ctrl:disabled,
+.btn-ctrl.disabled {
+    opacity: 0.25 !important;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    border-color: var(--border-default) !important;
+    background-color: var(--bg-card-secondary) !important;
+}
+
 .btn-pill {
     background-color: var(--bg-card-secondary);
     border: 1px solid var(--border-default);
@@ -76,6 +85,15 @@
 .btn-pill:hover {
     background-color: var(--bg-hover);
     border-color: var(--border-active);
+}
+
+.btn-pill:disabled,
+.btn-pill.disabled {
+    opacity: 0.25 !important;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    border-color: var(--border-default) !important;
+    background-color: var(--bg-card-secondary) !important;
 }
 
 .nav-title-text {
@@ -411,6 +429,15 @@
     border-color: var(--border-active);
 }
 
+.annual-mini-month.disabled-month {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.annual-mini-month.disabled-month:hover {
+    border-color: var(--border-default);
+}
+
 .annual-month-header {
     display: flex;
     align-items: center;
@@ -426,6 +453,11 @@
     font-size: 8px;
     font-weight: 700;
     color: var(--text-muted);
+}
+
+.annual-weekdays span.col-weekend,
+.mini-weekdays span.col-weekend {
+    opacity: 0.35;
 }
 
 .annual-days-grid {
@@ -445,9 +477,17 @@
     color: var(--text-muted);
 }
 
+.annual-day-dot.weekend,
+.mini-day.weekend {
+    background-color: var(--bg-card-secondary);
+    opacity: 0.35;
+    color: var(--text-muted);
+}
+
 .annual-day-dot.has-trades {
     font-weight: 700;
     cursor: pointer;
+    opacity: 1;
 }
 
 .annual-day-dot.win {

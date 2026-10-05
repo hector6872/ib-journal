@@ -90,18 +90,29 @@ const CalendarMonth = {
             }
         }
 
+        const now = new Date();
+        const nowYear = now.getFullYear();
+        const nowMonth = now.getMonth() + 1;
+        const minDateStr = State.minTradeDate || (State.overviewStats && State.overviewStats.min_trade_date);
+        const minYear = minDateStr ? parseInt(minDateStr.split('-')[0], 10) : nowYear;
+        const minMonth = minDateStr ? parseInt(minDateStr.split('-')[1], 10) : nowMonth;
+
+        const canPrevMonth = (year > minYear) || (year === minYear && month > minMonth);
+        const canNextMonth = (year < nowYear) || (year === nowYear && month < nowMonth);
+        const isCurrentMonth = (year === nowYear && month === nowMonth);
+
         container.innerHTML = `
             <div class="month-view-container">
                 <div class="month-nav-bar">
                     <div class="nav-controls">
-                        <button class="btn-icon" id="btn-prev-month">
+                        <button class="btn-icon" id="btn-prev-month" ${!canPrevMonth ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                         </button>
                         <span class="year-title-label">${monthName} ${year}</span>
-                        <button class="btn-icon" id="btn-next-month">
+                        <button class="btn-icon" id="btn-next-month" ${!canNextMonth ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                         </button>
-                        <button class="btn-secondary" id="btn-this-month">${STRINGS.calendar.thisMonth}</button>
+                        <button class="btn-secondary" id="btn-this-month" ${isCurrentMonth ? 'disabled' : ''}>${STRINGS.calendar.thisMonth}</button>
                     </div>
 
                     <div class="month-totals-badge">
@@ -122,6 +133,7 @@ const CalendarMonth = {
 
         // Event listeners
         document.getElementById('btn-prev-month')?.addEventListener('click', () => {
+            if (!canPrevMonth) return;
             let nextM = month - 1;
             let nextY = year;
             if (nextM < 1) { nextM = 12; nextY--; }
@@ -129,6 +141,7 @@ const CalendarMonth = {
         });
 
         document.getElementById('btn-next-month')?.addEventListener('click', () => {
+            if (!canNextMonth) return;
             let nextM = month + 1;
             let nextY = year;
             if (nextM > 12) { nextM = 1; nextY++; }

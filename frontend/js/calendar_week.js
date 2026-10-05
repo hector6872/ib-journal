@@ -77,18 +77,39 @@ const CalendarWeek = {
             `;
         }).join('');
 
+        const start = new Date(data.start_date + 'T00:00:00');
+        const nowWeekStart = new Date(today);
+        const nowDow = (nowWeekStart.getDay() + 6) % 7;
+        nowWeekStart.setDate(nowWeekStart.getDate() - nowDow);
+        nowWeekStart.setHours(0, 0, 0, 0);
+
+        const minDateStr = State.minTradeDate || (State.overviewStats && State.overviewStats.min_trade_date);
+        let minWeekStart = nowWeekStart;
+        if (minDateStr) {
+            const minParts = minDateStr.split('-');
+            const minDate = new Date(parseInt(minParts[0], 10), parseInt(minParts[1], 10) - 1, parseInt(minParts[2], 10));
+            const minDow = (minDate.getDay() + 6) % 7;
+            minWeekStart = new Date(minDate);
+            minWeekStart.setDate(minWeekStart.getDate() - minDow);
+            minWeekStart.setHours(0, 0, 0, 0);
+        }
+
+        const canPrevWeek = start > minWeekStart;
+        const canNextWeek = start < nowWeekStart;
+        const isCurrentWeek = start.getTime() === nowWeekStart.getTime();
+
         container.innerHTML = `
             <div class="week-view-container">
                 <div class="month-nav-bar">
                     <div class="nav-controls">
-                        <button class="btn-icon" id="btn-prev-week">
+                        <button class="btn-icon" id="btn-prev-week" ${!canPrevWeek ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                         </button>
                         <span class="year-title-label">${headerText}</span>
-                        <button class="btn-icon" id="btn-next-week">
+                        <button class="btn-icon" id="btn-next-week" ${!canNextWeek ? 'disabled' : ''}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                         </button>
-                        <button class="btn-secondary" id="btn-this-week">${STRINGS.calendar.thisWeek}</button>
+                        <button class="btn-secondary" id="btn-this-week" ${isCurrentWeek ? 'disabled' : ''}>${STRINGS.calendar.thisWeek}</button>
                     </div>
 
                     <div class="month-totals-badge">
@@ -104,13 +125,15 @@ const CalendarWeek = {
 
         // Event Listeners for Navigation
         document.getElementById('btn-prev-week')?.addEventListener('click', () => {
-            const cur = new Date(data.start_date);
+            if (!canPrevWeek) return;
+            const cur = new Date(data.start_date + 'T00:00:00');
             cur.setDate(cur.getDate() - 7);
             this.load(cur.toISOString().split('T')[0]);
         });
 
         document.getElementById('btn-next-week')?.addEventListener('click', () => {
-            const cur = new Date(data.start_date);
+            if (!canNextWeek) return;
+            const cur = new Date(data.start_date + 'T00:00:00');
             cur.setDate(cur.getDate() + 7);
             this.load(cur.toISOString().split('T')[0]);
         });

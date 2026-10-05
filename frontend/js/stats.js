@@ -8,6 +8,10 @@ const StatsController = {
         try {
             const data = await API.fetchOverviewStats();
             State.overviewStats = data;
+            if (data) {
+                State.minTradeDate = data.min_trade_date;
+                State.maxTradeDate = data.max_trade_date;
+            }
             this.renderOverview(data);
         } catch (err) {
             console.error("Error updating overview stats:", err);

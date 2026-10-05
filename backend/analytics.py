@@ -19,6 +19,8 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
     query = """
     SELECT
         COUNT(*) as total_trades,
+        MIN(trade_date) as min_trade_date,
+        MAX(trade_date) as max_trade_date,
         COALESCE(SUM(realized_pnl), 0.0) as gross_pnl,
         COALESCE(SUM(ib_commission), 0.0) as total_commissions,
         COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
@@ -154,6 +156,8 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         return {
             "total_trades": total_trades,
+            "min_trade_date": row["min_trade_date"],
+            "max_trade_date": row["max_trade_date"],
             "winning_trades": winning_trades,
             "losing_trades": losing_trades,
             "breakeven_trades": row["breakeven_trades"],

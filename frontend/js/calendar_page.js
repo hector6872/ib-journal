@@ -44,6 +44,51 @@ const CalendarPage = {
         ]);
     },
 
+    getBounds() {
+        const now = new Date();
+        const nowYear = now.getFullYear();
+        const nowMonth = now.getMonth() + 1; // 1 - 12
+        
+        // Monday of current week (normalized to 00:00:00)
+        const nowWeekStart = new Date(now);
+        const nowDow = (nowWeekStart.getDay() + 6) % 7; // Mon=0 .. Sun=6
+        nowWeekStart.setDate(nowWeekStart.getDate() - nowDow);
+        nowWeekStart.setHours(0, 0, 0, 0);
+
+        const minDateStr = State.minTradeDate || (State.overviewStats && State.overviewStats.min_trade_date);
+        
+        if (!minDateStr) {
+            return {
+                minYear: nowYear,
+                minMonth: nowMonth,
+                minWeekStart: nowWeekStart,
+                maxYear: nowYear,
+                maxMonth: nowMonth,
+                maxWeekStart: nowWeekStart
+            };
+        }
+
+        const minParts = minDateStr.split('-');
+        const minYear = parseInt(minParts[0], 10);
+        const minMonth = parseInt(minParts[1], 10);
+        const minDay = parseInt(minParts[2], 10);
+        
+        const minDate = new Date(minYear, minMonth - 1, minDay);
+        const minDow = (minDate.getDay() + 6) % 7;
+        const minWeekStart = new Date(minDate);
+        minWeekStart.setDate(minWeekStart.getDate() - minDow);
+        minWeekStart.setHours(0, 0, 0, 0);
+
+        return {
+            minYear,
+            minMonth,
+            minWeekStart,
+            maxYear: nowYear,
+            maxMonth: nowMonth,
+            maxWeekStart: nowWeekStart
+        };
+    },
+
     // -------------------------------------------------------------
     // 1. WEEK SECTION
     // -------------------------------------------------------------
@@ -66,8 +111,8 @@ const CalendarPage = {
         const totalNetPnl = data.total_net_pnl || 0;
         const totalTrades = data.total_trades || 0;
 
-        const start = new Date(data.start_date);
-        const end = new Date(data.end_date);
+        const start = new Date(data.start_date + 'T00:00:00');
+        const end = new Date(data.end_date + 'T00:00:00');
         const startM = STRINGS.months.short[start.getMonth()];
         const endM = STRINGS.months.short[end.getMonth()];
         const year = start.getFullYear();
@@ -76,6 +121,11 @@ const CalendarPage = {
             : `${STRINGS.calendar.weekOf} ${startM} ${start.getDate()} – ${endM} ${end.getDate()}, ${year}`;
 
         const todayStr = new Date().toISOString().split('T')[0];
+
+        const bounds = this.getBounds();
+        const canPrevWeek = start > bounds.minWeekStart;
+        const canNextWeek = start < bounds.maxWeekStart;
+        const isCurrentWeek = start.getTime() === bounds.maxWeekStart.getTime();
 
         let cardsHtml = days.map(d => {
             const isToday = d.date === todayStr;
@@ -124,14 +174,14 @@ const CalendarPage = {
         container.innerHTML = `
             <div class="week-nav-bar">
                 <div class="nav-controls-group">
-                    <button class="btn-ctrl" id="btn-week-prev" title="Previous Week">
+                    <button class="btn-ctrl" id="btn-week-prev" title="Previous Week" ${!canPrevWeek ? 'disabled' : ''}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                     </button>
                     <span class="nav-title-text">${headerText}</span>
-                    <button class="btn-ctrl" id="btn-week-next" title="Next Week">
+                    <button class="btn-ctrl" id="btn-week-next" title="Next Week" ${!canNextWeek ? 'disabled' : ''}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
-                    <button class="btn-pill" id="btn-week-today">${STRINGS.calendar.thisWeek}</button>
+                    <button class="btn-pill" id="btn-week-today" ${isCurrentWeek ? 'disabled' : ''}>${STRINGS.calendar.thisWeek}</button>
                 </div>
             </div>
             <div class="week-cards-row">
@@ -142,12 +192,14 @@ const CalendarPage = {
 
         // Event listeners
         document.getElementById('btn-week-prev')?.addEventListener('click', () => {
-            const cur = new Date(data.start_date);
+            if (!canPrevWeek) return;
+            const cur = new Date(data.start_date + 'T00:00:00');
             cur.setDate(cur.getDate() - 7);
             this.loadWeek(cur.toISOString().split('T')[0]);
         });
         document.getElementById('btn-week-next')?.addEventListener('click', () => {
-            const cur = new Date(data.start_date);
+            if (!canNextWeek) return;
+            const cur = new Date(data.start_date + 'T00:00:00');
             cur.setDate(cur.getDate() + 7);
             this.loadWeek(cur.toISOString().split('T')[0]);
         });
@@ -187,6 +239,11 @@ const CalendarPage = {
         const totalNetPnl = data.total_net_pnl || 0;
         const totalTrades = data.total_trades || 0;
         const todayStr = new Date().toISOString().split('T')[0];
+
+        const bounds = this.getBounds();
+        const canPrevMonth = (year > bounds.minYear) || (year === bounds.minYear && month > bounds.minMonth);
+        const canNextMonth = (year < bounds.maxYear) || (year === bounds.maxYear && month < bounds.maxMonth);
+        const isCurrentMonth = (year === bounds.maxYear && month === bounds.maxMonth);
 
         const daysInMonth = new Date(year, month, 0).getDate();
         const firstDayObj = new Date(year, month - 1, 1);
@@ -281,14 +338,14 @@ const CalendarPage = {
         container.innerHTML = `
             <div class="week-nav-bar">
                 <div class="nav-controls-group">
-                    <button class="btn-ctrl" id="btn-month-prev" title="Previous Month">
+                    <button class="btn-ctrl" id="btn-month-prev" title="Previous Month" ${!canPrevMonth ? 'disabled' : ''}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                     </button>
                     <span class="nav-title-text">${monthName} ${year}</span>
-                    <button class="btn-ctrl" id="btn-month-next" title="Next Month">
+                    <button class="btn-ctrl" id="btn-month-next" title="Next Month" ${!canNextMonth ? 'disabled' : ''}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
-                    <button class="btn-pill" id="btn-month-today">${STRINGS.calendar.thisMonth}</button>
+                    <button class="btn-pill" id="btn-month-today" ${isCurrentMonth ? 'disabled' : ''}>${STRINGS.calendar.thisMonth}</button>
                 </div>
                 <div class="section-summary-badge">
                     <span class="mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 15px; font-weight: 800;">${State.formatCurrency(totalNetPnl)}</span>
@@ -307,11 +364,13 @@ const CalendarPage = {
         `;
 
         document.getElementById('btn-month-prev')?.addEventListener('click', () => {
+            if (!canPrevMonth) return;
             let nextM = month - 1, nextY = year;
             if (nextM < 1) { nextM = 12; nextY--; }
             this.loadMonth(nextY, nextM);
         });
         document.getElementById('btn-month-next')?.addEventListener('click', () => {
+            if (!canNextMonth) return;
             let nextM = month + 1, nextY = year;
             if (nextM > 12) { nextM = 1; nextY++; }
             this.loadMonth(nextY, nextM);
@@ -352,6 +411,10 @@ const CalendarPage = {
         const totalNetPnl = data.total_net_pnl || 0;
         const totalTrades = data.total_trades || 0;
 
+        const bounds = this.getBounds();
+        const canPrevYear = year > bounds.minYear;
+        const canNextYear = year < bounds.maxYear;
+
         let monthsHtml = '';
         for (let m = 1; m <= 12; m++) {
             const monthName = STRINGS.months.short[m - 1];
@@ -361,6 +424,10 @@ const CalendarPage = {
             const mTradesBadge = `${mTrades} ${mTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
             const mPnlClass = State.getPnlClass(mPnl);
 
+            const isMonthInFuture = (year > bounds.maxYear) || (year === bounds.maxYear && m > bounds.maxMonth);
+            const isMonthPreHistory = (year < bounds.minYear) || (year === bounds.minYear && m < bounds.minMonth);
+            const isMonthDisabled = isMonthInFuture || isMonthPreHistory;
+
             const daysInMonth = new Date(year, m, 0).getDate();
             const firstDayObj = new Date(year, m - 1, 1);
             let firstDayOfWeek = firstDayObj.getDay() - 1;
@@ -368,14 +435,18 @@ const CalendarPage = {
 
             let daysHtml = '';
             for (let e = 0; e < firstDayOfWeek; e++) {
-                daysHtml += `<div class="annual-day-dot empty"></div>`;
+                const isWeekend = e === 5 || e === 6;
+                daysHtml += `<div class="annual-day-dot empty ${isWeekend ? 'weekend' : ''}"></div>`;
             }
 
             for (let d = 1; d <= daysInMonth; d++) {
+                const dow = (firstDayOfWeek + d - 1) % 7;
+                const isWeekend = dow === 5 || dow === 6;
                 const dStr = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const dayData = dailyMap[dStr];
 
                 let dotClass = 'annual-day-dot';
+                if (isWeekend) dotClass += ' weekend';
                 let titleAttr = `${dStr}`;
 
                 if (dayData && dayData.count > 0) {
@@ -389,7 +460,7 @@ const CalendarPage = {
             }
 
             monthsHtml += `
-                <div class="annual-mini-month" data-month="${m}">
+                <div class="annual-mini-month ${isMonthDisabled ? 'disabled-month' : ''}" data-month="${m}" data-disabled="${isMonthDisabled ? '1' : '0'}">
                     <div class="annual-month-header">
                         <span>${monthName}</span>
                         <span class="mono">
@@ -398,7 +469,7 @@ const CalendarPage = {
                         </span>
                     </div>
                     <div class="annual-weekdays">
-                        ${STRINGS.days.shortMonSun.map(d => `<span>${d}</span>`).join('')}
+                        ${STRINGS.days.shortMonSun.map((d, idx) => `<span class="${idx >= 5 ? 'col-weekend' : ''}">${d}</span>`).join('')}
                     </div>
                     <div class="annual-days-grid">
                         ${daysHtml}
@@ -410,11 +481,11 @@ const CalendarPage = {
         container.innerHTML = `
             <div class="week-nav-bar">
                 <div class="nav-controls-group">
-                    <button class="btn-ctrl" id="btn-year-prev" title="Previous Year">
+                    <button class="btn-ctrl" id="btn-year-prev" title="Previous Year" ${!canPrevYear ? 'disabled' : ''}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                     </button>
                     <span class="nav-title-text">${STRINGS.calendar.yearHeader} ${year}</span>
-                    <button class="btn-ctrl" id="btn-year-next" title="Next Year">
+                    <button class="btn-ctrl" id="btn-year-next" title="Next Year" ${!canNextYear ? 'disabled' : ''}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
                 </div>
@@ -430,9 +501,11 @@ const CalendarPage = {
         `;
 
         document.getElementById('btn-year-prev')?.addEventListener('click', () => {
+            if (!canPrevYear) return;
             this.loadYear(year - 1);
         });
         document.getElementById('btn-year-next')?.addEventListener('click', () => {
+            if (!canNextYear) return;
             this.loadYear(year + 1);
         });
 
@@ -446,6 +519,7 @@ const CalendarPage = {
 
         container.querySelectorAll('.annual-mini-month').forEach(el => {
             el.addEventListener('click', () => {
+                if (el.getAttribute('data-disabled') === '1') return;
                 const m = parseInt(el.getAttribute('data-month'), 10);
                 if (m) {
                     this.loadMonth(year, m);

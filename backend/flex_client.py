@@ -13,6 +13,7 @@ except ImportError:
     httpx = None  # type: ignore[assignment]
 
 from backend.config import IBKR_QUERY_ID, IBKR_TOKEN
+from backend.database import normalize_symbol
 
 logger = logging.getLogger("ib-journal.flex")
 
@@ -207,13 +208,18 @@ class IBKRFlexClient:
             trade_money = float(attrs.get("tradeMoney") or (abs(quantity) * trade_price))
             proceeds = float(attrs.get("proceeds") or 0.0)
 
+            raw_sym = attrs.get("symbol") or "UNKNOWN"
+            desc = attrs.get("description") or ""
+            asset_category = attrs.get("assetCategory") or "STK"
+            norm_symbol = normalize_symbol(raw_sym, desc, asset_category)
+
             trade_record = {
                 "ib_exec_id": exec_id,
                 "trade_id": attrs.get("tradeID") or exec_id,
                 "account_id": attrs.get("accountId") or "",
-                "symbol": (attrs.get("symbol") or "UNKNOWN").upper(),
-                "description": attrs.get("description") or "",
-                "asset_category": attrs.get("assetCategory") or "STK",
+                "symbol": norm_symbol,
+                "description": desc or norm_symbol,
+                "asset_category": asset_category,
                 "currency": raw_currency,
                 "raw_currency": raw_currency,
                 "base_currency": base_currency,

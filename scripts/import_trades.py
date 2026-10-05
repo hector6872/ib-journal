@@ -23,7 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.config import DB_PATH  # noqa: E402
-from backend.database import db_session, init_db, upsert_cash_transactions, upsert_trades  # noqa: E402
+from backend.database import db_session, init_db, normalize_symbol, upsert_cash_transactions, upsert_trades  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -148,9 +148,13 @@ def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
     for node in root.iter("Trade"):
         attrs = node.attrib
         exec_id = attrs.get("ibExecId") or attrs.get("transactionID") or attrs.get("tradeID")
-        symbol = (attrs.get("symbol") or "").upper().strip()
-        if not symbol:
+        raw_symbol = (attrs.get("symbol") or "").strip()
+        if not raw_symbol:
             continue
+
+        desc = attrs.get("description") or ""
+        asset_cat = (attrs.get("assetCategory") or "STK").upper()
+        symbol = normalize_symbol(raw_symbol, desc, asset_cat)
 
         date_raw = attrs.get("dateTime") or attrs.get("tradeDate") or ""
         t_date, t_time, t_dt_iso = parse_datetime_str(date_raw)
@@ -172,8 +176,8 @@ def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
             "trade_id": attrs.get("tradeID") or exec_id,
             "account_id": attrs.get("accountId") or "",
             "symbol": symbol,
-            "description": attrs.get("description") or "",
-            "asset_category": (attrs.get("assetCategory") or "STK").upper(),
+            "description": desc or symbol,
+            "asset_category": asset_cat,
             "currency": attrs.get("currency") or "EUR",
             "buy_sell": side,
             "quantity": qty,
@@ -538,6 +542,9 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             elif "BOND" in raw_cat:
                 asset_category = "BOND"
 
+            desc = row_dict.get("description", "")
+            symbol = normalize_symbol(symbol, desc, asset_category)
+
             code = (row_dict.get("code") or "C").upper()
             open_close = "O" if "O" in code else ("C" if "C" in code else "C")
             side = "BUY" if qty > 0 else "SELL"
@@ -550,7 +557,7 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
                 "trade_id": trade_id or exec_id,
                 "account_id": row_dict.get("accountid", "") or account_id,
                 "symbol": symbol,
-                "description": row_dict.get("description", ""),
+                "description": desc or symbol,
                 "asset_category": asset_category,
                 "currency": raw_currency,
                 "raw_currency": raw_currency,
@@ -585,8 +592,8 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
     for raw_row in reader:
         row = {k.strip().lower().replace(" ", "").replace("_", "").replace("/", ""): v for k, v in raw_row.items() if k}
 
-        symbol = (row.get("symbol") or row.get("underlying") or "").upper().strip()
-        if not symbol:
+        raw_sym = (row.get("symbol") or row.get("underlying") or "").strip()
+        if not raw_sym:
             continue
 
         dt_raw = row.get("datetime") or row.get("tradedatetime") or row.get("date") or row.get("tradedate") or ""
@@ -612,6 +619,9 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
         elif "CRYPTO" in raw_cat:
             asset_category = "CRYPTO"
 
+        desc = row.get("description") or ""
+        symbol = normalize_symbol(raw_sym, desc, asset_category)
+
         trade_id = row.get("tradeid") or row.get("transactionid") or ""
         exec_id = row.get("ibexecutionid") or row.get("ibexecid") or row.get("execid") or generate_deterministic_exec_id(symbol, t_dt_iso, side, qty, price, trade_id)
 
@@ -620,7 +630,7 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
             "trade_id": trade_id or exec_id,
             "account_id": row.get("accountid") or row.get("clientaccountid") or "",
             "symbol": symbol,
-            "description": row.get("description") or "",
+            "description": desc or symbol,
             "asset_category": asset_category,
             "currency": (row.get("currency") or "EUR").upper(),
             "buy_sell": side,

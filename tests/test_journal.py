@@ -669,6 +669,101 @@ class TestTradeGrouping(unittest.TestCase):
         self.assertEqual(put_grouped[0]["result"], "WIN")
 
 
+class TestNormalizationAndDeduplication(unittest.TestCase):
+    def setUp(self):
+        self.tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.test_db_path = Path(self.tmp_db.name)
+        self.tmp_db.close()
+
+        self.orig_db_path = config.DB_PATH
+        config.DB_PATH = self.test_db_path
+        database.DB_PATH = self.test_db_path
+        init_db()
+
+    def tearDown(self):
+        config.DB_PATH = self.orig_db_path
+        database.DB_PATH = self.orig_db_path
+        if self.test_db_path.exists():
+            try:
+                self.test_db_path.unlink()
+            except Exception:
+                pass
+
+    def test_normalize_symbol(self):
+        from backend.database import normalize_symbol
+
+        # OCC options format
+        self.assertEqual(normalize_symbol("QQQ   261001C00743000", "QQQ 01OCT26 743 C", "OPT"), "QQQ 01OCT26 743 C")
+        self.assertEqual(normalize_symbol("SPY   230120C00400000", "", "OPT"), "SPY 20JAN23 400 C")
+        self.assertEqual(normalize_symbol("AAPL240119P00150500", "", "OPT"), "AAPL 19JAN24 150.5 P")
+        self.assertEqual(normalize_symbol("QQQ 01OCT26 743 C", "", "OPT"), "QQQ 01OCT26 743 C")
+
+        # Equities and Forex
+        self.assertEqual(normalize_symbol("NVDA", "", "STK"), "NVDA")
+        self.assertEqual(normalize_symbol("EUR.USD", "", "CASH"), "EUR.USD")
+
+    def test_cross_source_deduplication(self):
+        """Tests that official Flex executions supersede CSV GEN_* placeholders and prevent duplicate counts."""
+        from backend.database import db_session, upsert_trades
+        from backend.analytics import get_day_trades, group_executions_to_trades
+
+        # 1. Insert CSV trade with GEN_ ID
+        csv_trade = [
+            {
+                "ib_exec_id": "GEN_abc123",
+                "trade_id": "GEN_abc123",
+                "symbol": "QQQ 01OCT26 743 C",
+                "description": "",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.51,
+                "ib_commission": 0.93,
+                "realized_pnl": -4.20,
+                "trade_date": "2026-10-01",
+                "trade_time": "11:27:52",
+                "open_close_indicator": "C"
+            }
+        ]
+        upsert_trades(csv_trade)
+
+        day_trades = get_day_trades("2026-10-01")
+        self.assertEqual(len(day_trades), 1)
+
+        # 2. Later, Flex query syncs official execution for the same trade with OCC symbol and real ID
+        flex_trade = [
+            {
+                "ib_exec_id": "6778374621",
+                "trade_id": "1600757591",
+                "symbol": "QQQ   261001C00743000",
+                "description": "QQQ 01OCT26 743 C",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.51,
+                "ib_commission": 0.928,
+                "realized_pnl": -4.2014,
+                "trade_date": "2026-10-01",
+                "trade_time": "11:27:52",
+                "open_close_indicator": "C"
+            }
+        ]
+        upsert_trades(flex_trade)
+
+        # Verified: No duplicate created, official execution replaces placeholder
+        day_trades_after = get_day_trades("2026-10-01")
+        self.assertEqual(len(day_trades_after), 1)
+        self.assertEqual(day_trades_after[0]["ib_exec_id"], "6778374621")
+        self.assertEqual(day_trades_after[0]["symbol"], "QQQ 01OCT26 743 C")
+
+        # 3. If CSV import is re-run with GEN_ ID, it should NOT re-insert duplicate
+        upsert_trades(csv_trade)
+        day_trades_rerun = get_day_trades("2026-10-01")
+        self.assertEqual(len(day_trades_rerun), 1)
+        self.assertEqual(day_trades_rerun[0]["ib_exec_id"], "6778374621")
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -641,6 +641,127 @@
 }
 
 /* ============================================================
+   Section Performance Dock (Dual-Axis Chart + Period Detailed Stats)
+   ============================================================ */
+.section-analytics-dock {
+    margin-top: 14px;
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.analytics-dock-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 8px;
+}
+
+.analytics-dock-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.analytics-dock-legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.dock-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-secondary);
+}
+
+.dock-legend-line {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+    background-color: var(--color-profit);
+}
+
+.dock-legend-bar {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background-color: rgba(56, 189, 248, 0.35);
+    border: 1px solid var(--color-accent);
+}
+
+.analytics-dock-body {
+    display: grid;
+    grid-template-columns: 1fr 310px;
+    gap: 14px;
+    align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+    .analytics-dock-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dock-chart-wrapper {
+    position: relative;
+    height: 140px;
+    width: 100%;
+}
+
+.dock-stats-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    padding: 10px 12px;
+    gap: 8px;
+}
+
+.dock-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 12px;
+}
+
+.dock-stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dock-stat-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.dock-stat-val {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* ============================================================
    4. DETAILED STATS PAGE (IBKR Style)
    ============================================================ */
 .stats-container {

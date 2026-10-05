@@ -42,6 +42,287 @@ const CalendarPage = {
             this.loadMonth(State.currentYear, State.currentMonth),
             this.loadYear(State.currentYear)
         ]);
+
+        if (!this._themeBound) {
+            this._themeBound = true;
+            window.addEventListener('themeChanged', () => {
+                this.updateAllChartsTheme();
+            });
+        }
+    },
+
+    charts: {},
+
+    updateAllChartsTheme() {
+        Object.keys(this.charts).forEach(k => {
+            if (this.charts[k]) {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColor = isDark ? '#94a3b8' : '#868e96';
+                const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
+
+                if (this.charts[k].options?.scales?.x) {
+                    this.charts[k].options.scales.x.ticks.color = textColor;
+                }
+                if (this.charts[k].options?.scales?.yPnl) {
+                    this.charts[k].options.scales.yPnl.ticks.color = textColor;
+                    this.charts[k].options.scales.yPnl.grid.color = gridColor;
+                }
+                if (this.charts[k].options?.scales?.yTrades) {
+                    this.charts[k].options.scales.yTrades.ticks.color = textColor;
+                }
+                this.charts[k].update('none');
+            }
+        });
+    },
+
+    computePeriodStats(items, fallbackDays = null) {
+        let totalTrades = 0;
+        let totalNetPnl = 0;
+        let grossProfit = 0;
+        let grossLoss = 0;
+        let winningTrades = 0;
+        let losingTrades = 0;
+        let activeDays = 0;
+
+        let runningCum = 0;
+        let peak = 0;
+        let maxDrawdown = 0;
+
+        items.forEach(item => {
+            const pnl = item.pnl !== undefined ? item.pnl : (item.net_pnl || 0);
+            const count = item.count !== undefined ? item.count : (item.trades_count || 0);
+            totalTrades += count;
+            totalNetPnl += pnl;
+
+            if (count > 0 || pnl !== 0) {
+                activeDays++;
+            }
+
+            if (pnl > 0) {
+                grossProfit += pnl;
+                winningTrades += (item.wins !== undefined ? item.wins : (count > 0 ? count : 1));
+            } else if (pnl < 0) {
+                grossLoss += Math.abs(pnl);
+                losingTrades += (item.losses !== undefined ? item.losses : (count > 0 ? count : 1));
+            }
+
+            runningCum += pnl;
+            if (runningCum > peak) peak = runningCum;
+            const dd = peak - runningCum;
+            if (dd > maxDrawdown) maxDrawdown = dd;
+        });
+
+        const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
+        const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? grossProfit : 0);
+        const avgWin = winningTrades > 0 ? (grossProfit / winningTrades) : 0;
+        const avgLoss = losingTrades > 0 ? (grossLoss / losingTrades) : 0;
+        const expectancy = totalTrades > 0 ? (totalNetPnl / totalTrades) : 0;
+        const daysDivisor = fallbackDays || (activeDays > 0 ? activeDays : 1);
+        const activity = (totalTrades / daysDivisor).toFixed(1);
+
+        return {
+            totalTrades,
+            totalNetPnl: roundVal(totalNetPnl),
+            grossProfit: roundVal(grossProfit),
+            grossLoss: roundVal(grossLoss),
+            winRate: winRate.toFixed(1),
+            profitFactor: profitFactor.toFixed(2),
+            avgWin: roundVal(avgWin),
+            avgLoss: roundVal(avgLoss),
+            expectancy: roundVal(expectancy),
+            maxDrawdown: roundVal(maxDrawdown),
+            activity,
+            activeDays
+        };
+
+        function roundVal(v) {
+            return Math.round(v * 100) / 100;
+        }
+    },
+
+    buildDockHtml(sectionId, stats) {
+        const pnlSign = stats.totalNetPnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+        const pnlColorVar = stats.totalNetPnl >= 0 ? 'var(--color-profit)' : 'var(--color-loss)';
+
+        return `
+            <div class="section-analytics-dock">
+                <div class="analytics-dock-header">
+                    <div class="analytics-dock-title">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-6 6"/></svg>
+                        <span>${STRINGS.calendar.evolutionTitle || "Performance & Volume Evolution"}</span>
+                    </div>
+                    <div class="analytics-dock-legend">
+                        <div class="dock-legend-item">
+                            <span class="dock-legend-line" style="background-color: ${pnlColorVar};"></span>
+                            <span>${STRINGS.calendar.cumPnlLabel || "Cumulative P&L"}</span>
+                        </div>
+                        <div class="dock-legend-item">
+                            <span class="dock-legend-bar"></span>
+                            <span>${STRINGS.calendar.tradesLabel || "Trades"}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analytics-dock-body">
+                    <div class="dock-chart-wrapper">
+                        <canvas id="chart-cal-${sectionId}"></canvas>
+                    </div>
+                    <div class="dock-stats-panel">
+                        <div class="dock-stats-grid">
+                            <div class="dock-stat-item">
+                                <span class="dock-stat-label">${STRINGS.calendar.expectancyLabel || "Expectancy / Op"}</span>
+                                <span class="dock-stat-val mono ${stats.expectancy >= 0 ? 'pnl-positive' : 'pnl-negative'}">${State.formatCurrency(stats.expectancy)}</span>
+                            </div>
+                            <div class="dock-stat-item">
+                                <span class="dock-stat-label">${STRINGS.calendar.winRateLabel || "Win Rate"}</span>
+                                <span class="dock-stat-val mono ${parseFloat(stats.winRate) >= 50 ? 'pnl-positive' : 'pnl-negative'}">${stats.winRate}%</span>
+                            </div>
+                            <div class="dock-stat-item">
+                                <span class="dock-stat-label">${STRINGS.calendar.profitFactorLabel || "Profit Factor"}</span>
+                                <span class="dock-stat-val mono">${stats.profitFactor}</span>
+                            </div>
+                            <div class="dock-stat-item">
+                                <span class="dock-stat-label">${STRINGS.calendar.avgWinLossLabel || "Avg Win / Loss"}</span>
+                                <span class="dock-stat-val mono" style="font-size: 11px;">
+                                    <span class="pnl-positive">${State.formatCurrency(stats.avgWin)}</span> / <span class="pnl-negative">-${State.formatCurrency(stats.avgLoss, false)}</span>
+                                </span>
+                            </div>
+                            <div class="dock-stat-item">
+                                <span class="dock-stat-label">${STRINGS.calendar.maxDrawdownLabel || "Max Drawdown"}</span>
+                                <span class="dock-stat-val mono pnl-negative">-${State.formatCurrency(stats.maxDrawdown, false)}</span>
+                            </div>
+                            <div class="dock-stat-item">
+                                <span class="dock-stat-label">${STRINGS.calendar.activityLabel || "Activity"}</span>
+                                <span class="dock-stat-val mono">${stats.activity} <span style="font-size: 9.5px; color: var(--text-muted); font-weight: 500;">ops/day</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderDualAxisChart(canvasId, labels, cumPnlArray, tradesCountArray, totalPnl) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        if (this.charts[canvasId]) {
+            try { this.charts[canvasId].destroy(); } catch (e) {}
+            delete this.charts[canvasId];
+        }
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textColor = isDark ? '#94a3b8' : '#868e96';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
+        
+        const isPositive = totalPnl >= 0;
+        const strokeColor = isPositive ? (isDark ? '#22c55e' : '#00875a') : (isDark ? '#ef4444' : '#d32f2f');
+        const fillColor = isPositive
+            ? (isDark ? 'rgba(34, 197, 94, 0.12)' : 'rgba(0, 135, 90, 0.08)')
+            : (isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(211, 47, 47, 0.08)');
+
+        const barBg = isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(0, 102, 204, 0.2)';
+        const barBorder = isDark ? 'rgba(56, 189, 248, 0.7)' : 'rgba(0, 102, 204, 0.6)';
+
+        const maxTrades = Math.max(...tradesCountArray, 1);
+
+        this.charts[canvasId] = new Chart(canvas, {
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        type: 'line',
+                        label: STRINGS.calendar.cumPnlLabel || 'Cumulative P&L',
+                        data: cumPnlArray,
+                        borderColor: strokeColor,
+                        backgroundColor: fillColor,
+                        fill: true,
+                        tension: 0.25,
+                        borderWidth: 2,
+                        pointRadius: labels.length > 25 ? 0 : 3.5,
+                        pointHoverRadius: 5.5,
+                        pointBackgroundColor: strokeColor,
+                        yAxisID: 'yPnl',
+                        order: 1
+                    },
+                    {
+                        type: 'bar',
+                        label: STRINGS.calendar.tradesLabel || 'Trades',
+                        data: tradesCountArray,
+                        backgroundColor: barBg,
+                        borderColor: barBorder,
+                        borderWidth: 1,
+                        borderRadius: 2,
+                        barPercentage: 0.45,
+                        yAxisID: 'yTrades',
+                        order: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? '#1e283d' : '#ffffff',
+                        titleColor: isDark ? '#f8fafc' : '#1a1e24',
+                        bodyColor: isDark ? '#cbd5e1' : '#495057',
+                        borderColor: isDark ? '#314261' : '#dee2e6',
+                        borderWidth: 1,
+                        padding: 10,
+                        boxPadding: 4,
+                        usePointStyle: true,
+                        callbacks: {
+                            label: function(context) {
+                                if (context.dataset.yAxisID === 'yPnl') {
+                                    return ` ${STRINGS.calendar.cumPnlLabel || 'Cumulative P&L'}: ${State.formatCurrency(context.parsed.y)}`;
+                                } else {
+                                    return ` ${STRINGS.calendar.tradesLabel || 'Trades'}: ${context.parsed.y} ops`;
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            color: textColor,
+                            font: { family: 'ui-monospace, SFMono-Regular, monospace', size: 10 }
+                        }
+                    },
+                    yPnl: {
+                        position: 'left',
+                        grid: {
+                            color: gridColor,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: textColor,
+                            font: { family: 'ui-monospace, SFMono-Regular, monospace', size: 10 },
+                            callback: (val) => State.formatCurrency(val)
+                        }
+                    },
+                    yTrades: {
+                        position: 'right',
+                        min: 0,
+                        max: Math.ceil(maxTrades * 2.5),
+                        grid: { display: false },
+                        ticks: {
+                            color: textColor,
+                            font: { family: 'ui-monospace, SFMono-Regular, monospace', size: 9 },
+                            stepSize: Math.max(1, Math.ceil(maxTrades / 2)),
+                            callback: (val) => (val % 1 === 0 && val <= maxTrades * 1.5) ? `${val}` : ''
+                        }
+                    }
+                }
+            }
+        });
     },
 
     getBounds() {
@@ -171,6 +452,22 @@ const CalendarPage = {
             </div>
         `;
 
+        // Compute cumulative PnL & trade counts for weekly chart
+        const weekLabels = [];
+        const weekCumPnl = [];
+        const weekTrades = [];
+        let runningPnl = 0;
+
+        days.forEach(d => {
+            weekLabels.push(`${STRINGS.days.short3[d.weekday_index]} ${d.day_number}`);
+            runningPnl += (d.pnl || 0);
+            weekCumPnl.push(Math.round(runningPnl * 100) / 100);
+            weekTrades.push(d.trades_count || 0);
+        });
+
+        const weekStats = this.computePeriodStats(days, 5);
+        const dockHtml = this.buildDockHtml('week', weekStats);
+
         container.innerHTML = `
             <div class="week-nav-bar">
                 <div class="nav-controls-group">
@@ -188,7 +485,11 @@ const CalendarPage = {
                 ${cardsHtml}
                 ${totalCardHtml}
             </div>
+            ${dockHtml}
         `;
+
+        // Render Chart.js
+        this.renderDualAxisChart('chart-cal-week', weekLabels, weekCumPnl, weekTrades, totalNetPnl);
 
         // Event listeners
         document.getElementById('btn-week-prev')?.addEventListener('click', () => {
@@ -344,6 +645,32 @@ const CalendarPage = {
             weekRowIndex++;
         }
 
+        // Compute cumulative PnL & trade counts for monthly chart
+        const monthLabels = [];
+        const monthCumPnl = [];
+        const monthTrades = [];
+        let runningMonthPnl = 0;
+        const monthItems = [];
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const dayData = dailyMap[dStr];
+            const pnl = dayData ? (dayData.pnl || 0) : 0;
+            const count = dayData ? (dayData.count || 0) : 0;
+            const wins = dayData ? (dayData.wins || 0) : 0;
+            const losses = dayData ? (dayData.losses || 0) : 0;
+
+            monthLabels.push(`${d}`);
+            runningMonthPnl += pnl;
+            monthCumPnl.push(Math.round(runningMonthPnl * 100) / 100);
+            monthTrades.push(count);
+
+            monthItems.push({ pnl, count, wins, losses, date: dStr });
+        }
+
+        const monthStats = this.computePeriodStats(monthItems.filter(item => item.count > 0 || item.pnl !== 0), null);
+        const monthDockHtml = this.buildDockHtml('month', monthStats);
+
         container.innerHTML = `
             <div class="week-nav-bar">
                 <div class="nav-controls-group">
@@ -370,7 +697,11 @@ const CalendarPage = {
                     ${matrixHtml}
                 </div>
             </div>
+            ${monthDockHtml}
         `;
+
+        // Render Chart.js
+        this.renderDualAxisChart('chart-cal-month', monthLabels, monthCumPnl, monthTrades, totalNetPnl);
 
         document.getElementById('btn-month-prev')?.addEventListener('click', () => {
             if (!canPrevMonth) return;
@@ -501,6 +832,28 @@ const CalendarPage = {
             `;
         }
 
+        // Compute cumulative PnL & trade counts for annual chart
+        const yearLabels = STRINGS.months.short;
+        const yearCumPnl = [];
+        const yearTrades = [];
+        let runningYearPnl = 0;
+        const yearItems = [];
+
+        for (let m = 1; m <= 12; m++) {
+            const mTotal = monthlyTotals.find(item => item.month === m) || { net_pnl: 0, trades_count: 0 };
+            const pnl = mTotal.net_pnl || 0;
+            const count = mTotal.trades_count || 0;
+
+            runningYearPnl += pnl;
+            yearCumPnl.push(Math.round(runningYearPnl * 100) / 100);
+            yearTrades.push(count);
+            yearItems.push({ pnl, count, month: m });
+        }
+
+        const activeDaysList = Object.values(dailyMap).map(d => ({ pnl: d.pnl, count: d.count, wins: d.wins, losses: d.losses }));
+        const yearStats = this.computePeriodStats(activeDaysList.length > 0 ? activeDaysList : yearItems, null);
+        const yearDockHtml = this.buildDockHtml('year', yearStats);
+
         container.innerHTML = `
             <div class="week-nav-bar">
                 <div class="nav-controls-group">
@@ -522,7 +875,11 @@ const CalendarPage = {
             <div class="annual-months-grid">
                 ${monthsHtml}
             </div>
+            ${yearDockHtml}
         `;
+
+        // Render Chart.js
+        this.renderDualAxisChart('chart-cal-year', yearLabels, yearCumPnl, yearTrades, totalNetPnl);
 
         document.getElementById('btn-year-prev')?.addEventListener('click', () => {
             if (!canPrevYear) return;

@@ -69,9 +69,19 @@ const STRINGS = {
         weekCol: "WEEK TOTAL",
         noTradesDay: "No trades",
         tradesBadge: "trades",
-        tradeSingleBadge: "trade",
         yearHeader: "YEAR",
         totalHeader: "ANNUAL TOTAL",
+        evolutionTitle: "Performance & Volume Evolution",
+        cumPnlLabel: "Cumulative P&L",
+        tradesLabel: "Trades",
+        statsTitle: "Period Stats",
+        expectancyLabel: "Expectancy / Op",
+        winRateLabel: "Win Rate",
+        profitFactorLabel: "Profit Factor",
+        avgWinLossLabel: "Avg Win / Loss",
+        maxDrawdownLabel: "Max Drawdown",
+        activityLabel: "Activity Rate",
+        noTradesPeriod: "No operations recorded for this period."
     },
 
 

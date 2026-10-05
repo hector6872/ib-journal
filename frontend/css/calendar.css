@@ -377,11 +377,17 @@
     cursor: default;
 }
 
-/* 8th Column: Weekly Total Cell */
+/* 8th Column: Weekly Total Cell (Clickable) */
 .month-day-cell.week-total-cell {
     background-color: var(--bg-card-secondary);
     border: 1px solid var(--border-default);
-    cursor: default;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.month-day-cell.week-total-cell:hover {
+    border-color: var(--border-active);
+    background-color: var(--bg-hover);
 }
 
 .cell-top {
@@ -541,21 +547,15 @@
     border: 1px solid transparent;
 }
 
-/* Hover effects for days in Year review (clean border color and subtle translucent hover velado) */
-.annual-day-dot:not(.empty):not(.weekend):not(.win):not(.loss):hover,
-.mini-day:not(.empty):not(.weekend):not(.win):not(.loss):hover {
-    border-color: var(--border-active);
-    background-color: var(--bg-hover);
-}
-
-.annual-day-dot.win:hover,
-.mini-day.win:hover {
+/* Hover effects for days in Year review (only clickable days with trades) */
+.annual-day-dot.has-trades.win:hover,
+.mini-day.has-trades.win:hover {
     border-color: var(--color-profit);
     background-color: var(--color-profit-hover-bg);
 }
 
-.annual-day-dot.loss:hover,
-.mini-day.loss:hover {
+.annual-day-dot.has-trades.loss:hover,
+.mini-day.has-trades.loss:hover {
     border-color: var(--color-loss);
     background-color: var(--color-loss-hover-bg);
 }

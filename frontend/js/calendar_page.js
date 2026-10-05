@@ -250,6 +250,11 @@ const CalendarPage = {
         let firstDayOfWeek = firstDayObj.getDay() - 1;
         if (firstDayOfWeek < 0) firstDayOfWeek = 6; // Mon=0 ... Sun=6
 
+        // Calculate Monday date of the first week row
+        const firstMonday = new Date(year, month - 1, 1);
+        const fDow = (firstMonday.getDay() + 6) % 7; // 0=Mon ... 6=Sun
+        firstMonday.setDate(firstMonday.getDate() - fDow);
+
         // Build list of cells row by row (7 days + 1 weekly total)
         let matrixHtml = '';
         let currentDay = 1;
@@ -259,6 +264,10 @@ const CalendarPage = {
             let rowDaysHtml = '';
             let rowNetPnl = 0;
             let rowTradesCount = 0;
+
+            const rowWeekDate = new Date(firstMonday);
+            rowWeekDate.setDate(firstMonday.getDate() + (weekRowIndex - 1) * 7);
+            const rowWeekDateStr = `${rowWeekDate.getFullYear()}-${String(rowWeekDate.getMonth() + 1).padStart(2, '0')}-${String(rowWeekDate.getDate()).padStart(2, '0')}`;
 
             for (let dow = 0; dow < 7; dow++) {
                 const isWeekend = dow === 5 || dow === 6;
@@ -314,13 +323,13 @@ const CalendarPage = {
                 }
             }
 
-            // 8th Cell: Weekly Total for this row
+            // 8th Cell: Weekly Total for this row (clickable to jump to Week view)
             const rowPnlClass = State.getPnlClass(rowNetPnl);
             const rowPnlText = State.formatCurrency(rowNetPnl);
             const rowTradesBadge = `${rowTradesCount} ${rowTradesCount === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
 
             const rowTotalCellHtml = `
-                <div class="month-day-cell week-total-cell">
+                <div class="month-day-cell week-total-cell" data-week-date="${rowWeekDateStr}" title="${STRINGS.calendar.viewWeek || 'View Week'}">
                     <div class="cell-top">
                         <span style="font-size: 11px; font-weight: 800; color: var(--color-accent);">WEEK ${weekRowIndex}</span>
                         <span class="cell-badge-count mono">${rowTradesBadge}</span>
@@ -384,6 +393,20 @@ const CalendarPage = {
             cell.addEventListener('click', () => {
                 const dStr = cell.getAttribute('data-date');
                 if (dStr) DayModal.open(dStr);
+            });
+        });
+
+        // Click on weekly total cell to navigate/scroll to that week in Week section
+        container.querySelectorAll('.month-day-cell.week-total-cell').forEach(cell => {
+            cell.addEventListener('click', () => {
+                const wDate = cell.getAttribute('data-week-date');
+                if (wDate) {
+                    this.loadWeek(wDate);
+                    const weekSec = document.getElementById('sec-week-container');
+                    if (weekSec) {
+                        weekSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
             });
         });
     },

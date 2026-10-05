@@ -57,10 +57,7 @@ const DayModal = {
         if (trades.length === 0) {
             bodyEl.innerHTML = `
                 <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
-                    <svg style="width: 48px; height: 48px; stroke: var(--text-muted); fill: none; stroke-width: 1.5; margin-bottom: 12px;" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                    <p>${STRINGS.modal.noTradesFound}</p>
+                    <p style="margin: 0; font-size: 13px;">${STRINGS.modal?.noTradesFound || 'No trade executions recorded on this date.'}</p>
                 </div>
             `;
             return;

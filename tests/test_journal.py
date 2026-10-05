@@ -482,6 +482,53 @@ Trades,Data,Order,Forex,AUD,EUR.AUD,"2023-12-14, 12:18:41",-77,1.63815,,126.1375
                     pass
             settings_mod.SETTINGS_PATH = orig_settings_path
 
+    def test_api_import_statement(self):
+        """Verifies the /api/import/statement endpoint logic parses and records trades and cash txs."""
+        try:
+            import asyncio
+            from backend.main import import_historical_statement
+
+            class MockRequest:
+                def __init__(self, body_bytes: bytes):
+                    self._body = body_bytes
+
+                async def body(self):
+                    return self._body
+
+            csv_content = """Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers
+Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount
+Deposits & Withdrawals,Data,EUR,2021-01-15,Wire In,5000.00
+Deposits & Withdrawals,Data,EUR,,Total,5000.00
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds,Comm/Fee,Realized P/L,Code
+Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O
+"""
+            mock_req = MockRequest(csv_content.encode("utf-8"))
+            result = asyncio.run(import_historical_statement(mock_req))
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["trades_count"], 1)
+            self.assertEqual(result["cash_count"], 1)
+        except ModuleNotFoundError:
+            # When testing under minimal system python without FastAPI installed
+            from scripts.import_trades import parse_csv_cash_transactions, parse_ibkr_activity_statement_csv
+            from backend.database import upsert_cash_transactions, upsert_trades
+            csv_lines = [
+                "Statement,Header,Field Name,Field Value",
+                "Statement,Data,BrokerName,Interactive Brokers",
+                "Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount",
+                "Deposits & Withdrawals,Data,EUR,2021-01-15,Wire In,5000.00",
+                "Deposits & Withdrawals,Data,EUR,,Total,5000.00",
+                "Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds,Comm/Fee,Realized P/L,Code",
+                "Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O"
+            ]
+            trades = parse_ibkr_activity_statement_csv(csv_lines)
+            cash_txs = parse_csv_cash_transactions(csv_lines)
+            count = upsert_trades(trades)
+            cash_count = upsert_cash_transactions(cash_txs)
+            self.assertEqual(count, 1)
+            self.assertEqual(cash_count, 1)
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,7 @@ from backend.config import BASE_DIR, CURRENCY_SYMBOL, HOST, PORT, is_ibkr_config
 
 from backend.database import (
     add_manual_cash_transaction,
+    db_session,
     delete_cash_transaction,
     get_cash_summary,
     init_db,

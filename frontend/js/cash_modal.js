@@ -236,8 +236,19 @@ const CashModal = {
                     await this.loadAndRender();
                     StatsController.updateOverview();
                     if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
+                    if (typeof App !== 'undefined' && App.showAlertModal) {
+                        App.showAlertModal({
+                            title: "Starting Capital Saved",
+                            message: `Starting capital set to ${State.formatCurrency(inputVal)}. Your account equity and returns have been updated.`,
+                            isSuccess: true
+                        });
+                    }
                 } catch (err) {
-                    alert("Failed to save starting capital: " + err.message);
+                    if (typeof App !== 'undefined' && App.showErrorModal) {
+                        App.showErrorModal("Save Capital Error", err.message);
+                    } else {
+                        console.error("Failed to save starting capital:", err);
+                    }
                 }
             });
         }
@@ -253,7 +264,13 @@ const CashModal = {
                 const desc = container.querySelector('#cash-tx-desc')?.value;
 
                 if (!amt || amt <= 0) {
-                    alert("Please enter a valid transfer amount.");
+                    if (typeof App !== 'undefined' && App.showAlertModal) {
+                        App.showAlertModal({
+                            title: "Invalid Transfer Amount",
+                            message: "Please enter a valid transfer amount greater than 0.",
+                            isError: true
+                        });
+                    }
                     return;
                 }
 
@@ -268,8 +285,19 @@ const CashModal = {
                     await this.loadAndRender();
                     StatsController.updateOverview();
                     if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
+                    if (typeof App !== 'undefined' && App.showAlertModal) {
+                        App.showAlertModal({
+                            title: "Transfer Recorded",
+                            message: `${txType === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'} of ${State.formatCurrency(amt)} successfully recorded.`,
+                            isSuccess: true
+                        });
+                    }
                 } catch (err) {
-                    alert("Failed to record cash transfer: " + err.message);
+                    if (typeof App !== 'undefined' && App.showErrorModal) {
+                        App.showErrorModal("Record Transfer Error", err.message);
+                    } else {
+                        console.error("Failed to record cash transfer:", err);
+                    }
                 }
             });
         }
@@ -279,7 +307,21 @@ const CashModal = {
             btn.addEventListener('click', async (e) => {
                 const id = btn.getAttribute('data-id');
                 if (!id) return;
-                if (!confirm("Are you sure you want to delete this cash transfer?")) return;
+
+                let confirmed = false;
+                if (typeof App !== 'undefined' && App.showConfirmModal) {
+                    confirmed = await App.showConfirmModal({
+                        title: "Delete Cash Transfer",
+                        message: "Are you sure you want to delete this cash transfer? Your account equity and returns will be automatically recalculated.",
+                        confirmText: "Delete",
+                        cancelText: "Cancel",
+                        isDanger: true
+                    });
+                } else {
+                    confirmed = window.confirm("Are you sure you want to delete this cash transfer?");
+                }
+
+                if (!confirmed) return;
 
                 try {
                     await API.deleteCashTransaction(id);
@@ -287,7 +329,11 @@ const CashModal = {
                     StatsController.updateOverview();
                     if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
                 } catch (err) {
-                    alert("Failed to delete cash transaction: " + err.message);
+                    if (typeof App !== 'undefined' && App.showErrorModal) {
+                        App.showErrorModal("Delete Transfer Error", err.message);
+                    } else {
+                        console.error("Failed to delete cash transaction:", err);
+                    }
                 }
             });
         });

@@ -145,25 +145,43 @@ const App = {
     },
 
     showErrorModal(title, rawMsg) {
+        this.showAlertModal({
+            title: title || "Error",
+            message: rawMsg,
+            isError: true
+        });
+    },
+
+    showAlertModal({ title = "Notification", message = "", isSuccess = false, isError = false }) {
         const backdrop = document.getElementById('error-modal-backdrop');
+        const titleWrap = document.getElementById('error-modal-title-wrap');
         const titleEl = document.getElementById('error-modal-title');
         const bodyEl = document.getElementById('error-modal-body');
         const closeBtn = document.getElementById('error-modal-close-btn');
         const okBtn = document.getElementById('error-modal-ok-btn');
 
-        const friendlyMessage = this.formatUserFriendlyError(rawMsg);
+        const friendlyMessage = this.formatUserFriendlyError(message);
 
         if (!backdrop || !bodyEl) {
-            console.error(title, friendlyMessage, rawMsg);
+            console.error(title, friendlyMessage, message);
             return;
         }
 
-        if (titleEl) titleEl.textContent = title || "Error";
+        if (titleEl) titleEl.textContent = title || "Notification";
+        if (titleWrap) {
+            if (isError || title.toLowerCase().includes('error') || title.toLowerCase().includes('failed')) {
+                titleWrap.style.color = 'var(--color-loss)';
+            } else if (isSuccess) {
+                titleWrap.style.color = 'var(--color-profit)';
+            } else {
+                titleWrap.style.color = 'var(--text-main)';
+            }
+        }
         
         bodyEl.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <p style="margin: 0; font-size: 13px; font-weight: 500; color: var(--text-main);">${friendlyMessage}</p>
-                ${rawMsg && rawMsg !== friendlyMessage ? `<div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); background: var(--bg-subtle); padding: 6px 8px; border-radius: var(--radius-xs); word-break: break-word; margin-top: 4px;">Technical details: ${rawMsg}</div>` : ''}
+                ${message && message !== friendlyMessage ? `<div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); background: var(--bg-subtle); padding: 6px 8px; border-radius: var(--radius-xs); word-break: break-word; margin-top: 4px;">Technical details: ${message}</div>` : ''}
             </div>
         `;
 
@@ -179,7 +197,7 @@ const App = {
         };
 
         const escHandler = (e) => {
-            if (e.key === 'Escape' && backdrop.classList.contains('open')) {
+            if (e.key === 'Escape' && (backdrop.classList.contains('open') || backdrop.classList.contains('active'))) {
                 closeModal();
                 document.removeEventListener('keydown', escHandler);
             }
@@ -188,6 +206,57 @@ const App = {
 
         backdrop.classList.add('open');
         backdrop.classList.add('active');
+    },
+
+    showConfirmModal({ title = "Confirm Action", message = "Are you sure?", confirmText = "Confirm", cancelText = "Cancel", isDanger = false } = {}) {
+        return new Promise((resolve) => {
+            const backdrop = document.getElementById('confirm-modal-backdrop');
+            const titleEl = document.getElementById('confirm-modal-title');
+            const titleWrap = document.getElementById('confirm-modal-title-wrap');
+            const bodyEl = document.getElementById('confirm-modal-body');
+            const closeBtn = document.getElementById('confirm-modal-close-btn');
+            const cancelBtn = document.getElementById('confirm-modal-cancel-btn');
+            const okBtn = document.getElementById('confirm-modal-ok-btn');
+
+            if (!backdrop || !bodyEl || !okBtn) {
+                resolve(window.confirm(message));
+                return;
+            }
+
+            if (titleEl) titleEl.textContent = title;
+            if (titleWrap) {
+                titleWrap.style.color = isDanger ? 'var(--color-loss)' : 'var(--text-main)';
+            }
+            bodyEl.innerHTML = `<p style="margin: 0; font-size: 13px; color: var(--text-main); line-height: 1.5;">${message}</p>`;
+
+            if (okBtn) {
+                okBtn.textContent = confirmText;
+                okBtn.className = isDanger ? "btn-pill btn-danger" : "btn-pill btn-accent";
+            }
+            if (cancelBtn) cancelBtn.textContent = cancelText;
+
+            const cleanup = (result) => {
+                backdrop.classList.remove('open', 'active');
+                document.removeEventListener('keydown', escHandler);
+                resolve(result);
+            };
+
+            const escHandler = (e) => {
+                if (e.key === 'Escape' && (backdrop.classList.contains('open') || backdrop.classList.contains('active'))) {
+                    cleanup(false);
+                }
+            };
+
+            if (closeBtn) closeBtn.onclick = () => cleanup(false);
+            if (cancelBtn) cancelBtn.onclick = () => cleanup(false);
+            if (okBtn) okBtn.onclick = () => cleanup(true);
+            backdrop.onclick = (e) => {
+                if (e.target === backdrop) cleanup(false);
+            };
+
+            document.addEventListener('keydown', escHandler);
+            backdrop.classList.add('open', 'active');
+        });
     },
 
     setupSyncButton() {

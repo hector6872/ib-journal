@@ -927,3 +927,25 @@ button.btn-accent:hover {
     filter: brightness(1.15);
 }
 
+.btn-danger,
+.btn-pill.btn-danger,
+button.btn-danger {
+    background-color: var(--color-loss) !important;
+    border: 1px solid var(--color-loss) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+}
+
+.btn-danger:hover,
+.btn-pill.btn-danger:hover,
+button.btn-danger:hover {
+    opacity: 0.9;
+    filter: brightness(0.92);
+}
+
+#error-modal-backdrop,
+#confirm-modal-backdrop {
+    z-index: 1200;
+}
+

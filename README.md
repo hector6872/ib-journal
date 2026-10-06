@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/hector6872/ib-journal/actions/workflows/ci.yml/badge.svg)](https://github.com/hector6872/ib-journal/actions/workflows/ci.yml)
 [![Sync Repository to GitLab](https://github.com/hector6872/ib-journal/actions/workflows/sync-to-gitlab.yml/badge.svg)](https://github.com/hector6872/ib-journal/actions/workflows/sync-to-gitlab.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-orange.svg)](LICENSE.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -261,5 +261,9 @@ Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** fo
 ---
 
 ## 📄 License
+ 
+This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0)** - see the **[LICENSE.md](LICENSE.md)** file for details.
 
-This project is licensed under the MIT License - see the **[LICENSE.md](LICENSE.md)** file for details.
+- **Attribution (BY)**: You must give appropriate credit and provide a link to the original repository.
+- **Non-Commercial (NC)**: You may **not** use the software for commercial purposes (selling it, hosting a paid version, or bundling it into paid products).
+- **Share-Alike (SA)**: If you remix, transform, or build upon the code, you must distribute your contributions under the same license.

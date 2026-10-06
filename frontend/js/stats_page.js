@@ -33,7 +33,8 @@ const StatsPage = {
         duration: { col: 'net_pnl', dir: 'desc' },
         order_type: { col: 'net_pnl', dir: 'desc' },
         category: { col: 'net_pnl', dir: 'desc' },
-        side: { col: 'net_pnl', dir: 'desc' }
+        side: { col: 'net_pnl', dir: 'desc' },
+        option_strategy: { col: 'net_pnl', dir: 'desc' }
     },
     equityCurveMetrics: {
         cum_pnl: true,
@@ -226,7 +227,8 @@ const StatsPage = {
             duration: this.data.holding_durations,
             order_type: this.data.order_types,
             category: this.data.categories,
-            side: this.data.sides
+            side: this.data.sides,
+            option_strategy: this.data.option_strategies
         };
         const builderMap = {
             symbol: (items) => this.buildSymbolTableRows(items),
@@ -236,7 +238,8 @@ const StatsPage = {
             duration: (items) => this.buildDurationTableRows(items),
             order_type: (items) => this.buildOrderTypeTableRows(items),
             category: (items) => this.buildCategoryTableRows(items),
-            side: (items) => this.buildSideTableRows(items)
+            side: (items) => this.buildSideTableRows(items),
+            option_strategy: (items) => this.buildOptionStrategyTableRows(items)
         };
 
         const tbody = document.getElementById(`tbody-table-${tableTarget}`);
@@ -309,6 +312,7 @@ const StatsPage = {
         const orderTypes = data.order_types || [];
         const categories = data.categories || [];
         const sides = data.sides || [];
+        const optionStrategies = data.option_strategies || [];
 
         // Update global header banner
         if (typeof StatsController !== 'undefined' && StatsController.renderOverview) {
@@ -1036,6 +1040,28 @@ const StatsPage = {
                             </table>
                         </div>
                     </div>
+
+                    <!-- Options Strategy Breakdown (Long Calls, Long Puts, Short Calls, Short Puts) -->
+                    <div class="stats-panel">
+                        <div class="section-header">
+                            <h3 class="section-title">${sp.optionsTableTitle || 'Options Strategy Breakdown'}</h3>
+                        </div>
+                        <div class="stats-table-wrapper">
+                            <table class="institutional-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'strategy')}" data-sort-table="option_strategy" data-sort-col="strategy">${sp.colStrategy || 'Strategy'} ${this.getSortIndicator('option_strategy', 'strategy')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'trades_count')}" data-sort-table="option_strategy" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('option_strategy', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'win_rate')}" data-sort-table="option_strategy" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('option_strategy', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'net_pnl')}" data-sort-table="option_strategy" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('option_strategy', 'net_pnl')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-table-option_strategy">
+                                    ${this.buildOptionStrategyTableRows(this.sortData('option_strategy', optionStrategies))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -1245,7 +1271,7 @@ const StatsPage = {
                     this.tableSort[tableTarget].dir = this.tableSort[tableTarget].dir === 'desc' ? 'asc' : 'desc';
                 } else {
                     this.tableSort[tableTarget].col = colTarget;
-                    const textCols = ['symbol', 'tag', 'category', 'duration', 'order_type', 'day_name', 'label', 'side'];
+                    const textCols = ['symbol', 'tag', 'category', 'duration', 'order_type', 'day_name', 'label', 'side', 'strategy'];
                     this.tableSort[tableTarget].dir = textCols.includes(colTarget) ? 'asc' : 'desc';
                 }
 
@@ -2236,6 +2262,46 @@ const StatsPage = {
                     <td class="mono">${s.trades_count}</td>
                     <td class="mono">${s.win_rate}%</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(s.net_pnl)}</td>
+                </tr>
+            `;
+        }).join('');
+    },
+
+    buildOptionStrategyTableRows(strategies) {
+        const sp = STRINGS.statsPage || {};
+        if (!strategies || !strategies.length) {
+            return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">${sp.noOptionsRecorded || 'No options trades recorded in this period'}</td></tr>`;
+        }
+
+        const totalTrades = strategies.reduce((acc, s) => acc + (s.trades_count || 0), 0);
+        if (totalTrades === 0) {
+            return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">${sp.noOptionsRecorded || 'No options trades recorded in this period'}</td></tr>`;
+        }
+
+        const labelMap = {
+            'long_call': sp.longCallLabel || 'Long Call (Buy Call)',
+            'long_put': sp.longPutLabel || 'Long Put (Buy Put)',
+            'short_call': sp.shortCallLabel || 'Short Call (Sell Call)',
+            'short_put': sp.shortPutLabel || 'Short Put (Sell Put)'
+        };
+
+        const badgeClassMap = {
+            'long_call': 'badge-buy-call',
+            'long_put': 'badge-buy-put',
+            'short_call': 'badge-sell-call',
+            'short_put': 'badge-sell-put'
+        };
+
+        return strategies.map(s => {
+            const label = labelMap[s.key] || s.strategy;
+            const badgeClass = badgeClassMap[s.key] || (s.side === 'LONG' ? 'badge-pill-profit' : 'badge-pill-loss');
+            const pnlClass = s.trades_count > 0 ? this.getPnlClass(s.net_pnl) : 'pnl-neutral';
+            return `
+                <tr>
+                    <td><span class="badge-direction ${badgeClass}" style="font-size: 10px; padding: 2px 7px;">${label}</span></td>
+                    <td class="mono">${s.trades_count}</td>
+                    <td class="mono">${s.trades_count > 0 ? `${s.win_rate}%` : '--'}</td>
+                    <td class="mono ${pnlClass}" style="font-weight: 700;">${s.trades_count > 0 ? State.formatCurrency(s.net_pnl) : '--'}</td>
                 </tr>
             `;
         }).join('');

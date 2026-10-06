@@ -139,9 +139,11 @@ const STRINGS = {
         symbolTableTitle: "Performance by Symbol",
         categoryTableTitle: "Asset Category Allocation",
         sideTableTitle: "Long vs Short Breakdown",
+        optionsTableTitle: "Options Strategy Breakdown",
         dowTableTitle: "Day of Week Distribution",
         colSymbol: "Symbol",
         colCategory: "Category",
+        colStrategy: "Strategy",
         colTrades: "Trades",
         colWinRate: "Win Rate",
         colNetPnl: "Net P&L",
@@ -151,6 +153,11 @@ const STRINGS = {
         colHour: "Hour",
         longSideLabel: "LONG (Buyer)",
         shortSideLabel: "SHORT (Seller)",
+        noOptionsRecorded: "No options trades recorded in this period",
+        longCallLabel: "Long Call (Buy Call)",
+        longPutLabel: "Long Put (Buy Put)",
+        shortCallLabel: "Short Call (Sell Call)",
+        shortPutLabel: "Short Put (Sell Put)",
         
         // Risk & Drawdown
         riskTitle: "RISK & DRAWDOWN",

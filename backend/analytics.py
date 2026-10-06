@@ -870,6 +870,71 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 "net_pnl": round(r["net_pnl"], 2)
             })
 
+        # 9. Options Strategy Breakdown (Long Call, Long Put, Short Call, Short Put)
+        opt_where = "WHERE asset_category = 'OPT' AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+        if where_clause:
+            opt_where = f"{where_clause} AND asset_category = 'OPT' AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+
+        cursor.execute(f"""
+            SELECT
+                symbol,
+                buy_sell,
+                open_close_indicator,
+                realized_pnl,
+                ib_commission
+            FROM trades
+            {opt_where}
+        """, params)
+        opt_rows = cursor.fetchall()
+
+        opt_stats = {
+            "long_call": {"strategy": "Long Call (Buy Call)", "type": "CALL", "side": "LONG", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+            "long_put": {"strategy": "Long Put (Buy Put)", "type": "PUT", "side": "LONG", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+            "short_call": {"strategy": "Short Call (Sell Call)", "type": "CALL", "side": "SHORT", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+            "short_put": {"strategy": "Short Put (Sell Put)", "type": "PUT", "side": "SHORT", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
+        }
+
+        for t in opt_rows:
+            sym = (t["symbol"] or "").upper()
+            is_call = sym.endswith(" C") or "CALL" in sym or re.search(r'\d[C]\d', sym)
+            is_put = sym.endswith(" P") or "PUT" in sym or re.search(r'\d[P]\d', sym)
+
+            op_cl = (t["open_close_indicator"] or "C").upper()
+            bs = (t["buy_sell"] or "SELL").upper()
+
+            # Closed with SELL -> was LONG; Closed with BUY -> was SHORT
+            # Opened with BUY -> is LONG; Opened with SELL -> is SHORT
+            is_long = (op_cl == "C" and bs == "SELL") or (op_cl == "O" and bs == "BUY")
+
+            strat_key = None
+            if is_call:
+                strat_key = "long_call" if is_long else "short_call"
+            elif is_put:
+                strat_key = "long_put" if is_long else "short_put"
+
+            if strat_key:
+                net = (t["realized_pnl"] or 0.0) - (t["ib_commission"] or 0.0)
+                opt_stats[strat_key]["trades_count"] += 1
+                if t["realized_pnl"] > 0:
+                    opt_stats[strat_key]["wins"] += 1
+                elif t["realized_pnl"] < 0:
+                    opt_stats[strat_key]["losses"] += 1
+                opt_stats[strat_key]["net_pnl"] += net
+
+        option_strategies = []
+        for k, val in opt_stats.items():
+            cnt = val["trades_count"]
+            wr = round((val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+            option_strategies.append({
+                "key": k,
+                "strategy": val["strategy"],
+                "type": val["type"],
+                "side": val["side"],
+                "trades_count": cnt,
+                "win_rate": wr,
+                "net_pnl": round(val["net_pnl"], 2)
+            })
+
     return {
         "overview": overview,
         "rolling_win_rate": rolling_win_rate,
@@ -883,7 +948,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         "holding_durations": holding_durations,
         "order_types": order_types,
         "categories": categories,
-        "sides": sides
+        "sides": sides,
+        "option_strategies": option_strategies
     }
 
 

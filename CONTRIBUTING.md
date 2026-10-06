@@ -84,6 +84,7 @@ ib-journal/
 │   │   ├── calendar_page.js  # Top-level calendar controller (Week/Month/Year)
 │   │   ├── calendar_week.js  # Weekly breakdown cards
 │   │   ├── calendar_year.js  # 12-month annual heatmap & ribbons
+│   │   ├── cash_modal.js     # Capital & cash management modal
 │   │   ├── day_modal.js      # Trade executions breakdown modal
 │   │   ├── import_modal.js   # Drag & drop historical importer modal
 │   │   ├── state.js          # Shared reactive client state

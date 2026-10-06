@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/hector6872/ib-journal/actions/workflows/ci.yml/badge.svg)](https://github.com/hector6872/ib-journal/actions/workflows/ci.yml)
 [![Sync Repository to GitLab](https://github.com/hector6872/ib-journal/actions/workflows/sync-to-gitlab.yml/badge.svg)](https://github.com/hector6872/ib-journal/actions/workflows/sync-to-gitlab.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-orange.svg)](LICENSE.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -15,10 +15,10 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 
 - **⚡ Pure Vanilla Web Stack**: 100% pure HTML5, modern CSS, and vanilla ES6+ JavaScript. No React, no Node.js, no npm dependencies, no build step.
 - **💰 Capital & Cash Management**:
-  - **Account Equity (NAV)** tracking: $\text{Starting Capital} + \text{Net Cash Flow} + \text{Realized P\&L}$.
+  - **Account Equity (NAV)** tracking: `Starting Capital + Net Cash Flow + Realized P&L`.
   - **Starting Capital**: Set your baseline portfolio capital with cross-device SQLite synchronization.
   - **Automatic & Manual Cash Transfers**: Auto-imports deposits and withdrawals from IBKR activity statements and allows manual cash entries.
-  - **Return on Capital (% ROI)**: Accurate performance returns based on active capital ($\text{Realized P\&L} / \text{Capital Base}$).
+  - **Return on Capital (% ROI)**: Accurate performance returns based on active capital (`Realized P&L / Capital Base`).
 - **🛡️ MicroSD Safe & Flash Protected**: Configured with SQLite Write-Ahead Logging (`WAL`), in-memory temporary tables (`temp_store=MEMORY`), and minimal disk I/O to protect your Raspberry Pi storage.
 - **🔄 Smart Market-Hours Synchronization**: Automatically ingests trade executions and realized P&L via IBKR Flex Query Web Service during market sessions, skipping redundant queries at night and on weekends.
 - **⏱️ Rate-Limit Guard**: Enforced cooldown protection on the manual *"Sync Now"* button with live UI countdown timers to protect your IBKR API rate limits.
@@ -30,9 +30,11 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
   - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Expectancy, Net Realized P&L, Total Trades, Commissions).
   - Portfolio Capital & Equity Overview strip in Statistics.
   - Risk & Drawdown analysis (Max Drawdown, Current Drawdown, Winning/Losing Streaks).
-  - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL).
+  - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL) and momentum tracking.
   - Equity Curve & Metric Evolution charts (Daily, Weekly, Monthly aggregations).
+  - Options Strategy Breakdown & Expiration Discipline (Long/Short Calls and Puts, comparing auto-settled $0.00 expirations vs active market exits).
   - Detailed breakdowns by Symbol, Tag/Setup, Day of Week, Time of Day, Holding Duration, and Order Type.
+- **🕒 Unified Timezone Switching**: Instant toggle between **Local Time (`CET`)** and **Market Time (`EST`)** synchronized across all stats breakdowns, tables, charts, and Day Execution trade modals.
 - **📥 Historical Multi-Year Import**: Drag & drop IBKR Activity Statements (CSV / XML) directly in the browser or import bulk files via CLI with zero duplicate risk (`INSERT ON CONFLICT`).
 - **💬 Custom Institutional Dialogs**: Sleek modal dialogs for confirmations, notifications, and error feedback (no standard browser alerts).
 - **🌐 Centralized Copy & Translations (`strings.js`)**: 100% of UI copy, labels, metrics, and messages are centralized in a single dictionary file with automatic DOM attribute bindings (`data-i18n`, `data-i18n-title`, `data-i18n-placeholder`).
@@ -261,5 +263,9 @@ Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** fo
 ---
 
 ## 📄 License
+ 
+This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0)** - see the **[LICENSE.md](LICENSE.md)** file for details.
 
-This project is licensed under the MIT License - see the **[LICENSE.md](LICENSE.md)** file for details.
+- **Attribution (BY)**: You must give appropriate credit and provide a link to the original repository.
+- **Non-Commercial (NC)**: You may **not** use the software for commercial purposes (selling it, hosting a paid version, or bundling it into paid products).
+- **Share-Alike (SA)**: If you remix, transform, or build upon the code, you must distribute your contributions under the same license.

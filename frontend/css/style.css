@@ -345,6 +345,7 @@ body {
     gap: 6px;
     cursor: pointer;
     transition: all 0.15s ease;
+    white-space: nowrap;
 }
 
 .btn-sync-action:hover:not(:disabled) {
@@ -361,6 +362,44 @@ body {
     background-color: var(--bg-subtle) !important;
     color: var(--text-muted) !important;
     border-color: var(--border-subtle) !important;
+}
+
+@media (max-width: 900px) {
+    .header-inner {
+        padding: 0 12px;
+        gap: 10px;
+    }
+    .header-left {
+        gap: 12px;
+    }
+    .sync-status-text {
+        display: none !important;
+    }
+    .btn-sync-action .btn-sync-label {
+        display: none !important;
+    }
+    .btn-sync-action {
+        padding: 6px 9px;
+    }
+    .sync-section {
+        gap: 6px;
+    }
+    .header-right {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 600px) {
+    .brand-title {
+        display: none;
+    }
+    .main-tabs .tab-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    .app-header .header-inner {
+        height: 50px;
+    }
 }
 
 .btn-sync-action.spinning svg {

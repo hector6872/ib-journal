@@ -13,20 +13,40 @@ except ImportError:
     httpx = None  # type: ignore[assignment]
 
 from backend.config import IBKR_QUERY_ID, IBKR_TOKEN
+from backend.database import normalize_symbol
 
 logger = logging.getLogger("ib-journal.flex")
 
-IBKR_BASE_ENDPOINTS = [
-    "https://ndcdyn.interactivebrokers.com/Universal/servlet",
-    "https://gdcdyn.interactivebrokers.com/Universal/servlet",
-    "https://www.interactivebrokers.com/Universal/servlet",
+IBKR_SERVICE_ENDPOINTS: List[Tuple[str, str]] = [
+    # Modern endpoint (AccountManagement/FlexWebService)
+    (
+        "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest",
+        "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/GetStatement",
+    ),
+    (
+        "https://gdcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest",
+        "https://gdcdyn.interactivebrokers.com/AccountManagement/FlexWebService/GetStatement",
+    ),
+    (
+        "https://www.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest",
+        "https://www.interactivebrokers.com/AccountManagement/FlexWebService/GetStatement",
+    ),
+    # Legacy servlet endpoints fallback
+    (
+        "https://ndcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.SendRequest",
+        "https://ndcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.GetStatement",
+    ),
+    (
+        "https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.SendRequest",
+        "https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.GetStatement",
+    ),
 ]
 
 class IBKRFlexClient:
     def __init__(self, token: str = IBKR_TOKEN, query_id: str = IBKR_QUERY_ID):
         self.token = token
         self.query_id = query_id
-        self._active_endpoint = IBKR_BASE_ENDPOINTS[0]
+        self._active_get_url = IBKR_SERVICE_ENDPOINTS[0][1]
 
     async def _http_get(self, url: str, params: Dict[str, str]) -> Tuple[int, str]:
         """Performs GET request via httpx or urllib with redirect following."""
@@ -62,21 +82,25 @@ class IBKRFlexClient:
         status_code = 0
         resp_text = ""
 
-        for endpoint in IBKR_BASE_ENDPOINTS:
-            send_url = f"{endpoint}/FlexStatementService.SendRequest"
+        for send_url, get_url in IBKR_SERVICE_ENDPOINTS:
             try:
                 status_code, resp_text = await self._http_get(
                     send_url,
                     {"t": self.token, "q": self.query_id, "v": "3"}
                 )
-                self._active_endpoint = endpoint
-                last_network_error = None
-                break
+                if status_code == 200 and "<Status>Success</Status>" in resp_text:
+                    self._active_get_url = get_url
+                    last_network_error = None
+                    break
+                elif status_code == 200 and "<ErrorCode>" in resp_text:
+                    # Valid response format from IBKR but error status
+                    last_network_error = None
+                    break
             except Exception as e:
-                logger.warning(f"Could not connect to IBKR endpoint {endpoint}: {e}")
+                logger.warning(f"Could not connect to IBKR endpoint {send_url}: {e}")
                 last_network_error = e
 
-        if last_network_error is not None:
+        if last_network_error is not None and not resp_text:
             raise ConnectionError(
                 f"Failed to connect to Interactive Brokers servers ({last_network_error}). "
                 "Please verify your internet connection, DNS settings, or VPN."
@@ -102,10 +126,10 @@ class IBKRFlexClient:
             raise RuntimeError("IBKR did not return a valid ReferenceCode.")
 
         ref_code = ref_elem.text.strip()
-        logger.info(f"Received ReferenceCode: {ref_code}. Polling statement from {self._active_endpoint}...")
+        logger.info(f"Received ReferenceCode: {ref_code}. Polling statement from {self._active_get_url}...")
 
         # Step 2: Poll for statement ready
-        get_url = f"{self._active_endpoint}/FlexStatementService.GetStatement"
+        get_url = self._active_get_url
         max_attempts = 15
         for attempt in range(1, max_attempts + 1):
             await asyncio.sleep(attempt * 1.5)  # Progressive backoff
@@ -207,13 +231,18 @@ class IBKRFlexClient:
             trade_money = float(attrs.get("tradeMoney") or (abs(quantity) * trade_price))
             proceeds = float(attrs.get("proceeds") or 0.0)
 
+            raw_sym = attrs.get("symbol") or "UNKNOWN"
+            desc = attrs.get("description") or ""
+            asset_category = attrs.get("assetCategory") or "STK"
+            norm_symbol = normalize_symbol(raw_sym, desc, asset_category)
+
             trade_record = {
                 "ib_exec_id": exec_id,
                 "trade_id": attrs.get("tradeID") or exec_id,
                 "account_id": attrs.get("accountId") or "",
-                "symbol": (attrs.get("symbol") or "UNKNOWN").upper(),
-                "description": attrs.get("description") or "",
-                "asset_category": attrs.get("assetCategory") or "STK",
+                "symbol": norm_symbol,
+                "description": desc or norm_symbol,
+                "asset_category": asset_category,
                 "currency": raw_currency,
                 "raw_currency": raw_currency,
                 "base_currency": base_currency,

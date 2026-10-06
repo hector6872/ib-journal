@@ -1,7 +1,9 @@
 import calendar
 import math
+import re
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from backend.database import db_session
 from backend.settings import get_all_settings
@@ -168,11 +170,28 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         total_withdrawals = float(cash_row["total_withdrawals"] if cash_row else 0.0)
         net_cash_flow = total_deposits - total_withdrawals
 
+        # Cumulative lifetime capital base (all historical deposits up to end_date)
+        lifetime_cash_query = """
+            SELECT
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) as lifetime_deposits,
+                COALESCE(SUM(amount), 0.0) as lifetime_net_flow
+            FROM cash_transactions
+            WHERE 1=1
+        """
+        lifetime_params = []
+        if end_date:
+            lifetime_cash_query += " AND transaction_date <= ?"
+            lifetime_params.append(end_date)
+        cursor.execute(lifetime_cash_query, lifetime_params)
+        lifetime_row = cursor.fetchone()
+        lifetime_deposits = float(lifetime_row["lifetime_deposits"] if lifetime_row else 0.0)
+        lifetime_net_flow = float(lifetime_row["lifetime_net_flow"] if lifetime_row else 0.0)
+
         app_settings = get_all_settings()
         starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
-        capital_base = starting_capital + total_deposits
-        account_balance = starting_capital + net_cash_flow + net_pnl
-        roi_pct = round((net_pnl / capital_base * 100), 2) if capital_base > 0 else 0.0
+        capital_base = starting_capital + (lifetime_deposits if lifetime_deposits > 0 else total_deposits)
+        account_balance = starting_capital + lifetime_net_flow + net_pnl
+        roi_pct = round((net_pnl / capital_base * 100), 2) if capital_base >= 10.0 else 0.0
 
         def format_duration(dur_list: List[float]) -> str:
             if not dur_list:
@@ -468,7 +487,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         }
 
         # 1. Symbol Breakdown
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 symbol,
                 COALESCE(asset_category, 'STK') as category,
@@ -479,9 +498,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 COALESCE(SUM(ib_commission), 0.0) as commissions,
                 COALESCE(SUM(ABS(quantity)), 0.0) as total_volume
             FROM trades
+            {where_clause}
             GROUP BY symbol, asset_category
             ORDER BY net_pnl ASC
-        """)
+        """, params)
         symbols = []
         for r in cursor.fetchall():
             cnt = r["trades_count"]
@@ -532,22 +552,21 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             trade_durations[t["id"]] = dur_label
 
         # 2. Tag / Setup / Mistake Breakdown (Custom tags from notes + Derived execution tags)
-        tag_map: Dict[str, Dict[str, Any]] = {}
-        cat_labels = {
-            "STK": "STK (Acciones)",
-            "OPT": "OPT (Opciones)",
-            "FUT": "FUT (Futuros)",
-            "CASH": "CASH (Forex)",
-            "CRYPTO": "CRYPTO (Cripto)"
-        }
+        tag_map_market: Dict[str, Dict[str, Any]] = {}
+        tag_map_local: Dict[str, Dict[str, Any]] = {}
 
         for t in all_trades:
             is_closed = (t.get("open_close_indicator") or "").upper() == "C" or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
+            if not is_closed:
+                continue
+            cat = (t.get("asset_category") or "STK").upper()
+            if cat == "CASH":
+                continue
+
             notes = t.get("notes") or ""
-            tags = []
+            tags_base = []
             if notes:
                 # Support tag patterns: "Setup: Scalp", "Mistake: Wrong direction", "[tag]", "#tag", comma separated
-                import re
                 chunks = re.split(r'[,;\n\r]+', notes)
                 for chunk in chunks:
                     c = chunk.strip()
@@ -557,59 +576,114 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                             c = c[1:-1].strip()
                         elif c.startswith('#'):
                             c = c[1:].strip()
-                        tags.append(c)
+                        tags_base.append(c)
 
-            # Execution derived tags
-            dur_tag = trade_durations.get(t["id"], "Day Trade (<1d)")
-            tags.append(f"Duration: {dur_tag}")
+            sym = (t.get("symbol") or "").upper()
+            price = float(t.get("trade_price") or 0.0)
+            t_time = str(t.get("trade_time") or "")[:5]
 
-            cat = (t.get("asset_category") or "STK").upper()
-            tags.append(f"Asset: {cat_labels.get(cat, cat)}")
+            # 1. Option Strategy Classification
+            if cat == "OPT":
+                if sym.endswith(" C") or "CALL" in sym or re.search(r'\d[C]\d', sym):
+                    tags_base.append("Option: Call")
+                elif sym.endswith(" P") or "PUT" in sym or re.search(r'\d[P]\d', sym):
+                    tags_base.append("Option: Put")
+                else:
+                    tags_base.append("Option Trade")
 
-            side = (t.get("buy_sell") or "BUY").upper()
-            side_label = "Long (Buy)" if "BUY" in side or "LONG" in side else "Short (Sell)"
-            tags.append(f"Side: {side_label}")
+                t_notes_lower = str(t.get("notes") or "").lower()
+                t_time_full = str(t.get("trade_time") or "")
+                if price == 0.0 or "16:20" in t_time_full or "expire" in t_notes_lower or "assign" in t_notes_lower:
+                    tags_base.append("Option: Expired / Auto-Liquidation")
+            elif cat == "STK":
+                if 0 < price < 5.0:
+                    tags_base.append("Penny Stock (<$5)")
+                elif price >= 5.0:
+                    tags_base.append("Stock (≥$5)")
 
-            exch = (t.get("exchange") or "SMART").upper()
-            tags.append(f"Exchange: {exch}")
+            # 2. Market Index / Major ETF
+            if any(idx in sym for idx in ["SPY", "QQQ", "IWM", "DIA", "VXX", "UVXY", "TQQQ", "SQQQ"]):
+                tags_base.append("Index ETF")
 
-            for tag in tags:
-                if tag not in tag_map:
-                    tag_map[tag] = {
-                        "tag": tag,
-                        "trades_count": 0,
-                        "wins": 0,
-                        "losses": 0,
-                        "net_pnl": 0.0
-                    }
-                if is_closed:
-                    tag_map[tag]["trades_count"] += 1
-                    if t["realized_pnl"] > 0:
-                        tag_map[tag]["wins"] += 1
-                    elif t["realized_pnl"] < 0:
-                        tag_map[tag]["losses"] += 1
-                tag_map[tag]["net_pnl"] += t["net_pnl"]
+            # 3. Market Session Time
+            tag_mkt_time = None
+            tag_loc_time = None
+            if t_time and ":" in t_time:
+                try:
+                    parts = t_time.split(":")
+                    hh, mm = int(parts[0]), int(parts[1])
+                    total_min = hh * 60 + mm
+                    if total_min < 9 * 60 + 30:
+                        tag_mkt_time = "Pre-Market (<09:30)"
+                        tag_loc_time = "Pre-Market (<15:30)"
+                    elif total_min <= 10 * 60 + 30:
+                        tag_mkt_time = "Market Open (09:30-10:30)"
+                        tag_loc_time = "Market Open (15:30-16:30)"
+                    elif total_min <= 14 * 60:
+                        tag_mkt_time = "Midday (10:30-14:00)"
+                        tag_loc_time = "Midday (16:30-20:00)"
+                    elif total_min <= 16 * 60:
+                        tag_mkt_time = "Power Hour (14:00-16:00)"
+                        tag_loc_time = "Power Hour (20:00-22:00)"
+                    else:
+                        tag_mkt_time = "After Hours (>16:00)"
+                        tag_loc_time = "After Hours (>22:00)"
+                except Exception:
+                    pass
 
-        tags_list = []
-        for tag, val in tag_map.items():
-            cnt = val["trades_count"]
-            wr = round((val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
-            tags_list.append({
-                "tag": tag,
-                "trades_count": cnt,
-                "wins": val["wins"],
-                "losses": val["losses"],
-                "win_rate": wr,
-                "net_pnl": round(val["net_pnl"], 2)
-            })
-        tags_list.sort(key=lambda x: x["net_pnl"])
+            # Market Tags
+            tags_mkt = list(tags_base)
+            if tag_mkt_time:
+                tags_mkt.append(tag_mkt_time)
+            for tag in tags_mkt:
+                if tag not in tag_map_market:
+                    tag_map_market[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
+                tag_map_market[tag]["trades_count"] += 1
+                if t["realized_pnl"] > 0:
+                    tag_map_market[tag]["wins"] += 1
+                elif t["realized_pnl"] < 0:
+                    tag_map_market[tag]["losses"] += 1
+                tag_map_market[tag]["net_pnl"] += t["net_pnl"]
+
+            # Local Tags
+            tags_loc = list(tags_base)
+            if tag_loc_time:
+                tags_loc.append(tag_loc_time)
+            for tag in tags_loc:
+                if tag not in tag_map_local:
+                    tag_map_local[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
+                tag_map_local[tag]["trades_count"] += 1
+                if t["realized_pnl"] > 0:
+                    tag_map_local[tag]["wins"] += 1
+                elif t["realized_pnl"] < 0:
+                    tag_map_local[tag]["losses"] += 1
+                tag_map_local[tag]["net_pnl"] += t["net_pnl"]
+
+        def _format_tags(t_map):
+            res = []
+            for tag, val in t_map.items():
+                cnt = val["trades_count"]
+                wr = round((val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+                res.append({
+                    "tag": tag,
+                    "trades_count": cnt,
+                    "wins": val["wins"],
+                    "losses": val["losses"],
+                    "win_rate": wr,
+                    "net_pnl": round(val["net_pnl"], 2)
+                })
+            res.sort(key=lambda x: x["net_pnl"])
+            return res
+
+        tags_market_list = _format_tags(tag_map_market)
+        tags_local_list = _format_tags(tag_map_local)
 
         # 3. Performance by Day of Week (Sun - Sat)
         dow_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         dow_short = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
         dow_data = {i: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for i in range(7)}
 
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 strftime('%w', trade_date) as day_of_week,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
@@ -617,8 +691,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
             FROM trades
+            {where_clause}
             GROUP BY strftime('%w', trade_date)
-        """)
+        """, params)
         for r in cursor.fetchall():
             if r["day_of_week"] is not None:
                 idx = int(r["day_of_week"])
@@ -645,33 +720,78 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 "net_pnl": d_info["net_pnl"]
             })
 
-        # 4. Performance by Time of Day (Hourly 06:00 to 21:00)
-        hourly_data = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(6, 22)}
+        # 4. Performance by Time of Day (Hourly - Market EST & Local CET)
+        ny_tz = ZoneInfo("America/New_York")
+        madrid_tz = ZoneInfo("Europe/Madrid")
+
+        hourly_market = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(6, 22)}
+        hourly_local = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(8, 24)}
+
         for t in all_trades:
             is_closed = (t.get("open_close_indicator") or "").upper() == "C" or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
             tt = t.get("trade_time") or ""
+            td = t.get("trade_date") or ""
+            h_market = None
+            h_local = None
+
             if tt:
                 try:
-                    h = int(tt.split(":")[0])
-                    if h in hourly_data:
-                        if is_closed:
-                            hourly_data[h]["trades_count"] += 1
-                            if t["realized_pnl"] > 0:
-                                hourly_data[h]["wins"] += 1
-                            elif t["realized_pnl"] < 0:
-                                hourly_data[h]["losses"] += 1
-                        hourly_data[h]["net_pnl"] += t["net_pnl"]
+                    clean_time = tt if len(tt.split(":")) == 3 else f"{tt}:00"
+                    dt_obj = datetime.strptime(f"{td} {clean_time}", "%Y-%m-%d %H:%M:%S").replace(tzinfo=ny_tz)
+                    h_market = dt_obj.hour
+                    h_local = dt_obj.astimezone(madrid_tz).hour
                 except Exception:
-                    pass
+                    try:
+                        h_market = int(tt.split(":")[0])
+                        h_local = (h_market + 6) % 24
+                    except Exception:
+                        pass
 
-        time_of_day_list = []
+            if h_market is not None and h_market in hourly_market:
+                if is_closed:
+                    hourly_market[h_market]["trades_count"] += 1
+                    if t["realized_pnl"] > 0:
+                        hourly_market[h_market]["wins"] += 1
+                    elif t["realized_pnl"] < 0:
+                        hourly_market[h_market]["losses"] += 1
+                hourly_market[h_market]["net_pnl"] += t["net_pnl"]
+
+            if h_local is not None and h_local in hourly_local:
+                if is_closed:
+                    hourly_local[h_local]["trades_count"] += 1
+                    if t["realized_pnl"] > 0:
+                        hourly_local[h_local]["wins"] += 1
+                    elif t["realized_pnl"] < 0:
+                        hourly_local[h_local]["losses"] += 1
+                hourly_local[h_local]["net_pnl"] += t["net_pnl"]
+
+        time_of_day_market = []
         for h in range(6, 22):
-            h_info = hourly_data[h]
+            h_info = hourly_market[h]
             cnt = h_info["trades_count"]
             wr = round((h_info["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
-            time_of_day_list.append({
+            time_of_day_market.append({
                 "hour": h,
                 "label": f"{h:02d}:00",
+                "market_label": f"{h:02d}:00 EST",
+                "local_label": f"{(h+6)%24:02d}:00 CET",
+                "trades_count": cnt,
+                "wins": h_info["wins"],
+                "losses": h_info["losses"],
+                "win_rate": wr,
+                "net_pnl": round(h_info["net_pnl"], 2)
+            })
+
+        time_of_day_local = []
+        for h in range(8, 24):
+            h_info = hourly_local[h]
+            cnt = h_info["trades_count"]
+            wr = round((h_info["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+            time_of_day_local.append({
+                "hour": h,
+                "label": f"{h:02d}:00",
+                "local_label": f"{h:02d}:00 CET",
+                "market_label": f"{(h-6)%24:02d}:00 EST",
                 "trades_count": cnt,
                 "wins": h_info["wins"],
                 "losses": h_info["losses"],
@@ -768,16 +888,17 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         order_types.sort(key=lambda x: x["trades_count"], reverse=True)
 
         # 7. Asset Category Breakdown
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
+            {where_clause}
             GROUP BY asset_category
             ORDER BY net_pnl DESC
-        """)
+        """, params)
         categories = []
         for r in cursor.fetchall():
             cnt = r["trades_count"]
@@ -790,26 +911,150 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 "net_pnl": round(r["net_pnl"], 2)
             })
 
-        # 8. Buy vs Sell / Long vs Short
-        cursor.execute("""
+        # 8. Buy vs Sell / Long vs Short Position Direction
+        side_where = "WHERE asset_category != 'CASH' AND ABS(quantity) > 0.0001"
+        if where_clause:
+            side_where = f"{where_clause} AND asset_category != 'CASH' AND ABS(quantity) > 0.0001"
+
+        cursor.execute(f"""
             SELECT
-                buy_sell,
+                CASE 
+                    WHEN (open_close_indicator = 'C' AND buy_sell = 'SELL') OR (open_close_indicator = 'O' AND buy_sell = 'BUY') THEN 'LONG'
+                    WHEN (open_close_indicator = 'C' AND buy_sell = 'BUY') OR (open_close_indicator = 'O' AND buy_sell = 'SELL') THEN 'SHORT'
+                    ELSE buy_sell
+                END as side,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
-            GROUP BY buy_sell
-        """)
+            {side_where}
+            GROUP BY side
+        """, params)
         sides = []
         for r in cursor.fetchall():
             cnt = r["trades_count"]
             wins = r["wins"]
             wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
             sides.append({
-                "side": r["buy_sell"],
+                "side": r["side"],
                 "trades_count": cnt,
                 "win_rate": wr,
                 "net_pnl": round(r["net_pnl"], 2)
+            })
+
+        # 9. Options Strategy Breakdown (Long Call, Long Put, Short Call, Short Put)
+        opt_where = "WHERE asset_category = 'OPT' AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+        if where_clause:
+            opt_where = f"{where_clause} AND asset_category = 'OPT' AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+
+        cursor.execute(f"""
+            SELECT
+                symbol,
+                buy_sell,
+                open_close_indicator,
+                realized_pnl,
+                ib_commission,
+                trade_price,
+                trade_time,
+                notes
+            FROM trades
+            {opt_where}
+        """, params)
+        opt_rows = cursor.fetchall()
+
+        opt_stats: Dict[str, Dict[str, Any]] = {
+            "long_call": {"strategy": "Long Call (Buy Call)", "type": "CALL", "side": "LONG", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+            "long_put": {"strategy": "Long Put (Buy Put)", "type": "PUT", "side": "LONG", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+            "short_call": {"strategy": "Short Call (Sell Call)", "type": "CALL", "side": "SHORT", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+            "short_put": {"strategy": "Short Put (Sell Put)", "type": "PUT", "side": "SHORT", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
+        }
+
+        expired_count = 0
+        expired_wins = 0
+        expired_losses = 0
+        expired_net_pnl = 0.0
+
+        manual_count = 0
+        manual_wins = 0
+        manual_losses = 0
+        manual_net_pnl = 0.0
+
+        for t in opt_rows:
+            sym = (t["symbol"] or "").upper()
+            is_call = sym.endswith(" C") or "CALL" in sym or re.search(r'\d[C]\d', sym)
+            is_put = sym.endswith(" P") or "PUT" in sym or re.search(r'\d[P]\d', sym)
+
+            op_cl = (t["open_close_indicator"] or "C").upper()
+            bs = (t["buy_sell"] or "SELL").upper()
+
+            # Closed with SELL -> was LONG; Closed with BUY -> was SHORT
+            # Opened with BUY -> is LONG; Opened with SELL -> is SHORT
+            is_long = (op_cl == "C" and bs == "SELL") or (op_cl == "O" and bs == "BUY")
+
+            strat_key = None
+            if is_call:
+                strat_key = "long_call" if is_long else "short_call"
+            elif is_put:
+                strat_key = "long_put" if is_long else "short_put"
+
+            net = (t["realized_pnl"] or 0.0) - (t["ib_commission"] or 0.0)
+            if strat_key:
+                opt_stats[strat_key]["trades_count"] += 1
+                if (t["realized_pnl"] or 0.0) > 0:
+                    opt_stats[strat_key]["wins"] += 1
+                elif (t["realized_pnl"] or 0.0) < 0:
+                    opt_stats[strat_key]["losses"] += 1
+                opt_stats[strat_key]["net_pnl"] += net
+
+            price = float(t["trade_price"] or 0.0)
+            time_str = str(t["trade_time"] or "")
+            notes_str = str(t["notes"] or "").lower()
+            is_expired = price == 0.0 or "16:20" in time_str or "expire" in notes_str or "assign" in notes_str
+
+            if is_expired:
+                expired_count += 1
+                expired_net_pnl += net
+                if (t["realized_pnl"] or 0.0) > 0:
+                    expired_wins += 1
+                elif (t["realized_pnl"] or 0.0) < 0:
+                    expired_losses += 1
+            else:
+                manual_count += 1
+                manual_net_pnl += net
+                if (t["realized_pnl"] or 0.0) > 0:
+                    manual_wins += 1
+                elif (t["realized_pnl"] or 0.0) < 0:
+                    manual_losses += 1
+
+        total_opt_count = len(opt_rows)
+        options_summary = {
+            "total_trades": total_opt_count,
+            "expired_count": expired_count,
+            "expired_pct": round((expired_count / total_opt_count * 100), 1) if total_opt_count > 0 else 0.0,
+            "expired_net_pnl": round(expired_net_pnl, 2),
+            "expired_wins": expired_wins,
+            "expired_losses": expired_losses,
+            "expired_win_rate": round((expired_wins / expired_count * 100), 1) if expired_count > 0 else 0.0,
+            "manual_count": manual_count,
+            "manual_pct": round((manual_count / total_opt_count * 100), 1) if total_opt_count > 0 else 0.0,
+            "manual_net_pnl": round(manual_net_pnl, 2),
+            "manual_wins": manual_wins,
+            "manual_losses": manual_losses,
+            "manual_win_rate": round((manual_wins / manual_count * 100), 1) if manual_count > 0 else 0.0
+        }
+
+        option_strategies = []
+        for k, val in opt_stats.items():
+            cnt = val["trades_count"]
+            wr = round((val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+            option_strategies.append({
+                "key": k,
+                "strategy": val["strategy"],
+                "type": val["type"],
+                "side": val["side"],
+                "trades_count": cnt,
+                "win_rate": wr,
+                "net_pnl": round(val["net_pnl"], 2)
             })
 
     return {
@@ -819,13 +1064,19 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         "drawdown_series": drawdown_series,
         "metric_evolution": metric_evolution,
         "symbols": symbols,
-        "tags": tags_list,
+        "tags": tags_local_list,
+        "tags_local": tags_local_list,
+        "tags_market": tags_market_list,
         "day_of_week": dow_list,
-        "time_of_day": time_of_day_list,
+        "time_of_day": time_of_day_local,
+        "time_of_day_local": time_of_day_local,
+        "time_of_day_market": time_of_day_market,
         "holding_durations": holding_durations,
         "order_types": order_types,
         "categories": categories,
-        "sides": sides
+        "sides": sides,
+        "option_strategies": option_strategies,
+        "options_summary": options_summary
     }
 
 

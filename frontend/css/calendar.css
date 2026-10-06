@@ -843,6 +843,91 @@
     letter-spacing: 0.05em;
 }
 
+.stat-card.is-clickable {
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.stat-card.is-clickable:hover {
+    border-color: var(--border-active);
+    background-color: var(--bg-hover);
+}
+
+.cash-card.is-clickable {
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.cash-card.is-clickable:hover {
+    border-color: var(--border-active);
+    background-color: var(--bg-hover);
+}
+
+.section-highlight-pulse {
+    animation: sectionHighlightPulse 1.4s ease-out;
+}
+
+@keyframes sectionHighlightPulse {
+    0% {
+        border-color: var(--border-active);
+    }
+    100% {
+        border-color: var(--border-default);
+    }
+}
+
+.stat-info-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0.65;
+    cursor: help;
+    padding: 2px;
+    margin-left: 4px;
+    transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.stat-info-icon:hover {
+    opacity: 1;
+    color: var(--color-accent);
+}
+
+/* Instant Theme-Aware CSS Floating Tooltip (0ms delay, light/dark responsive) */
+.stat-info-icon[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    right: -4px;
+    z-index: 9999;
+    width: max-content;
+    max-width: 270px;
+    padding: 8px 11px;
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+    white-space: pre-line;
+    box-shadow: var(--shadow-md);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.08s ease, visibility 0.08s ease;
+    font-family: var(--font-sans);
+}
+
+.stat-info-icon[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
 .stat-card-value {
     font-size: 20px;
     font-weight: 800;
@@ -909,6 +994,39 @@
     margin-bottom: 2px;
 }
 
+@media (max-width: 768px) {
+    .stats-header-bar {
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 6px;
+    }
+    .stats-header-bar .segmented-control {
+        flex-shrink: 1;
+    }
+    .stats-header-bar .segmented-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-header-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .stats-header-bar .segmented-control {
+        width: 100%;
+        display: flex;
+    }
+    .stats-header-bar .segmented-btn {
+        flex: 1;
+        text-align: center;
+        padding: 5px 6px;
+    }
+}
+
 /* ============================================================
    Stats Section Layouts & Charts
    ============================================================ */
@@ -927,6 +1045,7 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    scroll-margin-top: 76px;
 }
 
 .stats-section-header {
@@ -974,17 +1093,64 @@
     color: var(--text-main);
 }
 .metric-toggle-label input[type="checkbox"] {
-    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
     width: 14px;
     height: 14px;
-    accent-color: var(--metric-color, #0066cc);
+    border: 1.5px solid var(--border-default);
+    border-radius: 3px;
+    background-color: var(--bg-card);
+    display: inline-grid;
+    place-content: center;
+    cursor: pointer;
+    margin: 0;
+    vertical-align: middle;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
-.metric-color-dot {
+.metric-toggle-label input[type="checkbox"]:checked {
+    background-color: var(--metric-color, var(--color-brand));
+    border-color: var(--metric-color, var(--color-brand));
+}
+
+.metric-toggle-label input[type="checkbox"]::before {
+    content: "";
     width: 8px;
     height: 8px;
-    border-radius: 50%;
-    display: inline-block;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    transform: scale(0);
+    transition: 0.12s transform ease-in-out;
+    background-color: #ffffff;
+}
+
+.metric-toggle-label input[type="checkbox"]:checked::before {
+    transform: scale(1);
+}
+
+.chart-footer-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    padding-top: 8px;
+    margin-top: 6px;
+    border-top: 1px dashed var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.chart-footer-link {
+    color: var(--color-brand);
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: underline;
+    transition: color 0.15s ease;
+}
+
+.chart-footer-link:hover {
+    color: var(--color-brand-hover, #0052a3);
 }
 
 .segmented-control {
@@ -1102,11 +1268,11 @@
 
 .stats-tables-grid {
     display: grid;
-    grid-template-columns: 1.2fr 0.8fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
     .stats-tables-grid {
         grid-template-columns: 1fr;
     }
@@ -1143,6 +1309,36 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid var(--border-default);
+}
+
+.institutional-table th.sortable-th {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    white-space: nowrap;
+}
+
+.institutional-table th.sortable-th:hover {
+    color: var(--text-main);
+    background-color: var(--bg-hover);
+}
+
+.institutional-table th.sortable-th.active-sort {
+    color: var(--color-brand);
+}
+
+.sort-indicator {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 9px;
+    opacity: 0.4;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.sort-indicator.active {
+    opacity: 1;
+    color: var(--color-brand);
+    font-weight: 800;
 }
 
 .institutional-table td {
@@ -1723,19 +1919,11 @@
     color: var(--text-muted);
 }
 
-.modal-empty-state .empty-icon {
-    font-size: 32px;
-    margin-bottom: 8px;
-}
-
-.modal-empty-state h4 {
-    font-size: 14px;
-    color: var(--text-main);
-    margin: 0 0 6px 0;
-}
-
+.modal-empty-state .modal-empty-message,
 .modal-empty-state p {
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
     margin: 0;
 }
 

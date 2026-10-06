@@ -5,6 +5,7 @@
  */
 const StatsPage = {
     data: null,
+    timezoneMode: 'local', // 'local' (CET/CEST) | 'market' (EST/EDT)
     dateRange: 'ALL', // '1W' | '1M' | '3M' | 'YTD' | 'ALL'
     timeframe: 'day', // 'day' | 'week' | 'month'
     rollingWindow: '20', // '10' | '20' | '50' | '100'
@@ -25,15 +26,49 @@ const StatsPage = {
         duration: 'chart',
         order_type: 'chart'
     },
+    tableSort: {
+        symbol: { col: 'net_pnl', dir: 'desc' },
+        tag: { col: 'net_pnl', dir: 'desc' },
+        dow: { col: 'net_pnl', dir: 'desc' },
+        tod: { col: 'net_pnl', dir: 'desc' },
+        duration: { col: 'net_pnl', dir: 'desc' },
+        order_type: { col: 'net_pnl', dir: 'desc' },
+        category: { col: 'net_pnl', dir: 'desc' },
+        side: { col: 'net_pnl', dir: 'desc' },
+        option_strategy: { col: 'net_pnl', dir: 'desc' }
+    },
+    equityCurveMetrics: {
+        cum_pnl: true,
+        daily_pnl: true
+    },
     charts: {},
+
+    getTodData() {
+        if (!this.data) return [];
+        if (this.timezoneMode === 'market') {
+            return this.data.time_of_day_market || this.data.time_of_day || [];
+        }
+        return this.data.time_of_day_local || this.data.time_of_day || [];
+    },
+
+    getTagsData() {
+        if (!this.data) return [];
+        if (this.timezoneMode === 'market') {
+            return this.data.tags_market || this.data.tags || [];
+        }
+        return this.data.tags_local || this.data.tags || [];
+    },
 
     loadSettings() {
         if (typeof SettingsManager !== 'undefined') {
+            this.timezoneMode = String(SettingsManager.get('app_timezone', 'local'));
             this.dateRange = String(SettingsManager.get('stats_date_range', this.dateRange));
             this.timeframe = String(SettingsManager.get('stats_timeframe', this.timeframe));
             this.rollingWindow = String(SettingsManager.get('stats_rolling_window', this.rollingWindow));
-            this.activeMetrics = SettingsManager.get('stats_active_metrics', this.activeMetrics);
-            this.viewModes = SettingsManager.get('stats_view_modes', this.viewModes);
+            this.activeMetrics = Object.assign({}, this.activeMetrics, SettingsManager.get('stats_active_metrics', null));
+            this.viewModes = Object.assign({}, this.viewModes, SettingsManager.get('stats_view_modes', null));
+            this.tableSort = Object.assign({}, this.tableSort, SettingsManager.get('stats_table_sort', null));
+            this.equityCurveMetrics = Object.assign({}, this.equityCurveMetrics, SettingsManager.get('stats_equity_curve_metrics', null));
         }
     },
 
@@ -158,6 +193,130 @@ const StatsPage = {
         return type === 'win' ? 'pnl-positive' : 'pnl-negative';
     },
 
+    renderInfoIcon(tooltipText) {
+        if (!tooltipText) return '';
+        return `<span class="stat-info-icon" data-tooltip="${tooltipText}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>`;
+    },
+
+    getSortThClass(tableTarget, col) {
+        const config = this.tableSort[tableTarget];
+        return (config && config.col === col) ? 'active-sort' : '';
+    },
+
+    getSortIndicator(tableTarget, col) {
+        const config = this.tableSort[tableTarget];
+        if (!config || config.col !== col) {
+            return '<span class="sort-indicator">↕</span>';
+        }
+        return config.dir === 'asc'
+            ? '<span class="sort-indicator active">▲</span>'
+            : '<span class="sort-indicator active">▼</span>';
+    },
+
+    sortData(tableTarget, dataList) {
+        if (!dataList || !dataList.length) return [];
+        const config = this.tableSort[tableTarget] || { col: 'net_pnl', dir: 'desc' };
+        const { col, dir } = config;
+        const sorted = [...dataList];
+        sorted.sort((a, b) => {
+            let valA = a[col];
+            let valB = b[col];
+            if (typeof valA === 'string' || typeof valB === 'string') {
+                valA = String(valA ?? '').toLowerCase();
+                valB = String(valB ?? '').toLowerCase();
+                return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            valA = Number(valA) || 0;
+            valB = Number(valB) || 0;
+            return dir === 'asc' ? valA - valB : valB - valA;
+        });
+        return sorted;
+    },
+
+    updateTable(tableTarget) {
+        if (!this.data) return;
+        const dataMap = {
+            symbol: this.data.symbols,
+            tag: this.getTagsData(),
+            dow: this.data.day_of_week,
+            tod: this.getTodData(),
+            duration: this.data.holding_durations,
+            order_type: this.data.order_types,
+            category: this.data.categories,
+            side: this.data.sides,
+            option_strategy: this.data.option_strategies
+        };
+        const builderMap = {
+            symbol: (items) => this.buildSymbolTableRows(items),
+            tag: (items) => this.buildTagTableRows(items),
+            dow: (items) => this.buildDowTableRows(items),
+            tod: (items) => this.buildTodTableRows(items),
+            duration: (items) => this.buildDurationTableRows(items),
+            order_type: (items) => this.buildOrderTypeTableRows(items),
+            category: (items) => this.buildCategoryTableRows(items),
+            side: (items) => this.buildSideTableRows(items),
+            option_strategy: (items) => this.buildOptionStrategyTableRows(items)
+        };
+
+        const tbody = document.getElementById(`tbody-table-${tableTarget}`);
+        if (tbody && dataMap[tableTarget] && builderMap[tableTarget]) {
+            const sorted = this.sortData(tableTarget, dataMap[tableTarget]);
+            tbody.innerHTML = builderMap[tableTarget](sorted);
+        }
+
+        // Update header sort indicators
+        document.querySelectorAll(`.sortable-th[data-sort-table="${tableTarget}"]`).forEach(th => {
+            const col = th.getAttribute('data-sort-col');
+            const isCurrent = this.tableSort[tableTarget]?.col === col;
+            th.classList.toggle('active-sort', isCurrent);
+            const ind = th.querySelector('.sort-indicator');
+            if (ind) {
+                ind.textContent = isCurrent ? (this.tableSort[tableTarget].dir === 'asc' ? '▲' : '▼') : '↕';
+                ind.classList.toggle('active', isCurrent);
+            }
+        });
+    },
+
+    isAllMetricsActive() {
+        return Object.values(this.activeMetrics).every(Boolean);
+    },
+
+    toggleAllMetrics() {
+        const allActive = this.isAllMetricsActive();
+        const targetState = !allActive;
+        Object.keys(this.activeMetrics).forEach(k => {
+            this.activeMetrics[k] = targetState;
+        });
+
+        const metricIdMap = {
+            'win_rate': 'm-win-rate',
+            'profit_factor': 'm-pf',
+            'avg_win': 'm-avg-win',
+            'avg_loss': 'm-avg-loss',
+            'expectancy': 'm-exp',
+            'avg_trade_pnl': 'm-avg-pnl',
+            'cumulative_pnl': 'm-cum-pnl'
+        };
+
+        Object.entries(metricIdMap).forEach(([k, id]) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = targetState;
+        });
+
+        const btn = document.getElementById('btn-toggle-all-metrics');
+        const sp = STRINGS.statsPage;
+        if (btn) {
+            btn.textContent = targetState ? (sp.deselectAllMetrics || 'Deselect All') : (sp.selectAllMetrics || 'Select All');
+        }
+
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.set('stats_active_metrics', this.activeMetrics);
+        }
+        this.renderMetricEvolutionChart();
+    },
+
     render(data, container) {
         this.destroyCharts();
 
@@ -171,6 +330,8 @@ const StatsPage = {
         const orderTypes = data.order_types || [];
         const categories = data.categories || [];
         const sides = data.sides || [];
+        const optionStrategies = data.option_strategies || [];
+        const optionsSummary = data.options_summary || {};
 
         // Update global header banner
         if (typeof StatsController !== 'undefined' && StatsController.renderOverview) {
@@ -209,7 +370,7 @@ const StatsPage = {
 
         container.innerHTML = `
             <div class="stats-main-container">
-                <!-- Top Statistics Bar with Date Range Filters -->
+                <!-- Top Statistics Bar with Date Range Filters & Timezone -->
                 <div class="stats-header-bar">
                     <div class="segmented-control" id="stats-date-range-filter">
                         <button class="segmented-btn ${this.dateRange === '1W' ? 'active' : ''}" data-range="1W">${sp.filter1W}</button>
@@ -218,12 +379,21 @@ const StatsPage = {
                         <button class="segmented-btn ${this.dateRange === 'YTD' ? 'active' : ''}" data-range="YTD">${sp.filterYTD}</button>
                         <button class="segmented-btn ${this.dateRange === 'ALL' ? 'active' : ''}" data-range="ALL">${sp.filterAll}</button>
                     </div>
+
+                    <div class="segmented-control" id="stats-global-tz-control">
+                        <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
+                            <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
+                        </button>
+                        <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
+                            <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 1. Primary Executive KPI Cards Grid (5 Columns - Matching Calendar Initial Order) -->
                 <div class="stats-kpi-grid" id="stats-kpi-grid">
                     <!-- 1. Net Realized P&L -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.netPnl}</span>
                         </div>
@@ -236,9 +406,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 2. Win Rate -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-rolling-winrate">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.winRate}</span>
+                            ${this.renderInfoIcon(sp.tipWinRate)}
                         </div>
                         <span class="stat-card-value mono ${this.getWinRateClass(ov.win_rate, ov.total_trades)}">
                             ${(ov.win_rate || 0).toFixed(2)}%
@@ -249,20 +420,21 @@ const StatsPage = {
                     </div>
 
                     <!-- 3. Profit Factor -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="pf">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.profitFactor}</span>
+                            ${this.renderInfoIcon(sp.tipProfitFactor)}
                         </div>
                         <span class="stat-card-value mono ${this.getRatioClass(ov.profit_factor, ov.total_trades)}">
                             ${(ov.profit_factor || 0).toFixed(2)}
                         </span>
                         <span class="stat-card-subtitle mono">
-                            ${State.formatCurrency(ov.gross_profit || 0)} / ${State.formatCurrency(ov.gross_loss || 0)}
+                            ${State.formatCurrency(ov.gross_profit || 0)} / ${State.formatCurrency(-(ov.gross_loss || 0))}
                         </span>
                     </div>
 
                     <!-- 4. Expectancy -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="exp">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
                         </div>
@@ -275,7 +447,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 5. Total Trades -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.totalTrades}</span>
                         </div>
@@ -288,7 +460,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 6. Avg Win -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="avg-win">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgWin}</span>
                         </div>
@@ -301,7 +473,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 7. Avg Loss -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="avg-loss">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgLoss}</span>
                         </div>
@@ -314,7 +486,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 8. Largest Gain -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.largestWin}</span>
                         </div>
@@ -327,7 +499,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 9. Largest Loss -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-risk-drawdown">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.largestLoss}</span>
                         </div>
@@ -340,9 +512,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 10. Adj. Win/Loss Ratio -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="win-rate">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.adjWinLossRatio}</span>
+                            ${this.renderInfoIcon(sp.tipAdjWinLossRatio)}
                         </div>
                         <span class="stat-card-value mono ${this.getRatioClass(ov.adj_win_loss_ratio, ov.total_trades)}">
                             ${(ov.adj_win_loss_ratio || 0).toFixed(2)}
@@ -353,9 +526,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 11. Sharpe Ratio -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-risk-drawdown">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.sharpeRatio}</span>
+                            ${this.renderInfoIcon(sp.tipSharpeRatio)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.sharpe_per_trade)}">
                             ${(ov.sharpe_per_trade || 0).toFixed(2)}
@@ -366,7 +540,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 12. Avg Win Hold -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-duration">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgWinHold}</span>
                         </div>
@@ -379,7 +553,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 13. Avg Loss Hold -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-duration">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgLossHold}</span>
                         </div>
@@ -392,7 +566,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 14. Gross Realized P&L -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.grossPnl}</span>
                         </div>
@@ -405,7 +579,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 15. Total Commissions & Fees -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.totalCommissions}</span>
                         </div>
@@ -419,38 +593,38 @@ const StatsPage = {
                 </div>
 
                 <!-- Portfolio Capital & Equity Overview Strip -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-capital-overview">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.capitalStripTitle || 'Portfolio Capital & Equity Overview'}</span>
                         </div>
                         <button type="button" class="btn-pill" id="btn-stats-manage-cash" style="padding: 4px 12px; font-size: 11px;">
-                            ${sp.manageCashBtn || '⚙ Manage Capital & Cash Transfers'}
+                            ${sp.manageCashBtn || 'Manage Capital & Cash Transfers'}
                         </button>
                     </div>
                     <div class="cash-summary-grid">
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-scroll-sec="sec-equity-curve">
                             <span class="cash-card-label">${STRINGS.cash?.accountEquity || 'ACCOUNT EQUITY (NAV)'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.account_balance)}">
                                 ${State.formatCurrency(ov.account_balance || 0)}
                             </span>
                             <span class="cash-card-sub">${STRINGS.cash?.accountEquitySub || 'Starting Capital + Net Flow + Realized P&L'}</span>
                         </div>
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.startingCapital || 'STARTING CAPITAL'}</span>
                             <span class="cash-card-value mono pnl-neutral">
                                 ${State.formatCurrency(ov.starting_capital || 0)}
                             </span>
                             <span class="cash-card-sub">${STRINGS.cash?.startingCapitalStatsSub || 'Configured baseline capital'}</span>
                         </div>
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.netTransfersStats || 'NET CASH TRANSFERS'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.net_cash_flow)}">
                                 ${State.formatCurrency(ov.net_cash_flow || 0)}
                             </span>
                             <span class="cash-card-sub">In: ${State.currency}${(ov.total_deposits || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${(ov.total_withdrawals || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
                         </div>
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-scroll-sec="sec-equity-curve">
                             <span class="cash-card-label">${STRINGS.cash?.roi || 'RETURN ON CAPITAL (% ROI)'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.roi_pct)}">
                                 ${(ov.roi_pct || 0) > 0 ? '+' : ''}${(ov.roi_pct || 0).toFixed(2)}%
@@ -461,10 +635,11 @@ const StatsPage = {
                 </div>
 
                 <!-- 2. Rolling Win Rate Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-rolling-winrate">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.rollingWinRateTitle}</span>
+                            ${this.renderInfoIcon(sp.tipRollingWinRate || 'Win rate calculated across a rolling window of your most recent N closed trades (10, 20, 50, or 100). Compares current performance against the previous block of N trades to track momentum.')}
                         </div>
 
                         <div class="segmented-control" id="rolling-winrate-window">
@@ -489,16 +664,22 @@ const StatsPage = {
                 </div>
 
                 <!-- 3. Metric Evolution Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-metric-evolution">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.metricEvolutionTitle}</span>
                         </div>
 
-                        <div class="segmented-control" id="metric-evolution-timeframe">
-                            <button class="segmented-btn ${this.timeframe === 'day' ? 'active' : ''}" data-tf="day">${sp.day}</button>
-                            <button class="segmented-btn ${this.timeframe === 'week' ? 'active' : ''}" data-tf="week">${sp.week}</button>
-                            <button class="segmented-btn ${this.timeframe === 'month' ? 'active' : ''}" data-tf="month">${sp.month}</button>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn-pill" id="btn-toggle-all-metrics" style="padding: 4px 10px; font-size: 11px;">
+                                ${this.isAllMetricsActive() ? (sp.deselectAllMetrics || 'Deselect All') : (sp.selectAllMetrics || 'Select All')}
+                            </button>
+
+                            <div class="segmented-control" id="metric-evolution-timeframe">
+                                <button class="segmented-btn ${this.timeframe === 'day' ? 'active' : ''}" data-tf="day">${sp.day}</button>
+                                <button class="segmented-btn ${this.timeframe === 'week' ? 'active' : ''}" data-tf="week">${sp.week}</button>
+                                <button class="segmented-btn ${this.timeframe === 'month' ? 'active' : ''}" data-tf="month">${sp.month}</button>
+                            </div>
                         </div>
                     </div>
 
@@ -506,43 +687,36 @@ const StatsPage = {
                     <div class="metric-toggles-bar">
                         <label class="metric-toggle-label" style="--metric-color: #10b981;">
                             <input type="checkbox" id="m-win-rate" ${this.activeMetrics.win_rate ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #10b981;"></span>
                             <span>${sp.winRateMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #8b5cf6;">
                             <input type="checkbox" id="m-pf" ${this.activeMetrics.profit_factor ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #8b5cf6;"></span>
                             <span>${sp.profitFactorMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #3b82f6;">
                             <input type="checkbox" id="m-avg-win" ${this.activeMetrics.avg_win ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #3b82f6;"></span>
                             <span>${sp.avgWinMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #ef4444;">
                             <input type="checkbox" id="m-avg-loss" ${this.activeMetrics.avg_loss ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #ef4444;"></span>
                             <span>${sp.avgLossMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #f59e0b;">
                             <input type="checkbox" id="m-exp" ${this.activeMetrics.expectancy ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #f59e0b;"></span>
                             <span>${sp.expectancyMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #06b6d4;">
                             <input type="checkbox" id="m-avg-pnl" ${this.activeMetrics.avg_trade_pnl ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #06b6d4;"></span>
                             <span>${sp.avgPnlTradeMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #ec4899;">
                             <input type="checkbox" id="m-cum-pnl" ${this.activeMetrics.cumulative_pnl ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #ec4899;"></span>
                             <span>${sp.cumPnlMetric}</span>
                         </label>
                     </div>
@@ -554,10 +728,21 @@ const StatsPage = {
                 </div>
 
                 <!-- 4. Equity Curve Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-equity-curve">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.equityCurveTitle}</span>
+                        </div>
+                        <div class="metric-toggles-bar">
+                            <label class="metric-toggle-label" style="--metric-color: #38bdf8;">
+                                <input type="checkbox" id="eq-cum-pnl" ${this.equityCurveMetrics.cum_pnl ? 'checked' : ''}>
+                                <span>${sp.cumPnlMetric}</span>
+                            </label>
+
+                            <label class="metric-toggle-label" style="--metric-color: #22c55e;">
+                                <input type="checkbox" id="eq-daily-pnl" ${this.equityCurveMetrics.daily_pnl ? 'checked' : ''}>
+                                <span>${sp.dailyPnlMetric}</span>
+                            </label>
                         </div>
                     </div>
                     <div class="chart-canvas-box tall">
@@ -566,7 +751,7 @@ const StatsPage = {
                 </div>
 
                 <!-- 5. Risk & Drawdown Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-risk-drawdown">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.riskTitle}</span>
@@ -636,7 +821,7 @@ const StatsPage = {
                 <!-- 6. 2x2 Breakdowns Grid (Symbol, Tag, Day of Week, Time of Day) -->
                 <div class="breakdowns-2x2-grid">
                     <!-- P&L by Symbol -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-symbol">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlBySymbolTitle}</span>
@@ -646,37 +831,53 @@ const StatsPage = {
                                 <button class="segmented-btn ${this.viewModes.symbol === 'table' ? 'active' : ''}" data-view-target="symbol" data-view-val="table">${sp.tableView}</button>
                             </div>
                         </div>
-                        <div id="wrap-symbol-chart" class="chart-canvas-box ${this.viewModes.symbol === 'chart' ? '' : 'hidden'}">
-                            <canvas id="chart-symbol"></canvas>
+                        <div id="wrap-symbol-chart" class="${this.viewModes.symbol === 'chart' ? '' : 'hidden'}">
+                            <div class="chart-canvas-box">
+                                <canvas id="chart-symbol"></canvas>
+                            </div>
+                            <div class="chart-footer-note">
+                                <span>${sp.symbolChartNotice || 'Showing Top 10 Best & Top 10 Worst symbols'}</span>
+                                <span class="chart-footer-link" data-switch-to-table="symbol">${sp.symbolChartNoticeLink || 'Switch to Table to view all'}</span>
+                            </div>
                         </div>
                         <div id="wrap-symbol-table" class="stats-table-wrapper ${this.viewModes.symbol === 'table' ? '' : 'hidden'}">
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colSymbol}</th>
-                                        <th>${sp.colCategory}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colCommissions}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'symbol')}" data-sort-table="symbol" data-sort-col="symbol">${sp.colSymbol} ${this.getSortIndicator('symbol', 'symbol')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'category')}" data-sort-table="symbol" data-sort-col="category">${sp.colCategory} ${this.getSortIndicator('symbol', 'category')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'trades_count')}" data-sort-table="symbol" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('symbol', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'win_rate')}" data-sort-table="symbol" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('symbol', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'commissions')}" data-sort-table="symbol" data-sort-col="commissions">${sp.colCommissions} ${this.getSortIndicator('symbol', 'commissions')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'net_pnl')}" data-sort-table="symbol" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('symbol', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildSymbolTableRows(symbols)}
+                                <tbody id="tbody-table-symbol">
+                                    ${this.buildSymbolTableRows(this.sortData('symbol', symbols))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <!-- P&L by Tag -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-tag">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByTagTitle}</span>
                             </div>
-                            <div class="segmented-control">
-                                <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
-                                <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="segmented-control" id="stats-tag-tz-control">
+                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
+                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
+                                    </button>
+                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
+                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
+                                    </button>
+                                </div>
+                                <div class="segmented-control">
+                                    <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
+                                    <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
+                                </div>
                             </div>
                         </div>
                         <div id="wrap-tag-chart" class="chart-canvas-box ${this.viewModes.tag === 'chart' ? '' : 'hidden'}">
@@ -686,21 +887,21 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colTag}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'tag')}" data-sort-table="tag" data-sort-col="tag">${sp.colTag} ${this.getSortIndicator('tag', 'tag')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'trades_count')}" data-sort-table="tag" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('tag', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'win_rate')}" data-sort-table="tag" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('tag', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'net_pnl')}" data-sort-table="tag" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('tag', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildTagTableRows(tags)}
+                                <tbody id="tbody-table-tag">
+                                    ${this.buildTagTableRows(this.sortData('tag', this.getTagsData()))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <!-- Performance by Day of Week -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-dow">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.perfByDowTitle}</span>
@@ -717,28 +918,38 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colDay}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'day_name')}" data-sort-table="dow" data-sort-col="day_name">${sp.colDay} ${this.getSortIndicator('dow', 'day_name')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'trades_count')}" data-sort-table="dow" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('dow', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'win_rate')}" data-sort-table="dow" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('dow', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'net_pnl')}" data-sort-table="dow" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('dow', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildDowTableRows(dow)}
+                                <tbody id="tbody-table-dow">
+                                    ${this.buildDowTableRows(this.sortData('dow', dow))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <!-- Performance by Time of Day -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-tod">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.perfByTodTitle}</span>
                             </div>
-                            <div class="segmented-control">
-                                <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
-                                <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="segmented-control" id="stats-tod-tz-control">
+                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
+                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
+                                    </button>
+                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
+                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
+                                    </button>
+                                </div>
+                                <div class="segmented-control">
+                                    <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
+                                    <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
+                                </div>
                             </div>
                         </div>
                         <div id="wrap-tod-chart" class="chart-canvas-box ${this.viewModes.tod === 'chart' ? '' : 'hidden'}">
@@ -748,21 +959,21 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colHour}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'label')}" id="th-tod-hour" data-sort-table="tod" data-sort-col="label">${this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)')} ${this.getSortIndicator('tod', 'label')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'trades_count')}" data-sort-table="tod" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('tod', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'win_rate')}" data-sort-table="tod" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('tod', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'net_pnl')}" data-sort-table="tod" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('tod', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildTodTableRows(tod)}
+                                <tbody id="tbody-table-tod">
+                                    ${this.buildTodTableRows(this.sortData('tod', this.getTodData()))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <!-- P&L by Holding Duration -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-duration">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByDurationTitle}</span>
@@ -779,21 +990,21 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colDuration}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'duration')}" data-sort-table="duration" data-sort-col="duration">${sp.colDuration} ${this.getSortIndicator('duration', 'duration')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'trades_count')}" data-sort-table="duration" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('duration', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'win_rate')}" data-sort-table="duration" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('duration', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'net_pnl')}" data-sort-table="duration" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('duration', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildDurationTableRows(durations)}
+                                <tbody id="tbody-table-duration">
+                                    ${this.buildDurationTableRows(this.sortData('duration', durations))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <!-- P&L by Order Type -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-ordertype">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByOrderTypeTitle}</span>
@@ -810,14 +1021,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colOrderType}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'order_type')}" data-sort-table="order_type" data-sort-col="order_type">${sp.colOrderType} ${this.getSortIndicator('order_type', 'order_type')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'trades_count')}" data-sort-table="order_type" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('order_type', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'win_rate')}" data-sort-table="order_type" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('order_type', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'net_pnl')}" data-sort-table="order_type" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('order_type', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildOrderTypeTableRows(orderTypes)}
+                                <tbody id="tbody-table-order_type">
+                                    ${this.buildOrderTypeTableRows(this.sortData('order_type', orderTypes))}
                                 </tbody>
                             </table>
                         </div>
@@ -834,14 +1045,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colCategory}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'category')}" data-sort-table="category" data-sort-col="category">${sp.colCategory} ${this.getSortIndicator('category', 'category')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'trades_count')}" data-sort-table="category" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('category', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'win_rate')}" data-sort-table="category" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('category', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'net_pnl')}" data-sort-table="category" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('category', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildCategoryTableRows(categories)}
+                                <tbody id="tbody-table-category">
+                                    ${this.buildCategoryTableRows(this.sortData('category', categories))}
                                 </tbody>
                             </table>
                         </div>
@@ -855,17 +1066,89 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colSide}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'side')}" data-sort-table="side" data-sort-col="side">${sp.colSide} ${this.getSortIndicator('side', 'side')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'trades_count')}" data-sort-table="side" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('side', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'win_rate')}" data-sort-table="side" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('side', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'net_pnl')}" data-sort-table="side" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('side', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildSideTableRows(sides)}
+                                <tbody id="tbody-table-side">
+                                    ${this.buildSideTableRows(this.sortData('side', sides))}
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    <!-- Options Strategy Breakdown (Long Calls, Long Puts, Short Calls, Short Puts) -->
+                    <div class="stats-panel">
+                        <div class="section-header">
+                            <h3 class="section-title">${sp.optionsTableTitle || 'Options Strategy Breakdown'}</h3>
+                        </div>
+                        <div class="stats-table-wrapper">
+                            <table class="institutional-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'strategy')}" data-sort-table="option_strategy" data-sort-col="strategy">${sp.colStrategy || 'Strategy'} ${this.getSortIndicator('option_strategy', 'strategy')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'trades_count')}" data-sort-table="option_strategy" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('option_strategy', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'win_rate')}" data-sort-table="option_strategy" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('option_strategy', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('option_strategy', 'net_pnl')}" data-sort-table="option_strategy" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('option_strategy', 'net_pnl')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-table-option_strategy">
+                                    ${this.buildOptionStrategyTableRows(this.sortData('option_strategy', optionStrategies))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        ${optionsSummary.total_trades > 0 ? `
+                            <div class="option-expiration-stat-box" style="margin-top: 14px; padding: 12px 14px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xs); display: flex; flex-direction: column; gap: 10px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">${sp.optionExpirationsTitle || 'Option Exit Discipline & Expirations'}</span>
+                                        ${this.renderInfoIcon(sp.optionExpirationsTooltip || 'Detailed analysis of option exit execution: unmanaged positions auto-settled at $0.00 upon expiration vs positions actively closed before expiry.')}
+                                    </div>
+                                    <span class="badge-pill" style="font-size: 10px; padding: 2px 7px; background: var(--bg-card); border: 1px solid var(--border-default); font-weight: 700; color: var(--text-main); font-family: var(--font-mono);">
+                                        ${optionsSummary.expired_count} Expired / ${optionsSummary.total_trades} Total (${optionsSummary.expired_pct}%)
+                                    </span>
+                                </div>
+
+                                <!-- Dual Visual Progress Bar -->
+                                <div style="display: flex; height: 6px; width: 100%; border-radius: 3px; overflow: hidden; background: var(--border-subtle);">
+                                    <div style="width: ${optionsSummary.expired_pct}%; background: var(--color-loss, #ef4444); transition: width 0.3s ease;" title="Expired at $0.00: ${optionsSummary.expired_pct}%"></div>
+                                    <div style="width: ${optionsSummary.manual_pct}%; background: var(--color-profit, #10b981); transition: width 0.3s ease;" title="Closed in Market: ${optionsSummary.manual_pct}%"></div>
+                                </div>
+
+                                <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+                                    <strong>${optionsSummary.expired_count} of ${optionsSummary.total_trades}</strong> ${sp.expiredSubNotice || 'held to expiration ($0.00 auto-settlement)'} (${optionsSummary.expired_pct}%), and <strong>${optionsSummary.manual_count}</strong> ${sp.manualSubNotice || 'actively closed in the market before expiry'} (${optionsSummary.manual_pct}%).
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11.5px;">
+                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.expiredLabel || 'Expired at $0.00'}</span>
+                                            <span style="font-size: 10px; color: var(--color-loss); font-weight: 700;">${optionsSummary.expired_pct}%</span>
+                                        </div>
+                                        <strong class="mono ${this.getPnlClass(optionsSummary.expired_net_pnl)}" style="font-size: 14px; margin-top: 2px;">${State.formatCurrency(optionsSummary.expired_net_pnl)}</strong>
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                                            <span>${optionsSummary.expired_count} trades</span>
+                                            <span>${optionsSummary.expired_win_rate}% Win Rate</span>
+                                        </div>
+                                    </div>
+
+                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.manualLabel || 'Closed in Market'}</span>
+                                            <span style="font-size: 10px; color: var(--color-profit); font-weight: 700;">${optionsSummary.manual_pct}%</span>
+                                        </div>
+                                        <strong class="mono ${this.getPnlClass(optionsSummary.manual_net_pnl)}" style="font-size: 14px; margin-top: 2px;">${State.formatCurrency(optionsSummary.manual_net_pnl)}</strong>
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                                            <span>${optionsSummary.manual_count} trades</span>
+                                            <span>${optionsSummary.manual_win_rate}% Win Rate</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -878,7 +1161,68 @@ const StatsPage = {
         }
     },
 
+    scrollToSection(secId, metricId = null) {
+        const el = document.getElementById(secId);
+        if (!el) return;
+
+        if (metricId) {
+            const metricKeyMap = {
+                'win-rate': 'win_rate',
+                'pf': 'profit_factor',
+                'avg-win': 'avg_win',
+                'avg-loss': 'avg_loss',
+                'exp': 'expectancy',
+                'avg-pnl': 'avg_trade_pnl',
+                'cum-pnl': 'cumulative_pnl'
+            };
+            const chk = document.getElementById(`m-${metricId}`);
+            if (chk && !chk.checked) {
+                chk.checked = true;
+                const mappedKey = metricKeyMap[metricId] || metricId;
+                this.activeMetrics[mappedKey] = true;
+                if (typeof SettingsManager !== 'undefined') {
+                    SettingsManager.set('stats_active_metrics', this.activeMetrics);
+                }
+                this.renderMetricEvolutionChart();
+            }
+        }
+
+        const headerOffset = 76;
+        const elementPosition = el.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({
+            top: Math.max(0, offsetPosition),
+            behavior: 'smooth'
+        });
+        el.classList.remove('section-highlight-pulse');
+        void el.offsetWidth;
+        el.classList.add('section-highlight-pulse');
+        setTimeout(() => el.classList.remove('section-highlight-pulse'), 1400);
+    },
+
     bindEvents() {
+        // Clickable stat cards & cash cards smooth scrolling
+        document.querySelectorAll('.stat-card.is-clickable, .cash-card.is-clickable').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.stat-info-icon')) {
+                    return; // Hover/tap tooltip without navigating
+                }
+                const isCashModal = card.getAttribute('data-cash-modal');
+                if (isCashModal) {
+                    if (typeof CashModal !== 'undefined' && CashModal.open) {
+                        CashModal.open();
+                    }
+                    return;
+                }
+
+                const secId = card.getAttribute('data-scroll-sec');
+                const metricId = card.getAttribute('data-scroll-metric');
+                if (secId) {
+                    this.scrollToSection(secId, metricId);
+                }
+            });
+        });
+
         const btnManageCash = document.getElementById('btn-stats-manage-cash');
         if (btnManageCash) {
             btnManageCash.addEventListener('click', () => {
@@ -951,10 +1295,20 @@ const StatsPage = {
                     if (typeof SettingsManager !== 'undefined') {
                         SettingsManager.set('stats_active_metrics', this.activeMetrics);
                     }
+                    const btn = document.getElementById('btn-toggle-all-metrics');
+                    const sp = STRINGS.statsPage;
+                    if (btn) {
+                        btn.textContent = this.isAllMetricsActive() ? (sp.deselectAllMetrics || 'Deselect All') : (sp.selectAllMetrics || 'Select All');
+                    }
                     this.renderMetricEvolutionChart();
                 });
             }
         });
+
+        const btnToggleMetrics = document.getElementById('btn-toggle-all-metrics');
+        if (btnToggleMetrics) {
+            btnToggleMetrics.addEventListener('click', () => this.toggleAllMetrics());
+        }
 
         // Chart / Table view switchers in 2x2 breakdowns
         document.querySelectorAll('[data-view-target]').forEach(btn => {
@@ -991,6 +1345,93 @@ const StatsPage = {
                 }
             });
         });
+
+        // Clickable sortable table headers (Red to Green & Green to Red sorting)
+        document.querySelectorAll('.sortable-th').forEach(th => {
+            th.addEventListener('click', () => {
+                const tableTarget = th.getAttribute('data-sort-table');
+                const colTarget = th.getAttribute('data-sort-col');
+                if (!tableTarget || !colTarget) return;
+
+                if (!this.tableSort[tableTarget]) {
+                    this.tableSort[tableTarget] = { col: colTarget, dir: 'desc' };
+                } else if (this.tableSort[tableTarget].col === colTarget) {
+                    this.tableSort[tableTarget].dir = this.tableSort[tableTarget].dir === 'desc' ? 'asc' : 'desc';
+                } else {
+                    this.tableSort[tableTarget].col = colTarget;
+                    const textCols = ['symbol', 'tag', 'category', 'duration', 'order_type', 'day_name', 'label', 'side', 'strategy'];
+                    this.tableSort[tableTarget].dir = textCols.includes(colTarget) ? 'asc' : 'desc';
+                }
+
+                if (typeof SettingsManager !== 'undefined') {
+                    SettingsManager.set('stats_table_sort', this.tableSort);
+                }
+
+                this.updateTable(tableTarget);
+            });
+        });
+
+        // Equity Curve metric toggles (Cumulative P&L / Daily P&L)
+        ['eq-cum-pnl', 'eq-daily-pnl'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    if (id === 'eq-cum-pnl') this.equityCurveMetrics.cum_pnl = e.target.checked;
+                    if (id === 'eq-daily-pnl') this.equityCurveMetrics.daily_pnl = e.target.checked;
+                    if (typeof SettingsManager !== 'undefined') {
+                        SettingsManager.set('stats_equity_curve_metrics', this.equityCurveMetrics);
+                    }
+                    this.renderEquityCurveChart();
+                });
+            }
+        });
+
+        // Clickable switch-to-table link in chart footer
+        document.querySelectorAll('[data-switch-to-table]').forEach(el => {
+            el.addEventListener('click', () => {
+                const target = el.getAttribute('data-switch-to-table');
+                const tableBtn = document.querySelector(`.segmented-btn[data-view-target="${target}"][data-view-val="table"]`);
+                if (tableBtn) tableBtn.click();
+            });
+        });
+
+        // Timezone switcher events
+        document.querySelectorAll('[data-stats-tz]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tz = btn.getAttribute('data-stats-tz');
+                if (tz) this.setTimezone(tz);
+            });
+        });
+    },
+
+    setTimezone(tz, broadcast = true) {
+        this.timezoneMode = tz;
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.set('app_timezone', tz);
+        }
+        document.querySelectorAll('[data-stats-tz]').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-stats-tz') === tz);
+        });
+        this.renderTodChart();
+        this.renderTagChart();
+        const tbodyTod = document.getElementById('tbody-table-tod');
+        if (tbodyTod) {
+            const sortedData = this.sortData('tod', this.getTodData());
+            tbodyTod.innerHTML = this.buildTodTableRows(sortedData);
+        }
+        const tbodyTag = document.getElementById('tbody-table-tag');
+        if (tbodyTag) {
+            const sortedTag = this.sortData('tag', this.getTagsData());
+            tbodyTag.innerHTML = this.buildTagTableRows(sortedTag);
+        }
+        const thHour = document.getElementById('th-tod-hour');
+        if (thHour) {
+            const timeLabel = this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)');
+            thHour.innerHTML = `${timeLabel} ${this.getSortIndicator('tod', 'label')}`;
+        }
+        if (broadcast) {
+            window.dispatchEvent(new CustomEvent('appTimezoneChanged', { detail: { timezone: tz } }));
+        }
     },
 
     updateRollingWinRateUI() {
@@ -1323,37 +1764,55 @@ const StatsPage = {
         const barColors = dailyPnl.map(p => p >= 0 ? theme.profitBar : theme.lossBar);
         const barBorders = dailyPnl.map(p => p >= 0 ? theme.profit : theme.loss);
 
+        const datasets = [];
+
+        if (this.equityCurveMetrics.cum_pnl) {
+            datasets.push({
+                type: 'line',
+                label: STRINGS.statsPage.cumPnlMetric,
+                data: cumPnl.length ? cumPnl : [0],
+                borderColor: theme.equityLine,
+                backgroundColor: theme.equityArea,
+                fill: true,
+                tension: 0.35,
+                borderWidth: 2.5,
+                pointRadius: labels.length > 35 ? 0 : 3,
+                pointHoverRadius: 6,
+                yAxisID: 'y',
+                order: 1
+            });
+        }
+
+        if (this.equityCurveMetrics.daily_pnl) {
+            datasets.push({
+                type: 'bar',
+                label: STRINGS.statsPage.dailyPnlMetric,
+                data: dailyPnl.length ? dailyPnl : [0],
+                backgroundColor: barColors,
+                borderColor: barBorders,
+                borderWidth: 1,
+                borderRadius: 2,
+                barPercentage: 0.5,
+                yAxisID: 'y',
+                order: 2
+            });
+        }
+
+        if (!datasets.length) {
+            datasets.push({
+                type: 'line',
+                label: STRINGS.statsPage.cumPnlMetric,
+                data: labels.map(() => 0),
+                borderColor: 'transparent',
+                backgroundColor: 'transparent',
+                yAxisID: 'y'
+            });
+        }
+
         this.charts.equityCurve = new Chart(canvas, {
             data: {
                 labels: labels.length ? labels : ['--'],
-                datasets: [
-                    {
-                        type: 'line',
-                        label: STRINGS.statsPage.cumPnlMetric,
-                        data: cumPnl.length ? cumPnl : [0],
-                        borderColor: theme.equityLine,
-                        backgroundColor: theme.equityArea,
-                        fill: true,
-                        tension: 0.35,
-                        borderWidth: 2.5,
-                        pointRadius: labels.length > 35 ? 0 : 3,
-                        pointHoverRadius: 6,
-                        yAxisID: 'y',
-                        order: 1
-                    },
-                    {
-                        type: 'bar',
-                        label: STRINGS.statsPage.dailyPnlMetric,
-                        data: dailyPnl.length ? dailyPnl : [0],
-                        backgroundColor: barColors,
-                        borderColor: barBorders,
-                        borderWidth: 1,
-                        borderRadius: 2,
-                        barPercentage: 0.5,
-                        yAxisID: 'y',
-                        order: 2
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -1361,14 +1820,7 @@ const StatsPage = {
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
-                        display: true,
-                        position: 'top',
-                        align: 'end',
-                        labels: {
-                            color: theme.text,
-                            boxWidth: 10,
-                            font: { size: 11, weight: '600' }
-                        }
+                        display: false
                     },
                     tooltip: {
                         callbacks: {
@@ -1379,7 +1831,7 @@ const StatsPage = {
                                 const val = context.parsed.y;
                                 if (context.dataset.type === 'bar') {
                                     const count = item ? item.trades_count : 0;
-                                    return ` ${label}: ${State.formatCurrency(val)} (${count} ops)`;
+                                    return ` ${label}: ${State.formatCurrency(val)} (${count} trades)`;
                                 }
                                 return ` ${label}: ${State.formatCurrency(val)}`;
                             }
@@ -1406,17 +1858,31 @@ const StatsPage = {
         });
     },
 
-    // 5. P&L by Symbol (Horizontal Bar)
+    // 5. P&L by Symbol (Horizontal Bar - Top 10 Best & Top 10 Worst)
     renderSymbolChart() {
         const canvas = document.getElementById('chart-symbol');
         if (!canvas) return;
         if (this.charts.symbol) this.charts.symbol.destroy();
 
         const theme = this.getThemeColors();
-        const symbols = this.data.symbols || [];
+        const rawSymbols = [...(this.data.symbols || [])];
 
-        const labels = symbols.map(s => s.symbol);
-        const values = symbols.map(s => s.net_pnl);
+        // Sort descending: best (+) to worst (-)
+        rawSymbols.sort((a, b) => b.net_pnl - a.net_pnl);
+
+        let displayedSymbols = rawSymbols;
+        if (rawSymbols.length > 20) {
+            const best10 = rawSymbols.slice(0, 10);
+            const worst10 = rawSymbols.slice(-10);
+            displayedSymbols = [...best10, ...worst10];
+        }
+
+        if (canvas.parentElement) {
+            canvas.parentElement.style.height = `${Math.max(280, displayedSymbols.length * 24)}px`;
+        }
+
+        const labels = displayedSymbols.map(s => s.symbol);
+        const values = displayedSymbols.map(s => s.net_pnl);
         const colors = values.map(v => v >= 0 ? theme.profitBar : theme.lossBar);
         const borders = values.map(v => v >= 0 ? theme.profit : theme.loss);
 
@@ -1443,10 +1909,10 @@ const StatsPage = {
                         callbacks: {
                             label: (context) => {
                                 const idx = context.dataIndex;
-                                const s = symbols[idx];
+                                const s = displayedSymbols[idx];
                                 const wr = s ? s.win_rate : 0;
                                 const cnt = s ? s.trades_count : 0;
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} ops)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} trades)`;
                             }
                         }
                     }
@@ -1463,6 +1929,7 @@ const StatsPage = {
                     y: {
                         grid: { display: false },
                         ticks: {
+                            autoSkip: false,
                             color: theme.textMain,
                             font: { weight: '700', size: 11 }
                         }
@@ -1472,14 +1939,21 @@ const StatsPage = {
         });
     },
 
-    // 6. P&L by Tag (Horizontal Bar)
+    // 6. P&L by Tag (Horizontal Bar - Full List)
     renderTagChart() {
         const canvas = document.getElementById('chart-tag');
         if (!canvas) return;
         if (this.charts.tag) this.charts.tag.destroy();
 
         const theme = this.getThemeColors();
-        const tags = this.data.tags || [];
+        const tags = [...this.getTagsData()];
+
+        // Sort tags descending: best (+) to worst (-)
+        tags.sort((a, b) => b.net_pnl - a.net_pnl);
+
+        if (canvas.parentElement) {
+            canvas.parentElement.style.height = `${Math.max(280, tags.length * 26)}px`;
+        }
 
         const labels = tags.map(t => t.tag);
         const values = tags.map(t => t.net_pnl);
@@ -1510,9 +1984,10 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const t = tags[idx];
-                                const wr = t ? t.win_rate : 0;
-                                const cnt = t ? t.trades_count : 0;
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} ops)`;
+                                if (!t) return ' No tags recorded';
+                                const wr = t.win_rate || 0;
+                                const cnt = t.trades_count || 0;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} trades)`;
                             }
                         }
                     }
@@ -1529,6 +2004,7 @@ const StatsPage = {
                     y: {
                         grid: { display: false },
                         ticks: {
+                            autoSkip: false,
                             color: theme.textMain,
                             font: { weight: '600', size: 11 }
                         }
@@ -1575,7 +2051,7 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const d = dow[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d.trades_count} ops, ${d.win_rate}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d.trades_count} trades, ${d.win_rate}% WR)`;
                             }
                         }
                     }
@@ -1598,14 +2074,15 @@ const StatsPage = {
         });
     },
 
-    // 8. Performance by Time of Day (Hourly Vertical Bar)
+    // 8. Performance by Time of Day (Hourly Vertical Bar - Local & Market Time)
     renderTodChart() {
         const canvas = document.getElementById('chart-tod');
         if (!canvas) return;
         if (this.charts.tod) this.charts.tod.destroy();
 
         const theme = this.getThemeColors();
-        const tod = this.data.time_of_day || [];
+        const tod = this.getTodData();
+        const isLocal = this.timezoneMode === 'local';
 
         const labels = tod.map(t => t.label);
         const values = tod.map(t => t.net_pnl);
@@ -1632,10 +2109,18 @@ const StatsPage = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (context) => {
+                                const idx = context[0]?.dataIndex;
+                                const t = tod[idx];
+                                if (!t) return '';
+                                return isLocal
+                                    ? `${t.local_label || t.label + ' CET'} (Market: ${t.market_label || '--'})`
+                                    : `${t.market_label || t.label + ' EST'} (Local: ${t.local_label || '--'})`;
+                            },
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const t = tod[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${t.trades_count} ops, ${t.win_rate}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${t.trades_count} trades, ${t.win_rate}% WR)`;
                             }
                         }
                     }
@@ -1695,7 +2180,7 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const d = durations[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d ? d.trades_count : 0} ops, ${d ? d.win_rate : 0}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d ? d.trades_count : 0} trades, ${d ? d.win_rate : 0}% WR)`;
                             }
                         }
                     }
@@ -1755,7 +2240,7 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const o = orderTypes[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${o ? o.trades_count : 0} ops, ${o ? o.win_rate : 0}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${o ? o.trades_count : 0} trades, ${o ? o.win_rate : 0}% WR)`;
                             }
                         }
                     }
@@ -1900,15 +2385,58 @@ const StatsPage = {
         if (!sides || !sides.length) {
             return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No trades</td></tr>`;
         }
+        const sp = STRINGS.statsPage || {};
         return sides.map(s => {
-            const isBuy = s.side === 'BUY';
+            const sideUpper = (s.side || '').toUpperCase();
+            const isLong = sideUpper === 'LONG' || sideUpper === 'BUY';
             const pnlClass = this.getPnlClass(s.net_pnl);
+            const label = isLong ? (sp.longSideLabel || 'LONG (Buyer)') : (sp.shortSideLabel || 'SHORT (Seller)');
             return `
                 <tr>
-                    <td><span class="${isBuy ? 'badge-pill-profit' : 'badge-pill-loss'}">${isBuy ? 'LONG (BUY)' : 'SHORT (SELL)'}</span></td>
+                    <td><span class="${isLong ? 'badge-pill-profit' : 'badge-pill-loss'}">${label}</span></td>
                     <td class="mono">${s.trades_count}</td>
                     <td class="mono">${s.win_rate}%</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(s.net_pnl)}</td>
+                </tr>
+            `;
+        }).join('');
+    },
+
+    buildOptionStrategyTableRows(strategies) {
+        const sp = STRINGS.statsPage || {};
+        if (!strategies || !strategies.length) {
+            return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">${sp.noOptionsRecorded || 'No options trades recorded in this period'}</td></tr>`;
+        }
+
+        const totalTrades = strategies.reduce((acc, s) => acc + (s.trades_count || 0), 0);
+        if (totalTrades === 0) {
+            return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">${sp.noOptionsRecorded || 'No options trades recorded in this period'}</td></tr>`;
+        }
+
+        const labelMap = {
+            'long_call': sp.longCallLabel || 'Long Call (Buy Call)',
+            'long_put': sp.longPutLabel || 'Long Put (Buy Put)',
+            'short_call': sp.shortCallLabel || 'Short Call (Sell Call)',
+            'short_put': sp.shortPutLabel || 'Short Put (Sell Put)'
+        };
+
+        const badgeClassMap = {
+            'long_call': 'badge-buy-call',
+            'long_put': 'badge-buy-put',
+            'short_call': 'badge-sell-call',
+            'short_put': 'badge-sell-put'
+        };
+
+        return strategies.map(s => {
+            const label = labelMap[s.key] || s.strategy;
+            const badgeClass = badgeClassMap[s.key] || (s.side === 'LONG' ? 'badge-pill-profit' : 'badge-pill-loss');
+            const pnlClass = s.trades_count > 0 ? this.getPnlClass(s.net_pnl) : 'pnl-neutral';
+            return `
+                <tr>
+                    <td><span class="badge-direction ${badgeClass}" style="font-size: 10px; padding: 2px 7px;">${label}</span></td>
+                    <td class="mono">${s.trades_count}</td>
+                    <td class="mono">${s.trades_count > 0 ? `${s.win_rate}%` : '--'}</td>
+                    <td class="mono ${pnlClass}" style="font-weight: 700;">${s.trades_count > 0 ? State.formatCurrency(s.net_pnl) : '--'}</td>
                 </tr>
             `;
         }).join('');
@@ -1919,6 +2447,14 @@ const StatsPage = {
 window.addEventListener('themeChanged', () => {
     if (typeof StatsPage !== 'undefined' && StatsPage.reRenderCharts) {
         StatsPage.reRenderCharts();
+    }
+});
+
+// Global timezone sync listener
+window.addEventListener('appTimezoneChanged', (e) => {
+    const newTz = e.detail?.timezone;
+    if (newTz && typeof StatsPage !== 'undefined' && StatsPage.timezoneMode !== newTz) {
+        StatsPage.setTimezone(newTz, false);
     }
 });
 

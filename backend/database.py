@@ -1,4 +1,5 @@
 import logging
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
@@ -8,6 +9,75 @@ from backend.config import DB_PATH
 
 
 logger = logging.getLogger("ib-journal.db")
+
+MONTHS = ["", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+
+
+def normalize_symbol(symbol: str, description: str = "", asset_category: str = "STK") -> str:
+    """
+    Normalizes option and asset symbols into clean, consistent, human-readable format:
+    - OCC option format 'QQQ   261001C00743000' -> 'QQQ 01OCT26 743 C'
+    - Description fallback if valid option format
+    - Removes internal duplicate whitespace
+    """
+    sym = (symbol or "").strip().upper()
+    desc = (description or "").strip().upper()
+    cat = (asset_category or "").strip().upper()
+
+    # 1. If description contains a clean human-readable option name like 'QQQ 01OCT26 743 C', prefer it for OPT
+    if cat == "OPT" or "OPT" in sym or re.search(r'\b\d{2}[A-Z]{3}\d{2}\b', desc):
+        if re.match(r'^[A-Z0-9\.\s/]+ \d{2}[A-Z]{3}\d{2} [\d\.]+ [CP]$', desc):
+            return " ".join(desc.split())
+
+    # 2. Check OCC format in symbol: e.g. 'QQQ   261001C00743000' or 'QQQ261001C00743000'
+    m = re.match(r'^([A-Z0-9\.\s/]+?)\s*(\d{2})(\d{2})(\d{2})([CP])(\d{8})$', sym)
+    if m:
+        root = m.group(1).strip()
+        yy = m.group(2)
+        mm = int(m.group(3))
+        dd = m.group(4)
+        opt_type = m.group(5)
+        strike_raw = int(m.group(6)) / 1000.0
+        strike_str = f"{strike_raw:.2f}".rstrip("0").rstrip(".") if strike_raw % 1 != 0 else str(int(strike_raw))
+        month_str = MONTHS[mm] if 1 <= mm <= 12 else f"{mm:02d}"
+        return f"{root} {dd}{month_str}{yy} {strike_str} {opt_type}"
+
+    return " ".join(sym.split())
+
+
+def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
+    """
+    Cleans up duplicate trades:
+    1. Normalizes symbol names in trades table.
+    2. Deletes placeholder GEN_% trades if an official execution (real ib_exec_id) exists for the same trade.
+    """
+    cursor = conn.cursor()
+    # 1. Normalize all symbols
+    cursor.execute("SELECT id, symbol, description, asset_category FROM trades;")
+    rows = cursor.fetchall()
+    for r in rows:
+        norm = normalize_symbol(r["symbol"], r["description"] or "", r["asset_category"] or "STK")
+        if norm != r["symbol"]:
+            cursor.execute("UPDATE trades SET symbol = ? WHERE id = ?;", (norm, r["id"]))
+
+    # 2. Delete GEN_% trades when matching real ib_exec_id trades exist
+    cursor.execute("""
+        DELETE FROM trades
+        WHERE ib_exec_id LIKE 'GEN_%'
+        AND EXISTS (
+            SELECT 1 FROM trades t_real
+            WHERE t_real.ib_exec_id NOT LIKE 'GEN_%'
+              AND t_real.trade_date = trades.trade_date
+              AND t_real.trade_time = trades.trade_time
+              AND (t_real.symbol = trades.symbol OR t_real.description = trades.symbol)
+              AND t_real.buy_sell = trades.buy_sell
+              AND ABS(t_real.trade_price - trades.trade_price) < 0.0001
+        );
+    """)
+    deleted_count = cursor.rowcount
+    if deleted_count > 0:
+        logger.info(f"Cleaned up {deleted_count} duplicate placeholder trades superseded by official executions.")
+    return deleted_count
 
 
 def get_connection() -> sqlite3.Connection:
@@ -164,11 +234,15 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_date ON cash_transactions(transaction_date);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_type ON cash_transactions(type);")
 
+        # Deduplicate and normalize symbols on initialization
+        cleanup_duplicate_trades(conn)
+
         logger.info("Database initialized successfully with WAL mode.")
 
 def upsert_trades(trades: List[Dict[str, Any]]) -> int:
     """
     Inserts or updates trades in batches for maximum efficiency and minimum disk writes.
+    Deduplicates between CSV (GEN_*) placeholders and official Flex executions.
     Returns the count of upserted trades.
     """
     if not trades:
@@ -189,6 +263,8 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         :raw_currency, :base_currency, :fx_rate_to_base, :raw_commission, :raw_realized_pnl
     )
     ON CONFLICT(ib_exec_id) DO UPDATE SET
+        symbol = excluded.symbol,
+        description = excluded.description,
         realized_pnl = excluded.realized_pnl,
         ib_commission = excluded.ib_commission,
         proceeds = excluded.proceeds,
@@ -215,14 +291,18 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         pnl = float(t.get("realized_pnl") or 0.0)
         raw_pnl_val = t.get("raw_realized_pnl")
         raw_pnl = float(raw_pnl_val) if raw_pnl_val is not None else pnl
+        asset_cat = t.get("asset_category", "STK")
+        desc = t.get("description", "")
+        raw_sym = t.get("symbol", "")
+        sym = normalize_symbol(raw_sym, desc, asset_cat)
 
         sanitized_trades.append({
             "ib_exec_id": t.get("ib_exec_id", ""),
             "trade_id": t.get("trade_id") or t.get("ib_exec_id", ""),
             "account_id": t.get("account_id", ""),
-            "symbol": t.get("symbol", ""),
-            "description": t.get("description", ""),
-            "asset_category": t.get("asset_category", "STK"),
+            "symbol": sym,
+            "description": desc or sym,
+            "asset_category": asset_cat,
             "currency": curr,
             "raw_currency": raw_curr,
             "base_currency": base_curr,
@@ -244,11 +324,54 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
             "exchange": t.get("exchange", "SMART"),
         })
 
+    # In-memory deduplication by ib_exec_id (keep last occurrence in batch)
+    unique_trades_map = {}
+    for st in sanitized_trades:
+        if st["ib_exec_id"]:
+            unique_trades_map[st["ib_exec_id"]] = st
+        else:
+            unique_trades_map[f"TEMP_{len(unique_trades_map)}"] = st
+    sanitized_trades = list(unique_trades_map.values())
+
     with db_session() as conn:
         cursor = conn.cursor()
-        cursor.executemany(sql, sanitized_trades)
-        affected = cursor.rowcount
-        return affected
+
+        # Step 1: For any official (non-GEN_) trade coming in, remove placeholder GEN_ trades matching same execution
+        official_trades = [t for t in sanitized_trades if not t["ib_exec_id"].startswith("GEN_")]
+        for ot in official_trades:
+            cursor.execute("""
+                DELETE FROM trades
+                WHERE ib_exec_id LIKE 'GEN_%'
+                  AND trade_date = ?
+                  AND trade_time = ?
+                  AND (symbol = ? OR description = ?)
+                  AND buy_sell = ?
+                  AND ABS(trade_price - ?) < 0.0001;
+            """, (ot["trade_date"], ot["trade_time"], ot["symbol"], ot["symbol"], ot["buy_sell"], ot["trade_price"]))
+
+        # Step 2: For any GEN_ trade coming in, skip if an official trade or identical trade already exists
+        trades_to_insert = []
+        for t in sanitized_trades:
+            if t["ib_exec_id"].startswith("GEN_"):
+                cursor.execute("""
+                    SELECT id FROM trades
+                    WHERE trade_date = ?
+                      AND trade_time = ?
+                      AND (symbol = ? OR description = ?)
+                      AND buy_sell = ?
+                      AND ABS(trade_price - ?) < 0.0001
+                      AND (ib_exec_id NOT LIKE 'GEN_%' OR ib_exec_id = ?);
+                """, (t["trade_date"], t["trade_time"], t["symbol"], t["symbol"], t["buy_sell"], t["trade_price"], t["ib_exec_id"]))
+                existing = cursor.fetchone()
+                if existing:
+                    # An official or existing trade already exists for this exact fill, skip inserting duplicate
+                    continue
+            trades_to_insert.append(t)
+
+        if trades_to_insert:
+            cursor.executemany(sql, trades_to_insert)
+            return len(trades_to_insert)
+        return 0
 
 def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
     """

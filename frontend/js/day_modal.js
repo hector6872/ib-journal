@@ -8,9 +8,68 @@ const DayModal = {
     currentData: null,
     currentDate: null,
     activeView: 'executions', // Default to raw executions
+    timezoneMode: 'local', // 'local' (CET/CEST - Europe/Madrid) | 'market' (EST/EDT - US/Eastern)
     expandedTradeIds: new Set(),
 
+    loadSettings() {
+        if (typeof SettingsManager !== 'undefined') {
+            this.timezoneMode = String(SettingsManager.get('app_timezone', 'local'));
+        }
+    },
+
+    setTimezone(mode) {
+        if (this.timezoneMode === mode) return;
+        this.timezoneMode = mode;
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.set('app_timezone', mode);
+        }
+        this.render();
+    },
+
+    formatTime(timeStr, dateStr = null) {
+        if (!timeStr || timeStr === '--:--') return '--:--';
+        const cleanTime = timeStr.trim();
+        if (this.timezoneMode === 'market') return cleanTime;
+        const dStr = dateStr || this.currentDate || new Date().toISOString().split('T')[0];
+        try {
+            const dt = new Date(dStr + "T" + cleanTime + "Z");
+            const nyDate = new Date(dt.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const utcDate = new Date(dt.toLocaleString("en-US", { timeZone: "UTC" }));
+            const nyOffsetHours = Math.round((utcDate - nyDate) / (1000 * 60 * 60));
+
+            const sign = nyOffsetHours >= 0 ? "-" : "+";
+            const offsetStr = sign + String(Math.abs(nyOffsetHours)).padStart(2, "0") + ":00";
+            const realDate = new Date(dStr + "T" + cleanTime + offsetStr);
+            return realDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        } catch (e) {
+            return cleanTime;
+        }
+    },
+
+    getTimeTooltip(timeStr, dateStr = null) {
+        if (!timeStr || timeStr === '--:--') return '';
+        const cleanTime = timeStr.trim();
+        const dStr = dateStr || this.currentDate || new Date().toISOString().split('T')[0];
+        try {
+            const dt = new Date(dStr + "T" + cleanTime + "Z");
+            const nyDate = new Date(dt.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const utcDate = new Date(dt.toLocaleString("en-US", { timeZone: "UTC" }));
+            const nyOffsetHours = Math.round((utcDate - nyDate) / (1000 * 60 * 60));
+
+            const sign = nyOffsetHours >= 0 ? "-" : "+";
+            const offsetStr = sign + String(Math.abs(nyOffsetHours)).padStart(2, "0") + ":00";
+            const realDate = new Date(dStr + "T" + cleanTime + offsetStr);
+
+            const localTime = realDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+            return `Local: ${localTime} (${localTz}) · Market: ${cleanTime} (US/Eastern)`;
+        } catch (e) {
+            return `Market: ${cleanTime} (US/Eastern)`;
+        }
+    },
+
     init() {
+        this.loadSettings();
         this.backdrop = document.getElementById('day-modal-backdrop');
         const closeBtn = document.getElementById('modal-close-btn');
         const footerCloseBtn = document.getElementById('modal-footer-close-btn');
@@ -32,6 +91,7 @@ const DayModal = {
     },
 
     async open(dateStr) {
+        this.loadSettings();
         if (!this.backdrop) this.init();
 
         this.currentDate = dateStr;
@@ -346,11 +406,23 @@ const DayModal = {
                     </button>
                 </div>
 
-                ${isGroupedView && groupedTrades.length > 1 ? `
-                    <button class="btn-pill" id="btn-toggle-all-trades">
-                        ${allExpanded ? (STRINGS.modal?.collapseAll || 'Collapse All') : (STRINGS.modal?.expandAll || 'Expand All')}
-                    </button>
-                ` : ''}
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <!-- Timezone Switcher -->
+                    <div class="segmented-control" id="modal-timezone-control">
+                        <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-tz="local" title="Local Time (Europe/Madrid / Browser)">
+                            <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
+                        </button>
+                        <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-tz="market" title="US Market Time (Wall Street EST/EDT)">
+                            <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
+                        </button>
+                    </div>
+
+                    ${isGroupedView && groupedTrades.length > 1 ? `
+                        <button class="btn-pill" id="btn-toggle-all-trades">
+                            ${allExpanded ? (STRINGS.modal?.collapseAll || 'Collapse All') : (STRINGS.modal?.expandAll || 'Expand All')}
+                        </button>
+                    ` : ''}
+                </div>
             </div>
 
             <!-- Content Area: Grouped Trades or Raw Executions Table -->
@@ -372,6 +444,14 @@ const DayModal = {
                 else this.expandAll();
             });
         }
+
+        // Timezone switcher events
+        document.querySelectorAll('#modal-timezone-control [data-tz]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tz = btn.getAttribute('data-tz');
+                if (tz) this.setTimezone(tz);
+            });
+        });
 
         // Accordion headers
         if (isGroupedView) {
@@ -409,7 +489,10 @@ const DayModal = {
                     const entryPriceStr = t.avg_entry_price ? `${currSym}${t.avg_entry_price.toFixed(2)}` : '--';
                     const exitPriceStr = t.avg_exit_price ? `${currSym}${t.avg_exit_price.toFixed(2)}` : (isOpen ? 'Active' : '--');
 
-                    const durationStr = t.duration || (t.close_time ? `${t.open_time} → ${t.close_time}` : `${t.open_time} (Open)`);
+                    const openTime = this.formatTime(t.open_time, this.currentDate);
+                    const closeTime = t.close_time ? this.formatTime(t.close_time, this.currentDate) : null;
+                    const tzSuffix = this.timezoneMode === 'local' ? 'CET' : 'EST';
+                    const durationStr = t.duration || (closeTime ? `${openTime} → ${closeTime} (${tzSuffix})` : `${openTime} (Open)`);
                     const fillsCount = (t.fills || []).length;
                     const fillsLabel = fillsCount === 1 ? `1 ${STRINGS.modal?.fillSingle || 'fill'}` : `${fillsCount} ${STRINGS.modal?.fills || 'fills'}`;
 
@@ -423,6 +506,8 @@ const DayModal = {
                         const fPnlDisplay = fIsOpen ? '<span style="color: var(--text-muted); font-size: 11px;">(Entry)</span>' : State.formatCurrency(fPnl);
                         const fPrice = currSym ? `${currSym}${parseFloat(f.trade_price).toFixed(2)}` : parseFloat(f.trade_price).toFixed(2);
                         const fillNumber = fillsCount - fIdx;
+                        const fillTimeStr = this.formatTime(f.trade_time, f.trade_date);
+                        const fillTimeTooltip = this.getTimeTooltip(f.trade_time, f.trade_date);
 
                         const sideBadgeHtml = isCash
                             ? `<span class="badge-side badge-exchange">${STRINGS.modal?.exchange || 'EXCHANGE'}</span>`
@@ -431,7 +516,7 @@ const DayModal = {
                         return `
                             <tr>
                                 <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${fillNumber}</td>
-                                <td class="mono">${f.trade_time || '--:--'}</td>
+                                <td class="mono" ${fillTimeTooltip ? `title="${fillTimeTooltip}"` : ''}>${fillTimeStr}</td>
                                 <td>${sideBadgeHtml}</td>
                                 <td class="mono">${Math.abs(f.quantity)}</td>
                                 <td class="mono">${fPrice}</td>
@@ -499,7 +584,7 @@ const DayModal = {
                                             <thead>
                                                 <tr>
                                                     <th>#</th>
-                                                    <th>${STRINGS.modal?.tableTime || 'Time'}</th>
+                                                    <th>${this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)')}</th>
                                                     <th>${STRINGS.modal?.tableSide || 'Side'}</th>
                                                     <th>${STRINGS.modal?.tableQty || 'Volume'}</th>
                                                     <th>${STRINGS.modal?.tablePrice || 'Price'}</th>
@@ -523,6 +608,7 @@ const DayModal = {
     },
 
     renderRawExecutionsHtml(rawTrades) {
+        const timeHeader = this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)');
         const rowsHtml = rawTrades.map((t, idx) => {
             const isBuy = (t.buy_sell || '').toUpperCase() === 'BUY';
             const isCash = (t.asset_category || '').toUpperCase() === 'CASH' || (t.asset_category || '').toUpperCase() === 'FX';
@@ -532,7 +618,8 @@ const DayModal = {
             const pnlDisplay = isOpen
                 ? `<span style="color: var(--text-muted); font-size: 11px;">(Open)</span>`
                 : State.formatCurrency(pnl);
-            const timeStr = t.trade_time || '--:--';
+            const timeStr = this.formatTime(t.trade_time, t.trade_date);
+            const timeTooltip = this.getTimeTooltip(t.trade_time, t.trade_date);
 
             const curr = t.raw_currency || t.currency || '';
             const currSym = curr === 'USD' ? '$' : (curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : ''));
@@ -556,7 +643,7 @@ const DayModal = {
             return `
                 <tr>
                     <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${rawTrades.length - idx}</td>
-                    <td class="mono">${timeStr}</td>
+                    <td class="mono" ${timeTooltip ? `title="${timeTooltip}"` : ''}>${timeStr}</td>
                     <td>
                         <strong>${t.symbol}</strong>
                         <span class="badge-category" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">${t.asset_category}</span>
@@ -577,7 +664,7 @@ const DayModal = {
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>${STRINGS.modal?.tableTime || 'Time'}</th>
+                            <th>${timeHeader}</th>
                             <th>${STRINGS.modal?.tableSymbol || 'Symbol'}</th>
                             <th>${STRINGS.modal?.tableSide || 'Side'}</th>
                             <th>${STRINGS.modal?.tableQty || 'Volume'}</th>

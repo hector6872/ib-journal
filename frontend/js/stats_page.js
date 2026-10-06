@@ -639,6 +639,7 @@ const StatsPage = {
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.rollingWinRateTitle}</span>
+                            ${this.renderInfoIcon(sp.tipRollingWinRate || 'Win rate calculated across a rolling window of your most recent N closed trades (10, 20, 50, or 100). Compares current performance against the previous block of N trades to track momentum.')}
                         </div>
 
                         <div class="segmented-control" id="rolling-winrate-window">

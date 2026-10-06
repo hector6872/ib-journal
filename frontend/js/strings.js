@@ -212,6 +212,7 @@ const STRINGS = {
 
         // Rolling Win Rate
         rollingWinRateTitle: "ROLLING WIN RATE",
+        tipRollingWinRate: "Win rate calculated across a rolling window of your most recent N closed trades (10, 20, 50, or 100). The trend indicator compares your current window against the prior block of N trades to track momentum.",
         filter1W: "1W",
         filter1M: "1M",
         filter3M: "3M",

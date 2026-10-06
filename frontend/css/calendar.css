@@ -1231,6 +1231,36 @@
     border-bottom: 1px solid var(--border-default);
 }
 
+.institutional-table th.sortable-th {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    white-space: nowrap;
+}
+
+.institutional-table th.sortable-th:hover {
+    color: var(--text-main);
+    background-color: var(--bg-hover);
+}
+
+.institutional-table th.sortable-th.active-sort {
+    color: var(--color-brand);
+}
+
+.sort-indicator {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 9px;
+    opacity: 0.4;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.sort-indicator.active {
+    opacity: 1;
+    color: var(--color-brand);
+    font-weight: 800;
+}
+
 .institutional-table td {
     padding: 9px 10px;
     border-bottom: 1px solid var(--border-subtle);

@@ -25,6 +25,16 @@ const StatsPage = {
         duration: 'chart',
         order_type: 'chart'
     },
+    tableSort: {
+        symbol: { col: 'net_pnl', dir: 'desc' },
+        tag: { col: 'net_pnl', dir: 'desc' },
+        dow: { col: 'net_pnl', dir: 'desc' },
+        tod: { col: 'net_pnl', dir: 'desc' },
+        duration: { col: 'net_pnl', dir: 'desc' },
+        order_type: { col: 'net_pnl', dir: 'desc' },
+        category: { col: 'net_pnl', dir: 'desc' },
+        side: { col: 'net_pnl', dir: 'desc' }
+    },
     charts: {},
 
     loadSettings() {
@@ -163,6 +173,83 @@ const StatsPage = {
         return `<span class="stat-info-icon" data-tooltip="${tooltipText}">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
         </span>`;
+    },
+
+    getSortThClass(tableTarget, col) {
+        const config = this.tableSort[tableTarget];
+        return (config && config.col === col) ? 'active-sort' : '';
+    },
+
+    getSortIndicator(tableTarget, col) {
+        const config = this.tableSort[tableTarget];
+        if (!config || config.col !== col) {
+            return '<span class="sort-indicator">↕</span>';
+        }
+        return config.dir === 'asc'
+            ? '<span class="sort-indicator active">▲</span>'
+            : '<span class="sort-indicator active">▼</span>';
+    },
+
+    sortData(tableTarget, dataList) {
+        if (!dataList || !dataList.length) return [];
+        const config = this.tableSort[tableTarget] || { col: 'net_pnl', dir: 'desc' };
+        const { col, dir } = config;
+        const sorted = [...dataList];
+        sorted.sort((a, b) => {
+            let valA = a[col];
+            let valB = b[col];
+            if (typeof valA === 'string' || typeof valB === 'string') {
+                valA = String(valA ?? '').toLowerCase();
+                valB = String(valB ?? '').toLowerCase();
+                return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            valA = Number(valA) || 0;
+            valB = Number(valB) || 0;
+            return dir === 'asc' ? valA - valB : valB - valA;
+        });
+        return sorted;
+    },
+
+    updateTable(tableTarget) {
+        if (!this.data) return;
+        const dataMap = {
+            symbol: this.data.symbols,
+            tag: this.data.tags,
+            dow: this.data.day_of_week,
+            tod: this.data.time_of_day,
+            duration: this.data.holding_durations,
+            order_type: this.data.order_types,
+            category: this.data.categories,
+            side: this.data.sides
+        };
+        const builderMap = {
+            symbol: (items) => this.buildSymbolTableRows(items),
+            tag: (items) => this.buildTagTableRows(items),
+            dow: (items) => this.buildDowTableRows(items),
+            tod: (items) => this.buildTodTableRows(items),
+            duration: (items) => this.buildDurationTableRows(items),
+            order_type: (items) => this.buildOrderTypeTableRows(items),
+            category: (items) => this.buildCategoryTableRows(items),
+            side: (items) => this.buildSideTableRows(items)
+        };
+
+        const tbody = document.getElementById(`tbody-table-${tableTarget}`);
+        if (tbody && dataMap[tableTarget] && builderMap[tableTarget]) {
+            const sorted = this.sortData(tableTarget, dataMap[tableTarget]);
+            tbody.innerHTML = builderMap[tableTarget](sorted);
+        }
+
+        // Update header sort indicators
+        document.querySelectorAll(`.sortable-th[data-sort-table="${tableTarget}"]`).forEach(th => {
+            const col = th.getAttribute('data-sort-col');
+            const isCurrent = this.tableSort[tableTarget]?.col === col;
+            th.classList.toggle('active-sort', isCurrent);
+            const ind = th.querySelector('.sort-indicator');
+            if (ind) {
+                ind.textContent = isCurrent ? (this.tableSort[tableTarget].dir === 'asc' ? '▲' : '▼') : '↕';
+                ind.classList.toggle('active', isCurrent);
+            }
+        });
     },
 
     render(data, container) {
@@ -675,16 +762,16 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colSymbol}</th>
-                                        <th>${sp.colCategory}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colCommissions}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'symbol')}" data-sort-table="symbol" data-sort-col="symbol">${sp.colSymbol} ${this.getSortIndicator('symbol', 'symbol')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'category')}" data-sort-table="symbol" data-sort-col="category">${sp.colCategory} ${this.getSortIndicator('symbol', 'category')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'trades_count')}" data-sort-table="symbol" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('symbol', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'win_rate')}" data-sort-table="symbol" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('symbol', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'commissions')}" data-sort-table="symbol" data-sort-col="commissions">${sp.colCommissions} ${this.getSortIndicator('symbol', 'commissions')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('symbol', 'net_pnl')}" data-sort-table="symbol" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('symbol', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildSymbolTableRows(symbols)}
+                                <tbody id="tbody-table-symbol">
+                                    ${this.buildSymbolTableRows(this.sortData('symbol', symbols))}
                                 </tbody>
                             </table>
                         </div>
@@ -708,14 +795,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colTag}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'tag')}" data-sort-table="tag" data-sort-col="tag">${sp.colTag} ${this.getSortIndicator('tag', 'tag')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'trades_count')}" data-sort-table="tag" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('tag', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'win_rate')}" data-sort-table="tag" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('tag', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tag', 'net_pnl')}" data-sort-table="tag" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('tag', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildTagTableRows(tags)}
+                                <tbody id="tbody-table-tag">
+                                    ${this.buildTagTableRows(this.sortData('tag', tags))}
                                 </tbody>
                             </table>
                         </div>
@@ -739,14 +826,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colDay}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'day_name')}" data-sort-table="dow" data-sort-col="day_name">${sp.colDay} ${this.getSortIndicator('dow', 'day_name')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'trades_count')}" data-sort-table="dow" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('dow', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'win_rate')}" data-sort-table="dow" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('dow', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('dow', 'net_pnl')}" data-sort-table="dow" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('dow', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildDowTableRows(dow)}
+                                <tbody id="tbody-table-dow">
+                                    ${this.buildDowTableRows(this.sortData('dow', dow))}
                                 </tbody>
                             </table>
                         </div>
@@ -770,14 +857,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colHour}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'label')}" data-sort-table="tod" data-sort-col="label">${sp.colHour} ${this.getSortIndicator('tod', 'label')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'trades_count')}" data-sort-table="tod" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('tod', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'win_rate')}" data-sort-table="tod" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('tod', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'net_pnl')}" data-sort-table="tod" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('tod', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildTodTableRows(tod)}
+                                <tbody id="tbody-table-tod">
+                                    ${this.buildTodTableRows(this.sortData('tod', tod))}
                                 </tbody>
                             </table>
                         </div>
@@ -801,14 +888,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colDuration}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'duration')}" data-sort-table="duration" data-sort-col="duration">${sp.colDuration} ${this.getSortIndicator('duration', 'duration')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'trades_count')}" data-sort-table="duration" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('duration', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'win_rate')}" data-sort-table="duration" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('duration', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('duration', 'net_pnl')}" data-sort-table="duration" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('duration', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildDurationTableRows(durations)}
+                                <tbody id="tbody-table-duration">
+                                    ${this.buildDurationTableRows(this.sortData('duration', durations))}
                                 </tbody>
                             </table>
                         </div>
@@ -832,14 +919,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colOrderType}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'order_type')}" data-sort-table="order_type" data-sort-col="order_type">${sp.colOrderType} ${this.getSortIndicator('order_type', 'order_type')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'trades_count')}" data-sort-table="order_type" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('order_type', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'win_rate')}" data-sort-table="order_type" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('order_type', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('order_type', 'net_pnl')}" data-sort-table="order_type" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('order_type', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildOrderTypeTableRows(orderTypes)}
+                                <tbody id="tbody-table-order_type">
+                                    ${this.buildOrderTypeTableRows(this.sortData('order_type', orderTypes))}
                                 </tbody>
                             </table>
                         </div>
@@ -856,14 +943,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colCategory}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'category')}" data-sort-table="category" data-sort-col="category">${sp.colCategory} ${this.getSortIndicator('category', 'category')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'trades_count')}" data-sort-table="category" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('category', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'win_rate')}" data-sort-table="category" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('category', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'net_pnl')}" data-sort-table="category" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('category', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildCategoryTableRows(categories)}
+                                <tbody id="tbody-table-category">
+                                    ${this.buildCategoryTableRows(this.sortData('category', categories))}
                                 </tbody>
                             </table>
                         </div>
@@ -877,14 +964,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th>${sp.colSide}</th>
-                                        <th>${sp.colTrades}</th>
-                                        <th>${sp.colWinRate}</th>
-                                        <th>${sp.colNetPnl}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'side')}" data-sort-table="side" data-sort-col="side">${sp.colSide} ${this.getSortIndicator('side', 'side')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'trades_count')}" data-sort-table="side" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('side', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'win_rate')}" data-sort-table="side" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('side', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('side', 'net_pnl')}" data-sort-table="side" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('side', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${this.buildSideTableRows(sides)}
+                                <tbody id="tbody-table-side">
+                                    ${this.buildSideTableRows(this.sortData('side', sides))}
                                 </tbody>
                             </table>
                         </div>
@@ -1072,6 +1159,27 @@ const StatsPage = {
                     if (chartWrap) chartWrap.classList.add('hidden');
                     if (tableWrap) tableWrap.classList.remove('hidden');
                 }
+            });
+        });
+
+        // Clickable sortable table headers (Red to Green & Green to Red sorting)
+        document.querySelectorAll('.sortable-th').forEach(th => {
+            th.addEventListener('click', () => {
+                const tableTarget = th.getAttribute('data-sort-table');
+                const colTarget = th.getAttribute('data-sort-col');
+                if (!tableTarget || !colTarget) return;
+
+                if (!this.tableSort[tableTarget]) {
+                    this.tableSort[tableTarget] = { col: colTarget, dir: 'desc' };
+                } else if (this.tableSort[tableTarget].col === colTarget) {
+                    this.tableSort[tableTarget].dir = this.tableSort[tableTarget].dir === 'desc' ? 'asc' : 'desc';
+                } else {
+                    this.tableSort[tableTarget].col = colTarget;
+                    const textCols = ['symbol', 'tag', 'category', 'duration', 'order_type', 'day_name', 'label', 'side'];
+                    this.tableSort[tableTarget].dir = textCols.includes(colTarget) ? 'asc' : 'desc';
+                }
+
+                this.updateTable(tableTarget);
             });
         });
     },
@@ -1489,17 +1597,31 @@ const StatsPage = {
         });
     },
 
-    // 5. P&L by Symbol (Horizontal Bar)
+    // 5. P&L by Symbol (Horizontal Bar - Top 10 Best & Top 10 Worst)
     renderSymbolChart() {
         const canvas = document.getElementById('chart-symbol');
         if (!canvas) return;
         if (this.charts.symbol) this.charts.symbol.destroy();
 
         const theme = this.getThemeColors();
-        const symbols = this.data.symbols || [];
+        const rawSymbols = [...(this.data.symbols || [])];
 
-        const labels = symbols.map(s => s.symbol);
-        const values = symbols.map(s => s.net_pnl);
+        // Sort descending: best (+) to worst (-)
+        rawSymbols.sort((a, b) => b.net_pnl - a.net_pnl);
+
+        let displayedSymbols = rawSymbols;
+        if (rawSymbols.length > 20) {
+            const best10 = rawSymbols.slice(0, 10);
+            const worst10 = rawSymbols.slice(-10);
+            displayedSymbols = [...best10, ...worst10];
+        }
+
+        if (canvas.parentElement) {
+            canvas.parentElement.style.height = `${Math.max(280, displayedSymbols.length * 24)}px`;
+        }
+
+        const labels = displayedSymbols.map(s => s.symbol);
+        const values = displayedSymbols.map(s => s.net_pnl);
         const colors = values.map(v => v >= 0 ? theme.profitBar : theme.lossBar);
         const borders = values.map(v => v >= 0 ? theme.profit : theme.loss);
 
@@ -1526,7 +1648,7 @@ const StatsPage = {
                         callbacks: {
                             label: (context) => {
                                 const idx = context.dataIndex;
-                                const s = symbols[idx];
+                                const s = displayedSymbols[idx];
                                 const wr = s ? s.win_rate : 0;
                                 const cnt = s ? s.trades_count : 0;
                                 return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} ops)`;
@@ -1546,6 +1668,7 @@ const StatsPage = {
                     y: {
                         grid: { display: false },
                         ticks: {
+                            autoSkip: false,
                             color: theme.textMain,
                             font: { weight: '700', size: 11 }
                         }
@@ -1555,14 +1678,21 @@ const StatsPage = {
         });
     },
 
-    // 6. P&L by Tag (Horizontal Bar)
+    // 6. P&L by Tag (Horizontal Bar - Full List)
     renderTagChart() {
         const canvas = document.getElementById('chart-tag');
         if (!canvas) return;
         if (this.charts.tag) this.charts.tag.destroy();
 
         const theme = this.getThemeColors();
-        const tags = this.data.tags || [];
+        const tags = [...(this.data.tags || [])];
+
+        // Sort tags descending: best (+) to worst (-)
+        tags.sort((a, b) => b.net_pnl - a.net_pnl);
+
+        if (canvas.parentElement) {
+            canvas.parentElement.style.height = `${Math.max(280, tags.length * 26)}px`;
+        }
 
         const labels = tags.map(t => t.tag);
         const values = tags.map(t => t.net_pnl);
@@ -1612,6 +1742,7 @@ const StatsPage = {
                     y: {
                         grid: { display: false },
                         ticks: {
+                            autoSkip: false,
                             color: theme.textMain,
                             font: { weight: '600', size: 11 }
                         }

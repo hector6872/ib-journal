@@ -394,6 +394,7 @@ const DayModal = {
                     const isWin = t.result === 'WIN';
                     const isLoss = t.result === 'LOSS';
                     const isOpen = t.status === 'OPEN' || t.result === 'OPEN';
+                    const tradeNumber = groupedTrades.length - idx;
 
                     const resultBadgeClass = isOpen ? 'badge-res-open' : (isWin ? 'badge-res-win' : (isLoss ? 'badge-res-loss' : 'badge-res-be'));
                     const resultLabel = isOpen ? (STRINGS.modal?.open || 'OPEN') : (isWin ? (STRINGS.modal?.win || 'WIN') : (isLoss ? (STRINGS.modal?.loss || 'LOSS') : (STRINGS.modal?.breakeven || 'BE')));
@@ -412,7 +413,7 @@ const DayModal = {
                     const fillsCount = (t.fills || []).length;
                     const fillsLabel = fillsCount === 1 ? `1 ${STRINGS.modal?.fillSingle || 'fill'}` : `${fillsCount} ${STRINGS.modal?.fills || 'fills'}`;
 
-                    // Sub-table of fills (Rule 4: sorted ascending)
+                    // Sub-table of fills (numbered from bottom to top)
                     const fillsRowsHtml = (t.fills || []).map((f, fIdx) => {
                         const isBuy = (f.buy_sell || '').toUpperCase() === 'BUY';
                         const isCash = (f.asset_category || t.asset_category || '').toUpperCase() === 'CASH' || (f.asset_category || t.asset_category || '').toUpperCase() === 'FX';
@@ -421,6 +422,7 @@ const DayModal = {
                         const fPnlClass = fIsOpen ? 'pnl-neutral' : State.getPnlClass(fPnl);
                         const fPnlDisplay = fIsOpen ? '<span style="color: var(--text-muted); font-size: 11px;">(Entry)</span>' : State.formatCurrency(fPnl);
                         const fPrice = currSym ? `${currSym}${parseFloat(f.trade_price).toFixed(2)}` : parseFloat(f.trade_price).toFixed(2);
+                        const fillNumber = fillsCount - fIdx;
 
                         const sideBadgeHtml = isCash
                             ? `<span class="badge-side badge-exchange">${STRINGS.modal?.exchange || 'EXCHANGE'}</span>`
@@ -428,7 +430,7 @@ const DayModal = {
 
                         return `
                             <tr>
-                                <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${fIdx + 1}</td>
+                                <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${fillNumber}</td>
                                 <td class="mono">${f.trade_time || '--:--'}</td>
                                 <td>${sideBadgeHtml}</td>
                                 <td class="mono">${Math.abs(f.quantity)}</td>
@@ -443,8 +445,9 @@ const DayModal = {
                     return `
                         <div class="trade-card ${isExpanded ? 'expanded' : ''}">
                             <div class="trade-card-header" data-trade-idx="${idx}">
-                                <!-- Left: Direction, Symbol & Badges -->
+                                <!-- Left: Number, Direction, Symbol & Badges -->
                                 <div class="trade-card-left">
+                                    <span class="mono" style="font-size: 11px; font-weight: 800; color: var(--text-muted); min-width: 20px;">#${tradeNumber}</span>
                                     <span class="badge-direction ${dirInfo.badgeClass}">${dirInfo.label}</span>
                                     <div class="trade-symbol-block">
                                         <div class="trade-symbol-line">
@@ -552,7 +555,7 @@ const DayModal = {
 
             return `
                 <tr>
-                    <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${idx + 1}</td>
+                    <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${rawTrades.length - idx}</td>
                     <td class="mono">${timeStr}</td>
                     <td>
                         <strong>${t.symbol}</strong>

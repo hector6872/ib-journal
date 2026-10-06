@@ -174,6 +174,21 @@ const STRINGS = {
         feesLabel: "fees",
         vsPrior: "vs prior",
 
+        // KPI Tooltips
+        tipNetPnl: "Total realized P&L after deducting IBKR execution commissions and exchange fees.",
+        tipWinRate: "Win Rate % is Net (after commissions). 'On price' shows Gross win/loss rate and trade counts based purely on price difference.",
+        tipProfitFactor: "Gross Profit divided by Gross Loss (after fees). A factor > 1.0 indicates overall trading profitability.",
+        tipExpectancy: "Expected dollar return per trade based on historical win/loss probabilities and payoff: (Win % × Avg Win) - (Loss % × Avg Loss).",
+        tipTotalTrades: "Total closed trades. Breakdown shows Net Wins (Net > 0), Net Losses (Net < 0), and Breakeven (Net = 0).",
+        tipAvgWin: "Average net profit across all winning trades (after deducting commissions).",
+        tipAvgLoss: "Average net loss across all losing trades (after deducting commissions).",
+        tipLargestWin: "Largest single winning trade return after commissions.",
+        tipLargestLoss: "Largest single losing trade loss after commissions.",
+        tipAdjWinLossRatio: "Adjusted Win/Loss Ratio measuring overall edge: (Win % × Avg Win) / (Loss % × Avg Loss).",
+        tipSharpeRatio: "Sharpe ratio per trade (Mean P&L / Std Dev), measuring risk-adjusted consistency per closed trade.",
+        tipGrossPnl: "Total realized gross profit/loss before deducting broker commissions.",
+        tipCommissions: "Cumulative IBKR commissions and regulatory fees paid across all executions.",
+
         // Rolling Win Rate
         rollingWinRateTitle: "ROLLING WIN RATE",
         filter1W: "1W",

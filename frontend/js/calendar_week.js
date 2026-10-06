@@ -126,21 +126,20 @@ const CalendarWeek = {
         // Event Listeners for Navigation
         document.getElementById('btn-prev-week')?.addEventListener('click', () => {
             if (!canPrevWeek) return;
-            const cur = new Date(data.start_date + 'T00:00:00');
+            const cur = new Date(start);
             cur.setDate(cur.getDate() - 7);
-            this.load(cur.toISOString().split('T')[0]);
+            this.load(State.formatLocalDate(cur));
         });
 
         document.getElementById('btn-next-week')?.addEventListener('click', () => {
             if (!canNextWeek) return;
-            const cur = new Date(data.start_date + 'T00:00:00');
+            const cur = new Date(start);
             cur.setDate(cur.getDate() + 7);
-            this.load(cur.toISOString().split('T')[0]);
+            this.load(State.formatLocalDate(cur));
         });
 
         document.getElementById('btn-this-week')?.addEventListener('click', () => {
-            const now = new Date();
-            this.load(now.toISOString().split('T')[0]);
+            this.load(State.formatLocalDate(new Date()));
         });
 
         // Click on day card

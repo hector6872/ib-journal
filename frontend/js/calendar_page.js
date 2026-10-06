@@ -466,8 +466,14 @@ const CalendarPage = {
         const totalNetPnl = data.total_net_pnl || 0;
         const totalTrades = data.total_trades || 0;
 
-        const start = new Date(data.start_date + 'T00:00:00');
-        const end = new Date(data.end_date + 'T00:00:00');
+        const startParts = (data.start_date || '').split('-');
+        const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
+        start.setHours(0, 0, 0, 0);
+
+        const endParts = (data.end_date || '').split('-');
+        const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
+        end.setHours(0, 0, 0, 0);
+
         const startM = STRINGS.months.short[start.getMonth()];
         const endM = STRINGS.months.short[end.getMonth()];
         const year = start.getFullYear();
@@ -475,11 +481,11 @@ const CalendarPage = {
             ? `${STRINGS.calendar.weekOf} ${startM} ${start.getDate()} – ${end.getDate()}, ${year}`
             : `${STRINGS.calendar.weekOf} ${startM} ${start.getDate()} – ${endM} ${end.getDate()}, ${year}`;
 
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = State.formatLocalDate(new Date());
 
         const bounds = this.getBounds();
-        const canPrevWeek = start > bounds.minWeekStart;
-        const canNextWeek = start < bounds.maxWeekStart;
+        const canPrevWeek = start.getTime() > bounds.minWeekStart.getTime();
+        const canNextWeek = start.getTime() < bounds.maxWeekStart.getTime();
         const isCurrentWeek = start.getTime() === bounds.maxWeekStart.getTime();
 
         let cardsHtml = days.map(d => {
@@ -531,7 +537,7 @@ const CalendarPage = {
         const weekCumPnl = [];
         const weekTrades = [];
         let runningPnl = 0;
-        const todayIso = new Date().toISOString().split('T')[0];
+        const todayIso = State.formatLocalDate(new Date());
 
         days.forEach(d => {
             weekLabels.push(`${STRINGS.days.short3[d.weekday_index]} ${d.day_number}`);
@@ -575,18 +581,18 @@ const CalendarPage = {
         // Event listeners
         document.getElementById('btn-week-prev')?.addEventListener('click', () => {
             if (!canPrevWeek) return;
-            const cur = new Date(data.start_date + 'T00:00:00');
+            const cur = new Date(start);
             cur.setDate(cur.getDate() - 7);
-            this.loadWeek(cur.toISOString().split('T')[0]);
+            this.loadWeek(State.formatLocalDate(cur));
         });
         document.getElementById('btn-week-next')?.addEventListener('click', () => {
             if (!canNextWeek) return;
-            const cur = new Date(data.start_date + 'T00:00:00');
+            const cur = new Date(start);
             cur.setDate(cur.getDate() + 7);
-            this.loadWeek(cur.toISOString().split('T')[0]);
+            this.loadWeek(State.formatLocalDate(cur));
         });
         document.getElementById('btn-week-today')?.addEventListener('click', () => {
-            this.loadWeek(new Date().toISOString().split('T')[0]);
+            this.loadWeek(State.formatLocalDate(new Date()));
         });
 
         container.querySelectorAll('.week-card:not(.total-card)').forEach(card => {

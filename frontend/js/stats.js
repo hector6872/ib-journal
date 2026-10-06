@@ -67,6 +67,7 @@ const StatsController = {
                 if (typeof App !== 'undefined' && App.switchTab) {
                     App.switchTab('stats');
                 }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         }
 
@@ -77,6 +78,7 @@ const StatsController = {
                     if (typeof App !== 'undefined' && App.switchTab) {
                         App.switchTab('stats');
                     }
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 });
             });
         }

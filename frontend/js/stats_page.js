@@ -158,6 +158,13 @@ const StatsPage = {
         return type === 'win' ? 'pnl-positive' : 'pnl-negative';
     },
 
+    renderInfoIcon(tooltipText) {
+        if (!tooltipText) return '';
+        return `<span class="stat-info-icon" data-tooltip="${tooltipText}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>`;
+    },
+
     render(data, container) {
         this.destroyCharts();
 
@@ -223,9 +230,10 @@ const StatsPage = {
                 <!-- 1. Primary Executive KPI Cards Grid (5 Columns - Matching Calendar Initial Order) -->
                 <div class="stats-kpi-grid" id="stats-kpi-grid">
                     <!-- 1. Net Realized P&L -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.netPnl}</span>
+                            ${this.renderInfoIcon(sp.tipNetPnl)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.net_pnl)}">
                             ${State.formatCurrency(ov.net_pnl || 0)}
@@ -236,9 +244,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 2. Win Rate -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-rolling-winrate">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.winRate}</span>
+                            ${this.renderInfoIcon(sp.tipWinRate)}
                         </div>
                         <span class="stat-card-value mono ${this.getWinRateClass(ov.win_rate, ov.total_trades)}">
                             ${(ov.win_rate || 0).toFixed(2)}%
@@ -249,9 +258,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 3. Profit Factor -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="pf">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.profitFactor}</span>
+                            ${this.renderInfoIcon(sp.tipProfitFactor)}
                         </div>
                         <span class="stat-card-value mono ${this.getRatioClass(ov.profit_factor, ov.total_trades)}">
                             ${(ov.profit_factor || 0).toFixed(2)}
@@ -262,9 +272,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 4. Expectancy -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="exp">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
+                            ${this.renderInfoIcon(sp.tipExpectancy)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.expectancy)}">
                             ${State.formatCurrency(ov.expectancy || 0)}
@@ -275,9 +286,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 5. Total Trades -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.totalTrades}</span>
+                            ${this.renderInfoIcon(sp.tipTotalTrades)}
                         </div>
                         <span class="stat-card-value mono pnl-neutral">
                             ${State.formatNumber(ov.total_trades || 0)}
@@ -288,9 +300,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 6. Avg Win -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="avg-win">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgWin}</span>
+                            ${this.renderInfoIcon(sp.tipAvgWin)}
                         </div>
                         <span class="stat-card-value mono ${ov.avg_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
                             ${State.formatCurrency(ov.avg_win || 0)}
@@ -301,9 +314,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 7. Avg Loss -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="avg-loss">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgLoss}</span>
+                            ${this.renderInfoIcon(sp.tipAvgLoss)}
                         </div>
                         <span class="stat-card-value mono ${ov.avg_loss > 0 ? 'pnl-negative' : 'pnl-neutral'}">
                             ${State.formatCurrency(-(ov.avg_loss || 0))}
@@ -314,9 +328,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 8. Largest Gain -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.largestWin}</span>
+                            ${this.renderInfoIcon(sp.tipLargestWin)}
                         </div>
                         <span class="stat-card-value mono ${ov.largest_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
                             ${State.formatCurrency(ov.largest_win || 0)}
@@ -327,9 +342,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 9. Largest Loss -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-risk-drawdown">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.largestLoss}</span>
+                            ${this.renderInfoIcon(sp.tipLargestLoss)}
                         </div>
                         <span class="stat-card-value mono ${ov.largest_loss < 0 ? 'pnl-negative' : 'pnl-neutral'}">
                             ${State.formatCurrency(ov.largest_loss || 0)}
@@ -340,9 +356,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 10. Adj. Win/Loss Ratio -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="win-rate">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.adjWinLossRatio}</span>
+                            ${this.renderInfoIcon(sp.tipAdjWinLossRatio)}
                         </div>
                         <span class="stat-card-value mono ${this.getRatioClass(ov.adj_win_loss_ratio, ov.total_trades)}">
                             ${(ov.adj_win_loss_ratio || 0).toFixed(2)}
@@ -353,9 +370,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 11. Sharpe Ratio -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-risk-drawdown">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.sharpeRatio}</span>
+                            ${this.renderInfoIcon(sp.tipSharpeRatio)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.sharpe_per_trade)}">
                             ${(ov.sharpe_per_trade || 0).toFixed(2)}
@@ -366,7 +384,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 12. Avg Win Hold -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-duration">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgWinHold}</span>
                         </div>
@@ -379,7 +397,7 @@ const StatsPage = {
                     </div>
 
                     <!-- 13. Avg Loss Hold -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-duration">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgLossHold}</span>
                         </div>
@@ -392,9 +410,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 14. Gross Realized P&L -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.grossPnl}</span>
+                            ${this.renderInfoIcon(sp.tipGrossPnl)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.gross_pnl)}">
                             ${State.formatCurrency(ov.gross_pnl || 0)}
@@ -405,9 +424,10 @@ const StatsPage = {
                     </div>
 
                     <!-- 15. Total Commissions & Fees -->
-                    <div class="stat-card">
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.totalCommissions}</span>
+                            ${this.renderInfoIcon(sp.tipCommissions)}
                         </div>
                         <span class="stat-card-value mono ${(ov.total_commissions || 0) > 0 ? 'pnl-negative' : 'pnl-neutral'}">
                             -${State.currency}${(ov.total_commissions || 0).toFixed(2)}
@@ -419,7 +439,7 @@ const StatsPage = {
                 </div>
 
                 <!-- Portfolio Capital & Equity Overview Strip -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-capital-overview">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.capitalStripTitle || 'Portfolio Capital & Equity Overview'}</span>
@@ -429,28 +449,28 @@ const StatsPage = {
                         </button>
                     </div>
                     <div class="cash-summary-grid">
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-scroll-sec="sec-equity-curve">
                             <span class="cash-card-label">${STRINGS.cash?.accountEquity || 'ACCOUNT EQUITY (NAV)'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.account_balance)}">
                                 ${State.formatCurrency(ov.account_balance || 0)}
                             </span>
                             <span class="cash-card-sub">${STRINGS.cash?.accountEquitySub || 'Starting Capital + Net Flow + Realized P&L'}</span>
                         </div>
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.startingCapital || 'STARTING CAPITAL'}</span>
                             <span class="cash-card-value mono pnl-neutral">
                                 ${State.formatCurrency(ov.starting_capital || 0)}
                             </span>
                             <span class="cash-card-sub">${STRINGS.cash?.startingCapitalStatsSub || 'Configured baseline capital'}</span>
                         </div>
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.netTransfersStats || 'NET CASH TRANSFERS'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.net_cash_flow)}">
                                 ${State.formatCurrency(ov.net_cash_flow || 0)}
                             </span>
                             <span class="cash-card-sub">In: ${State.currency}${(ov.total_deposits || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${(ov.total_withdrawals || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
                         </div>
-                        <div class="cash-card">
+                        <div class="cash-card is-clickable" data-scroll-sec="sec-equity-curve">
                             <span class="cash-card-label">${STRINGS.cash?.roi || 'RETURN ON CAPITAL (% ROI)'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.roi_pct)}">
                                 ${(ov.roi_pct || 0) > 0 ? '+' : ''}${(ov.roi_pct || 0).toFixed(2)}%
@@ -461,7 +481,7 @@ const StatsPage = {
                 </div>
 
                 <!-- 2. Rolling Win Rate Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-rolling-winrate">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.rollingWinRateTitle}</span>
@@ -489,7 +509,7 @@ const StatsPage = {
                 </div>
 
                 <!-- 3. Metric Evolution Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-metric-evolution">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.metricEvolutionTitle}</span>
@@ -554,7 +574,7 @@ const StatsPage = {
                 </div>
 
                 <!-- 4. Equity Curve Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-equity-curve">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.equityCurveTitle}</span>
@@ -566,7 +586,7 @@ const StatsPage = {
                 </div>
 
                 <!-- 5. Risk & Drawdown Section -->
-                <div class="stats-section-box">
+                <div class="stats-section-box" id="sec-risk-drawdown">
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.riskTitle}</span>
@@ -636,7 +656,7 @@ const StatsPage = {
                 <!-- 6. 2x2 Breakdowns Grid (Symbol, Tag, Day of Week, Time of Day) -->
                 <div class="breakdowns-2x2-grid">
                     <!-- P&L by Symbol -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-symbol">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlBySymbolTitle}</span>
@@ -669,7 +689,7 @@ const StatsPage = {
                     </div>
 
                     <!-- P&L by Tag -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-tag">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByTagTitle}</span>
@@ -700,7 +720,7 @@ const StatsPage = {
                     </div>
 
                     <!-- Performance by Day of Week -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-dow">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.perfByDowTitle}</span>
@@ -731,7 +751,7 @@ const StatsPage = {
                     </div>
 
                     <!-- Performance by Time of Day -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-tod">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.perfByTodTitle}</span>
@@ -762,7 +782,7 @@ const StatsPage = {
                     </div>
 
                     <!-- P&L by Holding Duration -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-duration">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByDurationTitle}</span>
@@ -793,7 +813,7 @@ const StatsPage = {
                     </div>
 
                     <!-- P&L by Order Type -->
-                    <div class="stats-section-box">
+                    <div class="stats-section-box" id="sec-pnl-ordertype">
                         <div class="stats-section-header">
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByOrderTypeTitle}</span>
@@ -878,7 +898,62 @@ const StatsPage = {
         }
     },
 
+    scrollToSection(secId, metricId = null) {
+        const el = document.getElementById(secId);
+        if (!el) return;
+
+        if (metricId) {
+            const metricKeyMap = {
+                'win-rate': 'win_rate',
+                'pf': 'profit_factor',
+                'avg-win': 'avg_win',
+                'avg-loss': 'avg_loss',
+                'exp': 'expectancy',
+                'avg-pnl': 'avg_trade_pnl',
+                'cum-pnl': 'cumulative_pnl'
+            };
+            const chk = document.getElementById(`m-${metricId}`);
+            if (chk && !chk.checked) {
+                chk.checked = true;
+                const mappedKey = metricKeyMap[metricId] || metricId;
+                this.activeMetrics[mappedKey] = true;
+                if (typeof SettingsManager !== 'undefined') {
+                    SettingsManager.set('stats_active_metrics', this.activeMetrics);
+                }
+                this.renderMetricEvolutionChart();
+            }
+        }
+
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.classList.remove('section-highlight-pulse');
+        void el.offsetWidth;
+        el.classList.add('section-highlight-pulse');
+        setTimeout(() => el.classList.remove('section-highlight-pulse'), 1400);
+    },
+
     bindEvents() {
+        // Clickable stat cards & cash cards smooth scrolling
+        document.querySelectorAll('.stat-card.is-clickable, .cash-card.is-clickable').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.stat-info-icon')) {
+                    return; // Hover/tap tooltip without navigating
+                }
+                const isCashModal = card.getAttribute('data-cash-modal');
+                if (isCashModal) {
+                    if (typeof CashModal !== 'undefined' && CashModal.open) {
+                        CashModal.open();
+                    }
+                    return;
+                }
+
+                const secId = card.getAttribute('data-scroll-sec');
+                const metricId = card.getAttribute('data-scroll-metric');
+                if (secId) {
+                    this.scrollToSection(secId, metricId);
+                }
+            });
+        });
+
         const btnManageCash = document.getElementById('btn-stats-manage-cash');
         if (btnManageCash) {
             btnManageCash.addEventListener('click', () => {

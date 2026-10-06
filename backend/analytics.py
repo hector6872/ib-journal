@@ -554,13 +554,6 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         # 2. Tag / Setup / Mistake Breakdown (Custom tags from notes + Derived execution tags)
         tag_map_market: Dict[str, Dict[str, Any]] = {}
         tag_map_local: Dict[str, Dict[str, Any]] = {}
-        cat_labels = {
-            "STK": "STK (Stocks)",
-            "OPT": "OPT (Options)",
-            "FUT": "FUT (Futures)",
-            "CASH": "CASH (Forex)",
-            "CRYPTO": "CRYPTO (Crypto)"
-        }
 
         for t in all_trades:
             is_closed = (t.get("open_close_indicator") or "").upper() == "C" or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)

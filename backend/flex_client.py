@@ -81,7 +81,6 @@ class IBKRFlexClient:
         last_network_error: Optional[Exception] = None
         status_code = 0
         resp_text = ""
-        success = False
 
         for send_url, get_url in IBKR_SERVICE_ENDPOINTS:
             try:
@@ -92,7 +91,6 @@ class IBKRFlexClient:
                 if status_code == 200 and "<Status>Success</Status>" in resp_text:
                     self._active_get_url = get_url
                     last_network_error = None
-                    success = True
                     break
                 elif status_code == 200 and "<ErrorCode>" in resp_text:
                     # Valid response format from IBKR but error status

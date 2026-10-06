@@ -704,8 +704,8 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
 
     def test_cross_source_deduplication(self):
         """Tests that official Flex executions supersede CSV GEN_* placeholders and prevent duplicate counts."""
-        from backend.database import db_session, upsert_trades
-        from backend.analytics import get_day_trades, group_executions_to_trades
+        from backend.database import upsert_trades
+        from backend.analytics import get_day_trades
 
         # 1. Insert CSV trade with GEN_ ID
         csv_trade = [

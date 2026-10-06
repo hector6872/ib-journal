@@ -969,7 +969,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         """, params)
         opt_rows = cursor.fetchall()
 
-        opt_stats = {
+        opt_stats: Dict[str, Dict[str, Any]] = {
             "long_call": {"strategy": "Long Call (Buy Call)", "type": "CALL", "side": "LONG", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
             "long_put": {"strategy": "Long Put (Buy Put)", "type": "PUT", "side": "LONG", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
             "short_call": {"strategy": "Short Call (Sell Call)", "type": "CALL", "side": "SHORT", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},

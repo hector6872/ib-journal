@@ -30,9 +30,11 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
   - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Expectancy, Net Realized P&L, Total Trades, Commissions).
   - Portfolio Capital & Equity Overview strip in Statistics.
   - Risk & Drawdown analysis (Max Drawdown, Current Drawdown, Winning/Losing Streaks).
-  - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL).
+  - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL) and momentum tracking.
   - Equity Curve & Metric Evolution charts (Daily, Weekly, Monthly aggregations).
+  - Options Strategy Breakdown & Expiration Discipline (Long/Short Calls and Puts, comparing auto-settled $0.00 expirations vs active market exits).
   - Detailed breakdowns by Symbol, Tag/Setup, Day of Week, Time of Day, Holding Duration, and Order Type.
+- **🕒 Unified Timezone Switching**: Instant toggle between **Local Time (`CET`)** and **Market Time (`EST`)** synchronized across all stats breakdowns, tables, charts, and Day Execution trade modals.
 - **📥 Historical Multi-Year Import**: Drag & drop IBKR Activity Statements (CSV / XML) directly in the browser or import bulk files via CLI with zero duplicate risk (`INSERT ON CONFLICT`).
 - **💬 Custom Institutional Dialogs**: Sleek modal dialogs for confirmations, notifications, and error feedback (no standard browser alerts).
 - **🌐 Centralized Copy & Translations (`strings.js`)**: 100% of UI copy, labels, metrics, and messages are centralized in a single dictionary file with automatic DOM attribute bindings (`data-i18n`, `data-i18n-title`, `data-i18n-placeholder`).

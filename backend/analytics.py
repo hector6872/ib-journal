@@ -487,7 +487,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         }
 
         # 1. Symbol Breakdown
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 symbol,
                 COALESCE(asset_category, 'STK') as category,
@@ -498,9 +498,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 COALESCE(SUM(ib_commission), 0.0) as commissions,
                 COALESCE(SUM(ABS(quantity)), 0.0) as total_volume
             FROM trades
+            {where_clause}
             GROUP BY symbol, asset_category
             ORDER BY net_pnl ASC
-        """)
+        """, params)
         symbols = []
         for r in cursor.fetchall():
             cnt = r["trades_count"]
@@ -689,7 +690,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         dow_short = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
         dow_data = {i: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for i in range(7)}
 
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 strftime('%w', trade_date) as day_of_week,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
@@ -697,8 +698,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
             FROM trades
+            {where_clause}
             GROUP BY strftime('%w', trade_date)
-        """)
+        """, params)
         for r in cursor.fetchall():
             if r["day_of_week"] is not None:
                 idx = int(r["day_of_week"])
@@ -893,16 +895,17 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         order_types.sort(key=lambda x: x["trades_count"], reverse=True)
 
         # 7. Asset Category Breakdown
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
+            {where_clause}
             GROUP BY asset_category
             ORDER BY net_pnl DESC
-        """)
+        """, params)
         categories = []
         for r in cursor.fetchall():
             cnt = r["trades_count"]

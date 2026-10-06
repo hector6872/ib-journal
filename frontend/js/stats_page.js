@@ -267,7 +267,7 @@ const StatsPage = {
                             ${(ov.profit_factor || 0).toFixed(2)}
                         </span>
                         <span class="stat-card-subtitle mono">
-                            ${State.formatCurrency(ov.gross_profit || 0)} / ${State.formatCurrency(ov.gross_loss || 0)}
+                            ${State.formatCurrency(ov.gross_profit || 0)} / ${State.formatCurrency(-(ov.gross_loss || 0))}
                         </span>
                     </div>
 
@@ -387,6 +387,7 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-duration">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgWinHold}</span>
+                            ${this.renderInfoIcon(sp.tipAvgWinHold)}
                         </div>
                         <span class="stat-card-value mono ${this.getHoldClass(ov.avg_win_hold, 'win')}">
                             ${ov.avg_win_hold || '--'}
@@ -400,6 +401,7 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-duration">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgLossHold}</span>
+                            ${this.renderInfoIcon(sp.tipAvgLossHold)}
                         </div>
                         <span class="stat-card-value mono ${this.getHoldClass(ov.avg_loss_hold, 'loss')}">
                             ${ov.avg_loss_hold || '--'}

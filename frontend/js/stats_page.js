@@ -5,6 +5,7 @@
  */
 const StatsPage = {
     data: null,
+    timezoneMode: 'local', // 'local' (CET/CEST) | 'market' (EST/EDT)
     dateRange: 'ALL', // '1W' | '1M' | '3M' | 'YTD' | 'ALL'
     timeframe: 'day', // 'day' | 'week' | 'month'
     rollingWindow: '20', // '10' | '20' | '50' | '100'
@@ -42,8 +43,25 @@ const StatsPage = {
     },
     charts: {},
 
+    getTodData() {
+        if (!this.data) return [];
+        if (this.timezoneMode === 'market') {
+            return this.data.time_of_day_market || this.data.time_of_day || [];
+        }
+        return this.data.time_of_day_local || this.data.time_of_day || [];
+    },
+
+    getTagsData() {
+        if (!this.data) return [];
+        if (this.timezoneMode === 'market') {
+            return this.data.tags_market || this.data.tags || [];
+        }
+        return this.data.tags_local || this.data.tags || [];
+    },
+
     loadSettings() {
         if (typeof SettingsManager !== 'undefined') {
+            this.timezoneMode = String(SettingsManager.get('app_timezone', 'local'));
             this.dateRange = String(SettingsManager.get('stats_date_range', this.dateRange));
             this.timeframe = String(SettingsManager.get('stats_timeframe', this.timeframe));
             this.rollingWindow = String(SettingsManager.get('stats_rolling_window', this.rollingWindow));
@@ -221,9 +239,9 @@ const StatsPage = {
         if (!this.data) return;
         const dataMap = {
             symbol: this.data.symbols,
-            tag: this.data.tags,
+            tag: this.getTagsData(),
             dow: this.data.day_of_week,
-            tod: this.data.time_of_day,
+            tod: this.getTodData(),
             duration: this.data.holding_durations,
             order_type: this.data.order_types,
             category: this.data.categories,
@@ -351,7 +369,7 @@ const StatsPage = {
 
         container.innerHTML = `
             <div class="stats-main-container">
-                <!-- Top Statistics Bar with Date Range Filters -->
+                <!-- Top Statistics Bar with Date Range Filters & Timezone -->
                 <div class="stats-header-bar">
                     <div class="segmented-control" id="stats-date-range-filter">
                         <button class="segmented-btn ${this.dateRange === '1W' ? 'active' : ''}" data-range="1W">${sp.filter1W}</button>
@@ -359,6 +377,15 @@ const StatsPage = {
                         <button class="segmented-btn ${this.dateRange === '3M' ? 'active' : ''}" data-range="3M">${sp.filter3M}</button>
                         <button class="segmented-btn ${this.dateRange === 'YTD' ? 'active' : ''}" data-range="YTD">${sp.filterYTD}</button>
                         <button class="segmented-btn ${this.dateRange === 'ALL' ? 'active' : ''}" data-range="ALL">${sp.filterAll}</button>
+                    </div>
+
+                    <div class="segmented-control" id="stats-global-tz-control">
+                        <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
+                            <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
+                        </button>
+                        <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
+                            <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
+                        </button>
                     </div>
                 </div>
 
@@ -847,9 +874,19 @@ const StatsPage = {
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByTagTitle}</span>
                             </div>
-                            <div class="segmented-control">
-                                <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
-                                <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="segmented-control" id="stats-tag-tz-control">
+                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
+                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
+                                    </button>
+                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
+                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
+                                    </button>
+                                </div>
+                                <div class="segmented-control">
+                                    <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
+                                    <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
+                                </div>
                             </div>
                         </div>
                         <div id="wrap-tag-chart" class="chart-canvas-box ${this.viewModes.tag === 'chart' ? '' : 'hidden'}">
@@ -866,7 +903,7 @@ const StatsPage = {
                                     </tr>
                                 </thead>
                                 <tbody id="tbody-table-tag">
-                                    ${this.buildTagTableRows(this.sortData('tag', tags))}
+                                    ${this.buildTagTableRows(this.sortData('tag', this.getTagsData()))}
                                 </tbody>
                             </table>
                         </div>
@@ -909,9 +946,19 @@ const StatsPage = {
                             <div class="stats-section-title-wrap">
                                 <span>${sp.perfByTodTitle}</span>
                             </div>
-                            <div class="segmented-control">
-                                <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
-                                <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="segmented-control" id="stats-tod-tz-control">
+                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
+                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
+                                    </button>
+                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
+                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
+                                    </button>
+                                </div>
+                                <div class="segmented-control">
+                                    <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
+                                    <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
+                                </div>
                             </div>
                         </div>
                         <div id="wrap-tod-chart" class="chart-canvas-box ${this.viewModes.tod === 'chart' ? '' : 'hidden'}">
@@ -921,14 +968,14 @@ const StatsPage = {
                             <table class="institutional-table">
                                 <thead>
                                     <tr>
-                                        <th class="sortable-th ${this.getSortThClass('tod', 'label')}" data-sort-table="tod" data-sort-col="label">${sp.colHour} ${this.getSortIndicator('tod', 'label')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('tod', 'label')}" id="th-tod-hour" data-sort-table="tod" data-sort-col="label">${this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)')} ${this.getSortIndicator('tod', 'label')}</th>
                                         <th class="sortable-th ${this.getSortThClass('tod', 'trades_count')}" data-sort-table="tod" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('tod', 'trades_count')}</th>
                                         <th class="sortable-th ${this.getSortThClass('tod', 'win_rate')}" data-sort-table="tod" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('tod', 'win_rate')}</th>
                                         <th class="sortable-th ${this.getSortThClass('tod', 'net_pnl')}" data-sort-table="tod" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('tod', 'net_pnl')}</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tbody-table-tod">
-                                    ${this.buildTodTableRows(this.sortData('tod', tod))}
+                                    ${this.buildTodTableRows(this.sortData('tod', this.getTodData()))}
                                 </tbody>
                             </table>
                         </div>
@@ -1306,6 +1353,44 @@ const StatsPage = {
                 if (tableBtn) tableBtn.click();
             });
         });
+
+        // Timezone switcher events
+        document.querySelectorAll('[data-stats-tz]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tz = btn.getAttribute('data-stats-tz');
+                if (tz) this.setTimezone(tz);
+            });
+        });
+    },
+
+    setTimezone(tz, broadcast = true) {
+        this.timezoneMode = tz;
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.set('app_timezone', tz);
+        }
+        document.querySelectorAll('[data-stats-tz]').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-stats-tz') === tz);
+        });
+        this.renderTodChart();
+        this.renderTagChart();
+        const tbodyTod = document.getElementById('tbody-table-tod');
+        if (tbodyTod) {
+            const sortedData = this.sortData('tod', this.getTodData());
+            tbodyTod.innerHTML = this.buildTodTableRows(sortedData);
+        }
+        const tbodyTag = document.getElementById('tbody-table-tag');
+        if (tbodyTag) {
+            const sortedTag = this.sortData('tag', this.getTagsData());
+            tbodyTag.innerHTML = this.buildTagTableRows(sortedTag);
+        }
+        const thHour = document.getElementById('th-tod-hour');
+        if (thHour) {
+            const timeLabel = this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)');
+            thHour.innerHTML = `${timeLabel} ${this.getSortIndicator('tod', 'label')}`;
+        }
+        if (broadcast) {
+            window.dispatchEvent(new CustomEvent('appTimezoneChanged', { detail: { timezone: tz } }));
+        }
     },
 
     updateRollingWinRateUI() {
@@ -1820,7 +1905,7 @@ const StatsPage = {
         if (this.charts.tag) this.charts.tag.destroy();
 
         const theme = this.getThemeColors();
-        const tags = [...(this.data.tags || [])];
+        const tags = [...this.getTagsData()];
 
         // Sort tags descending: best (+) to worst (-)
         tags.sort((a, b) => b.net_pnl - a.net_pnl);
@@ -1948,14 +2033,15 @@ const StatsPage = {
         });
     },
 
-    // 8. Performance by Time of Day (Hourly Vertical Bar)
+    // 8. Performance by Time of Day (Hourly Vertical Bar - Local & Market Time)
     renderTodChart() {
         const canvas = document.getElementById('chart-tod');
         if (!canvas) return;
         if (this.charts.tod) this.charts.tod.destroy();
 
         const theme = this.getThemeColors();
-        const tod = this.data.time_of_day || [];
+        const tod = this.getTodData();
+        const isLocal = this.timezoneMode === 'local';
 
         const labels = tod.map(t => t.label);
         const values = tod.map(t => t.net_pnl);
@@ -1982,6 +2068,14 @@ const StatsPage = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (context) => {
+                                const idx = context[0]?.dataIndex;
+                                const t = tod[idx];
+                                if (!t) return '';
+                                return isLocal
+                                    ? `${t.local_label || t.label + ' CET'} (Market: ${t.market_label || '--'})`
+                                    : `${t.market_label || t.label + ' EST'} (Local: ${t.local_label || '--'})`;
+                            },
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const t = tod[idx];
@@ -2312,6 +2406,14 @@ const StatsPage = {
 window.addEventListener('themeChanged', () => {
     if (typeof StatsPage !== 'undefined' && StatsPage.reRenderCharts) {
         StatsPage.reRenderCharts();
+    }
+});
+
+// Global timezone sync listener
+window.addEventListener('appTimezoneChanged', (e) => {
+    const newTz = e.detail?.timezone;
+    if (newTz && typeof StatsPage !== 'undefined' && StatsPage.timezoneMode !== newTz) {
+        StatsPage.setTimezone(newTz, false);
     }
 });
 

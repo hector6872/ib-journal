@@ -17,11 +17,14 @@ const DayModal = {
         }
     },
 
-    setTimezone(mode) {
+    setTimezone(mode, broadcast = true) {
         if (this.timezoneMode === mode) return;
         this.timezoneMode = mode;
         if (typeof SettingsManager !== 'undefined') {
             SettingsManager.set('app_timezone', mode);
+        }
+        if (broadcast) {
+            window.dispatchEvent(new CustomEvent('appTimezoneChanged', { detail: { timezone: mode } }));
         }
         this.render();
     },
@@ -86,6 +89,14 @@ const DayModal = {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.backdrop && this.backdrop.classList.contains('open')) {
                 this.close();
+            }
+        });
+
+        // Sync with global timezone switches
+        window.addEventListener('appTimezoneChanged', (e) => {
+            const newTz = e.detail?.timezone;
+            if (newTz && this.timezoneMode !== newTz) {
+                this.setTimezone(newTz, false);
             }
         });
     },

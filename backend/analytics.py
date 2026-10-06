@@ -3,6 +3,7 @@ import math
 import re
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from backend.database import db_session
 from backend.settings import get_all_settings
@@ -550,7 +551,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             trade_durations[t["id"]] = dur_label
 
         # 2. Tag / Setup / Mistake Breakdown (Custom tags from notes + Derived execution tags)
-        tag_map: Dict[str, Dict[str, Any]] = {}
+        tag_map_market: Dict[str, Dict[str, Any]] = {}
+        tag_map_local: Dict[str, Dict[str, Any]] = {}
         cat_labels = {
             "STK": "STK (Stocks)",
             "OPT": "OPT (Options)",
@@ -568,7 +570,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 continue
 
             notes = t.get("notes") or ""
-            tags = []
+            tags_base = []
             if notes:
                 # Support tag patterns: "Setup: Scalp", "Mistake: Wrong direction", "[tag]", "#tag", comma separated
                 chunks = re.split(r'[,;\n\r]+', notes)
@@ -580,7 +582,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                             c = c[1:-1].strip()
                         elif c.startswith('#'):
                             c = c[1:].strip()
-                        tags.append(c)
+                        tags_base.append(c)
 
             sym = (t.get("symbol") or "").upper()
             price = float(t.get("trade_price") or 0.0)
@@ -589,69 +591,93 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             # 1. Option Strategy Classification
             if cat == "OPT":
                 if sym.endswith(" C") or "CALL" in sym or re.search(r'\d[C]\d', sym):
-                    tags.append("Option: Call")
+                    tags_base.append("Option: Call")
                 elif sym.endswith(" P") or "PUT" in sym or re.search(r'\d[P]\d', sym):
-                    tags.append("Option: Put")
+                    tags_base.append("Option: Put")
                 else:
-                    tags.append("Option Trade")
+                    tags_base.append("Option Trade")
             elif cat == "STK":
                 if 0 < price < 5.0:
-                    tags.append("Penny Stock (<$5)")
+                    tags_base.append("Penny Stock (<$5)")
                 elif price >= 5.0:
-                    tags.append("Stock (≥$5)")
+                    tags_base.append("Stock (≥$5)")
 
             # 2. Market Index / Major ETF
             if any(idx in sym for idx in ["SPY", "QQQ", "IWM", "DIA", "VXX", "UVXY", "TQQQ", "SQQQ"]):
-                tags.append("Index ETF")
+                tags_base.append("Index ETF")
 
             # 3. Market Session Time
+            tag_mkt_time = None
+            tag_loc_time = None
             if t_time and ":" in t_time:
                 try:
                     parts = t_time.split(":")
                     hh, mm = int(parts[0]), int(parts[1])
                     total_min = hh * 60 + mm
                     if total_min < 9 * 60 + 30:
-                        tags.append("Pre-Market (<09:30)")
+                        tag_mkt_time = "Pre-Market (<09:30)"
+                        tag_loc_time = "Pre-Market (<15:30)"
                     elif total_min <= 10 * 60 + 30:
-                        tags.append("Market Open (09:30-10:30)")
+                        tag_mkt_time = "Market Open (09:30-10:30)"
+                        tag_loc_time = "Market Open (15:30-16:30)"
                     elif total_min <= 14 * 60:
-                        tags.append("Midday (10:30-14:00)")
+                        tag_mkt_time = "Midday (10:30-14:00)"
+                        tag_loc_time = "Midday (16:30-20:00)"
                     elif total_min <= 16 * 60:
-                        tags.append("Power Hour (14:00-16:00)")
+                        tag_mkt_time = "Power Hour (14:00-16:00)"
+                        tag_loc_time = "Power Hour (20:00-22:00)"
                     else:
-                        tags.append("After Hours (>16:00)")
+                        tag_mkt_time = "After Hours (>16:00)"
+                        tag_loc_time = "After Hours (>22:00)"
                 except Exception:
                     pass
 
-            for tag in tags:
-                if tag not in tag_map:
-                    tag_map[tag] = {
-                        "tag": tag,
-                        "trades_count": 0,
-                        "wins": 0,
-                        "losses": 0,
-                        "net_pnl": 0.0
-                    }
-                tag_map[tag]["trades_count"] += 1
+            # Market Tags
+            tags_mkt = list(tags_base)
+            if tag_mkt_time:
+                tags_mkt.append(tag_mkt_time)
+            for tag in tags_mkt:
+                if tag not in tag_map_market:
+                    tag_map_market[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
+                tag_map_market[tag]["trades_count"] += 1
                 if t["realized_pnl"] > 0:
-                    tag_map[tag]["wins"] += 1
+                    tag_map_market[tag]["wins"] += 1
                 elif t["realized_pnl"] < 0:
-                    tag_map[tag]["losses"] += 1
-                tag_map[tag]["net_pnl"] += t["net_pnl"]
+                    tag_map_market[tag]["losses"] += 1
+                tag_map_market[tag]["net_pnl"] += t["net_pnl"]
 
-        tags_list = []
-        for tag, val in tag_map.items():
-            cnt = val["trades_count"]
-            wr = round((val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
-            tags_list.append({
-                "tag": tag,
-                "trades_count": cnt,
-                "wins": val["wins"],
-                "losses": val["losses"],
-                "win_rate": wr,
-                "net_pnl": round(val["net_pnl"], 2)
-            })
-        tags_list.sort(key=lambda x: x["net_pnl"])
+            # Local Tags
+            tags_loc = list(tags_base)
+            if tag_loc_time:
+                tags_loc.append(tag_loc_time)
+            for tag in tags_loc:
+                if tag not in tag_map_local:
+                    tag_map_local[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
+                tag_map_local[tag]["trades_count"] += 1
+                if t["realized_pnl"] > 0:
+                    tag_map_local[tag]["wins"] += 1
+                elif t["realized_pnl"] < 0:
+                    tag_map_local[tag]["losses"] += 1
+                tag_map_local[tag]["net_pnl"] += t["net_pnl"]
+
+        def _format_tags(t_map):
+            res = []
+            for tag, val in t_map.items():
+                cnt = val["trades_count"]
+                wr = round((val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+                res.append({
+                    "tag": tag,
+                    "trades_count": cnt,
+                    "wins": val["wins"],
+                    "losses": val["losses"],
+                    "win_rate": wr,
+                    "net_pnl": round(val["net_pnl"], 2)
+                })
+            res.sort(key=lambda x: x["net_pnl"])
+            return res
+
+        tags_market_list = _format_tags(tag_map_market)
+        tags_local_list = _format_tags(tag_map_local)
 
         # 3. Performance by Day of Week (Sun - Sat)
         dow_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -694,33 +720,78 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 "net_pnl": d_info["net_pnl"]
             })
 
-        # 4. Performance by Time of Day (Hourly 06:00 to 21:00)
-        hourly_data = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(6, 22)}
+        # 4. Performance by Time of Day (Hourly - Market EST & Local CET)
+        ny_tz = ZoneInfo("America/New_York")
+        madrid_tz = ZoneInfo("Europe/Madrid")
+
+        hourly_market = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(6, 22)}
+        hourly_local = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(8, 24)}
+
         for t in all_trades:
             is_closed = (t.get("open_close_indicator") or "").upper() == "C" or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
             tt = t.get("trade_time") or ""
+            td = t.get("trade_date") or ""
+            h_market = None
+            h_local = None
+
             if tt:
                 try:
-                    h = int(tt.split(":")[0])
-                    if h in hourly_data:
-                        if is_closed:
-                            hourly_data[h]["trades_count"] += 1
-                            if t["realized_pnl"] > 0:
-                                hourly_data[h]["wins"] += 1
-                            elif t["realized_pnl"] < 0:
-                                hourly_data[h]["losses"] += 1
-                        hourly_data[h]["net_pnl"] += t["net_pnl"]
+                    clean_time = tt if len(tt.split(":")) == 3 else f"{tt}:00"
+                    dt_obj = datetime.strptime(f"{td} {clean_time}", "%Y-%m-%d %H:%M:%S").replace(tzinfo=ny_tz)
+                    h_market = dt_obj.hour
+                    h_local = dt_obj.astimezone(madrid_tz).hour
                 except Exception:
-                    pass
+                    try:
+                        h_market = int(tt.split(":")[0])
+                        h_local = (h_market + 6) % 24
+                    except Exception:
+                        pass
 
-        time_of_day_list = []
+            if h_market is not None and h_market in hourly_market:
+                if is_closed:
+                    hourly_market[h_market]["trades_count"] += 1
+                    if t["realized_pnl"] > 0:
+                        hourly_market[h_market]["wins"] += 1
+                    elif t["realized_pnl"] < 0:
+                        hourly_market[h_market]["losses"] += 1
+                hourly_market[h_market]["net_pnl"] += t["net_pnl"]
+
+            if h_local is not None and h_local in hourly_local:
+                if is_closed:
+                    hourly_local[h_local]["trades_count"] += 1
+                    if t["realized_pnl"] > 0:
+                        hourly_local[h_local]["wins"] += 1
+                    elif t["realized_pnl"] < 0:
+                        hourly_local[h_local]["losses"] += 1
+                hourly_local[h_local]["net_pnl"] += t["net_pnl"]
+
+        time_of_day_market = []
         for h in range(6, 22):
-            h_info = hourly_data[h]
+            h_info = hourly_market[h]
             cnt = h_info["trades_count"]
             wr = round((h_info["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
-            time_of_day_list.append({
+            time_of_day_market.append({
                 "hour": h,
                 "label": f"{h:02d}:00",
+                "market_label": f"{h:02d}:00 EST",
+                "local_label": f"{(h+6)%24:02d}:00 CET",
+                "trades_count": cnt,
+                "wins": h_info["wins"],
+                "losses": h_info["losses"],
+                "win_rate": wr,
+                "net_pnl": round(h_info["net_pnl"], 2)
+            })
+
+        time_of_day_local = []
+        for h in range(8, 24):
+            h_info = hourly_local[h]
+            cnt = h_info["trades_count"]
+            wr = round((h_info["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+            time_of_day_local.append({
+                "hour": h,
+                "label": f"{h:02d}:00",
+                "local_label": f"{h:02d}:00 CET",
+                "market_label": f"{(h-6)%24:02d}:00 EST",
                 "trades_count": cnt,
                 "wins": h_info["wins"],
                 "losses": h_info["losses"],
@@ -942,9 +1013,13 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         "drawdown_series": drawdown_series,
         "metric_evolution": metric_evolution,
         "symbols": symbols,
-        "tags": tags_list,
+        "tags": tags_local_list,
+        "tags_local": tags_local_list,
+        "tags_market": tags_market_list,
         "day_of_week": dow_list,
-        "time_of_day": time_of_day_list,
+        "time_of_day": time_of_day_local,
+        "time_of_day_local": time_of_day_local,
+        "time_of_day_market": time_of_day_market,
         "holding_durations": holding_durations,
         "order_types": order_types,
         "categories": categories,

@@ -124,7 +124,9 @@ const STRINGS = {
         subtitle: "In-depth breakdown by instrument, asset category, execution side, and trading days.",
         kpiSummary: "Executive Summary",
         capitalStripTitle: "Portfolio Capital & Equity Overview",
-        manageCashBtn: "⚙ Manage Capital & Cash Transfers",
+        manageCashBtn: "Manage Capital & Cash Transfers",
+        symbolChartNotice: "Showing Top 10 Best & Top 10 Worst symbols",
+        symbolChartNoticeLink: "Switch to Table to view all",
         grossProfit: "Gross Profit",
         grossLoss: "Gross Loss",
         totalCommissions: "Commissions & Fees",
@@ -143,12 +145,12 @@ const STRINGS = {
         colTrades: "Trades",
         colWinRate: "Win Rate",
         colNetPnl: "Net P&L",
-        colCommissions: "Commissions",
-        colVolume: "Volume",
         colSide: "Side",
         colDay: "Day",
         colTag: "Tag / Setup",
         colHour: "Hour",
+        longSideLabel: "LONG (Buyer)",
+        shortSideLabel: "SHORT (Seller)",
         
         // Risk & Drawdown
         riskTitle: "RISK & DRAWDOWN",
@@ -201,6 +203,8 @@ const STRINGS = {
         
         // Metric Evolution & Equity
         metricEvolutionTitle: "METRIC EVOLUTION",
+        selectAllMetrics: "Select All",
+        deselectAllMetrics: "Deselect All",
         equityCurveTitle: "EQUITY CURVE",
         day: "Day",
         week: "Week",

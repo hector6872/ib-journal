@@ -1060,17 +1060,64 @@
     color: var(--text-main);
 }
 .metric-toggle-label input[type="checkbox"] {
-    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
     width: 14px;
     height: 14px;
-    accent-color: var(--metric-color, #0066cc);
+    border: 1.5px solid var(--border-default);
+    border-radius: 3px;
+    background-color: var(--bg-card);
+    display: inline-grid;
+    place-content: center;
+    cursor: pointer;
+    margin: 0;
+    vertical-align: middle;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
-.metric-color-dot {
+.metric-toggle-label input[type="checkbox"]:checked {
+    background-color: var(--metric-color, var(--color-brand));
+    border-color: var(--metric-color, var(--color-brand));
+}
+
+.metric-toggle-label input[type="checkbox"]::before {
+    content: "";
     width: 8px;
     height: 8px;
-    border-radius: 50%;
-    display: inline-block;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    transform: scale(0);
+    transition: 0.12s transform ease-in-out;
+    background-color: #ffffff;
+}
+
+.metric-toggle-label input[type="checkbox"]:checked::before {
+    transform: scale(1);
+}
+
+.chart-footer-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    padding-top: 8px;
+    margin-top: 6px;
+    border-top: 1px dashed var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.chart-footer-link {
+    color: var(--color-brand);
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: underline;
+    transition: color 0.15s ease;
+}
+
+.chart-footer-link:hover {
+    color: var(--color-brand-hover, #0052a3);
 }
 
 .segmented-control {

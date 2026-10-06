@@ -35,6 +35,10 @@ const StatsPage = {
         category: { col: 'net_pnl', dir: 'desc' },
         side: { col: 'net_pnl', dir: 'desc' }
     },
+    equityCurveMetrics: {
+        cum_pnl: true,
+        daily_pnl: true
+    },
     charts: {},
 
     loadSettings() {
@@ -42,8 +46,10 @@ const StatsPage = {
             this.dateRange = String(SettingsManager.get('stats_date_range', this.dateRange));
             this.timeframe = String(SettingsManager.get('stats_timeframe', this.timeframe));
             this.rollingWindow = String(SettingsManager.get('stats_rolling_window', this.rollingWindow));
-            this.activeMetrics = SettingsManager.get('stats_active_metrics', this.activeMetrics);
-            this.viewModes = SettingsManager.get('stats_view_modes', this.viewModes);
+            this.activeMetrics = Object.assign({}, this.activeMetrics, SettingsManager.get('stats_active_metrics', null));
+            this.viewModes = Object.assign({}, this.viewModes, SettingsManager.get('stats_view_modes', null));
+            this.tableSort = Object.assign({}, this.tableSort, SettingsManager.get('stats_table_sort', null));
+            this.equityCurveMetrics = Object.assign({}, this.equityCurveMetrics, SettingsManager.get('stats_equity_curve_metrics', null));
         }
     },
 
@@ -250,6 +256,44 @@ const StatsPage = {
                 ind.classList.toggle('active', isCurrent);
             }
         });
+    },
+
+    isAllMetricsActive() {
+        return Object.values(this.activeMetrics).every(Boolean);
+    },
+
+    toggleAllMetrics() {
+        const allActive = this.isAllMetricsActive();
+        const targetState = !allActive;
+        Object.keys(this.activeMetrics).forEach(k => {
+            this.activeMetrics[k] = targetState;
+        });
+
+        const metricIdMap = {
+            'win_rate': 'm-win-rate',
+            'profit_factor': 'm-pf',
+            'avg_win': 'm-avg-win',
+            'avg_loss': 'm-avg-loss',
+            'expectancy': 'm-exp',
+            'avg_trade_pnl': 'm-avg-pnl',
+            'cumulative_pnl': 'm-cum-pnl'
+        };
+
+        Object.entries(metricIdMap).forEach(([k, id]) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = targetState;
+        });
+
+        const btn = document.getElementById('btn-toggle-all-metrics');
+        const sp = STRINGS.statsPage;
+        if (btn) {
+            btn.textContent = targetState ? (sp.deselectAllMetrics || 'Deselect All') : (sp.selectAllMetrics || 'Select All');
+        }
+
+        if (typeof SettingsManager !== 'undefined') {
+            SettingsManager.set('stats_active_metrics', this.activeMetrics);
+        }
+        this.renderMetricEvolutionChart();
     },
 
     render(data, container) {
@@ -534,7 +578,7 @@ const StatsPage = {
                             <span>${sp.capitalStripTitle || 'Portfolio Capital & Equity Overview'}</span>
                         </div>
                         <button type="button" class="btn-pill" id="btn-stats-manage-cash" style="padding: 4px 12px; font-size: 11px;">
-                            ${sp.manageCashBtn || '⚙ Manage Capital & Cash Transfers'}
+                            ${sp.manageCashBtn || 'Manage Capital & Cash Transfers'}
                         </button>
                     </div>
                     <div class="cash-summary-grid">
@@ -604,10 +648,16 @@ const StatsPage = {
                             <span>${sp.metricEvolutionTitle}</span>
                         </div>
 
-                        <div class="segmented-control" id="metric-evolution-timeframe">
-                            <button class="segmented-btn ${this.timeframe === 'day' ? 'active' : ''}" data-tf="day">${sp.day}</button>
-                            <button class="segmented-btn ${this.timeframe === 'week' ? 'active' : ''}" data-tf="week">${sp.week}</button>
-                            <button class="segmented-btn ${this.timeframe === 'month' ? 'active' : ''}" data-tf="month">${sp.month}</button>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn-pill" id="btn-toggle-all-metrics" style="padding: 4px 10px; font-size: 11px;">
+                                ${this.isAllMetricsActive() ? (sp.deselectAllMetrics || 'Deselect All') : (sp.selectAllMetrics || 'Select All')}
+                            </button>
+
+                            <div class="segmented-control" id="metric-evolution-timeframe">
+                                <button class="segmented-btn ${this.timeframe === 'day' ? 'active' : ''}" data-tf="day">${sp.day}</button>
+                                <button class="segmented-btn ${this.timeframe === 'week' ? 'active' : ''}" data-tf="week">${sp.week}</button>
+                                <button class="segmented-btn ${this.timeframe === 'month' ? 'active' : ''}" data-tf="month">${sp.month}</button>
+                            </div>
                         </div>
                     </div>
 
@@ -615,43 +665,36 @@ const StatsPage = {
                     <div class="metric-toggles-bar">
                         <label class="metric-toggle-label" style="--metric-color: #10b981;">
                             <input type="checkbox" id="m-win-rate" ${this.activeMetrics.win_rate ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #10b981;"></span>
                             <span>${sp.winRateMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #8b5cf6;">
                             <input type="checkbox" id="m-pf" ${this.activeMetrics.profit_factor ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #8b5cf6;"></span>
                             <span>${sp.profitFactorMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #3b82f6;">
                             <input type="checkbox" id="m-avg-win" ${this.activeMetrics.avg_win ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #3b82f6;"></span>
                             <span>${sp.avgWinMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #ef4444;">
                             <input type="checkbox" id="m-avg-loss" ${this.activeMetrics.avg_loss ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #ef4444;"></span>
                             <span>${sp.avgLossMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #f59e0b;">
                             <input type="checkbox" id="m-exp" ${this.activeMetrics.expectancy ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #f59e0b;"></span>
                             <span>${sp.expectancyMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #06b6d4;">
                             <input type="checkbox" id="m-avg-pnl" ${this.activeMetrics.avg_trade_pnl ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #06b6d4;"></span>
                             <span>${sp.avgPnlTradeMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #ec4899;">
                             <input type="checkbox" id="m-cum-pnl" ${this.activeMetrics.cumulative_pnl ? 'checked' : ''}>
-                            <span class="metric-color-dot" style="background: #ec4899;"></span>
                             <span>${sp.cumPnlMetric}</span>
                         </label>
                     </div>
@@ -667,6 +710,17 @@ const StatsPage = {
                     <div class="stats-section-header">
                         <div class="stats-section-title-wrap">
                             <span>${sp.equityCurveTitle}</span>
+                        </div>
+                        <div class="metric-toggles-bar">
+                            <label class="metric-toggle-label" style="--metric-color: #38bdf8;">
+                                <input type="checkbox" id="eq-cum-pnl" ${this.equityCurveMetrics.cum_pnl ? 'checked' : ''}>
+                                <span>${sp.cumPnlMetric}</span>
+                            </label>
+
+                            <label class="metric-toggle-label" style="--metric-color: #22c55e;">
+                                <input type="checkbox" id="eq-daily-pnl" ${this.equityCurveMetrics.daily_pnl ? 'checked' : ''}>
+                                <span>${sp.dailyPnlMetric}</span>
+                            </label>
                         </div>
                     </div>
                     <div class="chart-canvas-box tall">
@@ -755,8 +809,14 @@ const StatsPage = {
                                 <button class="segmented-btn ${this.viewModes.symbol === 'table' ? 'active' : ''}" data-view-target="symbol" data-view-val="table">${sp.tableView}</button>
                             </div>
                         </div>
-                        <div id="wrap-symbol-chart" class="chart-canvas-box ${this.viewModes.symbol === 'chart' ? '' : 'hidden'}">
-                            <canvas id="chart-symbol"></canvas>
+                        <div id="wrap-symbol-chart" class="${this.viewModes.symbol === 'chart' ? '' : 'hidden'}">
+                            <div class="chart-canvas-box">
+                                <canvas id="chart-symbol"></canvas>
+                            </div>
+                            <div class="chart-footer-note">
+                                <span>${sp.symbolChartNotice || 'Showing Top 10 Best & Top 10 Worst symbols'}</span>
+                                <span class="chart-footer-link" data-switch-to-table="symbol">${sp.symbolChartNoticeLink || 'Switch to Table to view all'}</span>
+                            </div>
                         </div>
                         <div id="wrap-symbol-table" class="stats-table-wrapper ${this.viewModes.symbol === 'table' ? '' : 'hidden'}">
                             <table class="institutional-table">
@@ -1121,10 +1181,20 @@ const StatsPage = {
                     if (typeof SettingsManager !== 'undefined') {
                         SettingsManager.set('stats_active_metrics', this.activeMetrics);
                     }
+                    const btn = document.getElementById('btn-toggle-all-metrics');
+                    const sp = STRINGS.statsPage;
+                    if (btn) {
+                        btn.textContent = this.isAllMetricsActive() ? (sp.deselectAllMetrics || 'Deselect All') : (sp.selectAllMetrics || 'Select All');
+                    }
                     this.renderMetricEvolutionChart();
                 });
             }
         });
+
+        const btnToggleMetrics = document.getElementById('btn-toggle-all-metrics');
+        if (btnToggleMetrics) {
+            btnToggleMetrics.addEventListener('click', () => this.toggleAllMetrics());
+        }
 
         // Chart / Table view switchers in 2x2 breakdowns
         document.querySelectorAll('[data-view-target]').forEach(btn => {
@@ -1179,7 +1249,35 @@ const StatsPage = {
                     this.tableSort[tableTarget].dir = textCols.includes(colTarget) ? 'asc' : 'desc';
                 }
 
+                if (typeof SettingsManager !== 'undefined') {
+                    SettingsManager.set('stats_table_sort', this.tableSort);
+                }
+
                 this.updateTable(tableTarget);
+            });
+        });
+
+        // Equity Curve metric toggles (Cumulative P&L / Daily P&L)
+        ['eq-cum-pnl', 'eq-daily-pnl'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    if (id === 'eq-cum-pnl') this.equityCurveMetrics.cum_pnl = e.target.checked;
+                    if (id === 'eq-daily-pnl') this.equityCurveMetrics.daily_pnl = e.target.checked;
+                    if (typeof SettingsManager !== 'undefined') {
+                        SettingsManager.set('stats_equity_curve_metrics', this.equityCurveMetrics);
+                    }
+                    this.renderEquityCurveChart();
+                });
+            }
+        });
+
+        // Clickable switch-to-table link in chart footer
+        document.querySelectorAll('[data-switch-to-table]').forEach(el => {
+            el.addEventListener('click', () => {
+                const target = el.getAttribute('data-switch-to-table');
+                const tableBtn = document.querySelector(`.segmented-btn[data-view-target="${target}"][data-view-val="table"]`);
+                if (tableBtn) tableBtn.click();
             });
         });
     },
@@ -1514,37 +1612,55 @@ const StatsPage = {
         const barColors = dailyPnl.map(p => p >= 0 ? theme.profitBar : theme.lossBar);
         const barBorders = dailyPnl.map(p => p >= 0 ? theme.profit : theme.loss);
 
+        const datasets = [];
+
+        if (this.equityCurveMetrics.cum_pnl) {
+            datasets.push({
+                type: 'line',
+                label: STRINGS.statsPage.cumPnlMetric,
+                data: cumPnl.length ? cumPnl : [0],
+                borderColor: theme.equityLine,
+                backgroundColor: theme.equityArea,
+                fill: true,
+                tension: 0.35,
+                borderWidth: 2.5,
+                pointRadius: labels.length > 35 ? 0 : 3,
+                pointHoverRadius: 6,
+                yAxisID: 'y',
+                order: 1
+            });
+        }
+
+        if (this.equityCurveMetrics.daily_pnl) {
+            datasets.push({
+                type: 'bar',
+                label: STRINGS.statsPage.dailyPnlMetric,
+                data: dailyPnl.length ? dailyPnl : [0],
+                backgroundColor: barColors,
+                borderColor: barBorders,
+                borderWidth: 1,
+                borderRadius: 2,
+                barPercentage: 0.5,
+                yAxisID: 'y',
+                order: 2
+            });
+        }
+
+        if (!datasets.length) {
+            datasets.push({
+                type: 'line',
+                label: STRINGS.statsPage.cumPnlMetric,
+                data: labels.map(() => 0),
+                borderColor: 'transparent',
+                backgroundColor: 'transparent',
+                yAxisID: 'y'
+            });
+        }
+
         this.charts.equityCurve = new Chart(canvas, {
             data: {
                 labels: labels.length ? labels : ['--'],
-                datasets: [
-                    {
-                        type: 'line',
-                        label: STRINGS.statsPage.cumPnlMetric,
-                        data: cumPnl.length ? cumPnl : [0],
-                        borderColor: theme.equityLine,
-                        backgroundColor: theme.equityArea,
-                        fill: true,
-                        tension: 0.35,
-                        borderWidth: 2.5,
-                        pointRadius: labels.length > 35 ? 0 : 3,
-                        pointHoverRadius: 6,
-                        yAxisID: 'y',
-                        order: 1
-                    },
-                    {
-                        type: 'bar',
-                        label: STRINGS.statsPage.dailyPnlMetric,
-                        data: dailyPnl.length ? dailyPnl : [0],
-                        backgroundColor: barColors,
-                        borderColor: barBorders,
-                        borderWidth: 1,
-                        borderRadius: 2,
-                        barPercentage: 0.5,
-                        yAxisID: 'y',
-                        order: 2
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -1552,14 +1668,7 @@ const StatsPage = {
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
-                        display: true,
-                        position: 'top',
-                        align: 'end',
-                        labels: {
-                            color: theme.text,
-                            boxWidth: 10,
-                            font: { size: 11, weight: '600' }
-                        }
+                        display: false
                     },
                     tooltip: {
                         callbacks: {
@@ -1570,7 +1679,7 @@ const StatsPage = {
                                 const val = context.parsed.y;
                                 if (context.dataset.type === 'bar') {
                                     const count = item ? item.trades_count : 0;
-                                    return ` ${label}: ${State.formatCurrency(val)} (${count} ops)`;
+                                    return ` ${label}: ${State.formatCurrency(val)} (${count} trades)`;
                                 }
                                 return ` ${label}: ${State.formatCurrency(val)}`;
                             }
@@ -1651,7 +1760,7 @@ const StatsPage = {
                                 const s = displayedSymbols[idx];
                                 const wr = s ? s.win_rate : 0;
                                 const cnt = s ? s.trades_count : 0;
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} ops)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} trades)`;
                             }
                         }
                     }
@@ -1725,7 +1834,7 @@ const StatsPage = {
                                 const t = tags[idx];
                                 const wr = t ? t.win_rate : 0;
                                 const cnt = t ? t.trades_count : 0;
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} ops)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} trades)`;
                             }
                         }
                     }
@@ -1789,7 +1898,7 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const d = dow[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d.trades_count} ops, ${d.win_rate}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d.trades_count} trades, ${d.win_rate}% WR)`;
                             }
                         }
                     }
@@ -1849,7 +1958,7 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const t = tod[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${t.trades_count} ops, ${t.win_rate}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${t.trades_count} trades, ${t.win_rate}% WR)`;
                             }
                         }
                     }
@@ -1909,7 +2018,7 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const d = durations[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d ? d.trades_count : 0} ops, ${d ? d.win_rate : 0}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${d ? d.trades_count : 0} trades, ${d ? d.win_rate : 0}% WR)`;
                             }
                         }
                     }
@@ -1969,7 +2078,7 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const o = orderTypes[idx];
-                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${o ? o.trades_count : 0} ops, ${o ? o.win_rate : 0}% WR)`;
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${o ? o.trades_count : 0} trades, ${o ? o.win_rate : 0}% WR)`;
                             }
                         }
                     }
@@ -2114,12 +2223,15 @@ const StatsPage = {
         if (!sides || !sides.length) {
             return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No trades</td></tr>`;
         }
+        const sp = STRINGS.statsPage || {};
         return sides.map(s => {
-            const isBuy = s.side === 'BUY';
+            const sideUpper = (s.side || '').toUpperCase();
+            const isLong = sideUpper === 'LONG' || sideUpper === 'BUY';
             const pnlClass = this.getPnlClass(s.net_pnl);
+            const label = isLong ? (sp.longSideLabel || 'LONG (Buyer)') : (sp.shortSideLabel || 'SHORT (Seller)');
             return `
                 <tr>
-                    <td><span class="${isBuy ? 'badge-pill-profit' : 'badge-pill-loss'}">${isBuy ? 'LONG (BUY)' : 'SHORT (SELL)'}</span></td>
+                    <td><span class="${isLong ? 'badge-pill-profit' : 'badge-pill-loss'}">${label}</span></td>
                     <td class="mono">${s.trades_count}</td>
                     <td class="mono">${s.win_rate}%</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(s.net_pnl)}</td>

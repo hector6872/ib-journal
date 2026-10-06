@@ -168,11 +168,28 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         total_withdrawals = float(cash_row["total_withdrawals"] if cash_row else 0.0)
         net_cash_flow = total_deposits - total_withdrawals
 
+        # Cumulative lifetime capital base (all historical deposits up to end_date)
+        lifetime_cash_query = """
+            SELECT
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) as lifetime_deposits,
+                COALESCE(SUM(amount), 0.0) as lifetime_net_flow
+            FROM cash_transactions
+            WHERE 1=1
+        """
+        lifetime_params = []
+        if end_date:
+            lifetime_cash_query += " AND transaction_date <= ?"
+            lifetime_params.append(end_date)
+        cursor.execute(lifetime_cash_query, lifetime_params)
+        lifetime_row = cursor.fetchone()
+        lifetime_deposits = float(lifetime_row["lifetime_deposits"] if lifetime_row else 0.0)
+        lifetime_net_flow = float(lifetime_row["lifetime_net_flow"] if lifetime_row else 0.0)
+
         app_settings = get_all_settings()
         starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
-        capital_base = starting_capital + total_deposits
-        account_balance = starting_capital + net_cash_flow + net_pnl
-        roi_pct = round((net_pnl / capital_base * 100), 2) if capital_base > 0 else 0.0
+        capital_base = starting_capital + (lifetime_deposits if lifetime_deposits > 0 else total_deposits)
+        account_balance = starting_capital + lifetime_net_flow + net_pnl
+        roi_pct = round((net_pnl / capital_base * 100), 2) if capital_base >= 10.0 else 0.0
 
         def format_duration(dur_list: List[float]) -> str:
             if not dur_list:
@@ -534,11 +551,11 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         # 2. Tag / Setup / Mistake Breakdown (Custom tags from notes + Derived execution tags)
         tag_map: Dict[str, Dict[str, Any]] = {}
         cat_labels = {
-            "STK": "STK (Acciones)",
-            "OPT": "OPT (Opciones)",
-            "FUT": "FUT (Futuros)",
+            "STK": "STK (Stocks)",
+            "OPT": "OPT (Options)",
+            "FUT": "FUT (Futures)",
             "CASH": "CASH (Forex)",
-            "CRYPTO": "CRYPTO (Cripto)"
+            "CRYPTO": "CRYPTO (Crypto)"
         }
 
         for t in all_trades:
@@ -790,23 +807,28 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 "net_pnl": round(r["net_pnl"], 2)
             })
 
-        # 8. Buy vs Sell / Long vs Short
-        cursor.execute("""
+        # 8. Buy vs Sell / Long vs Short Position Direction
+        cursor.execute(f"""
             SELECT
-                buy_sell,
+                CASE 
+                    WHEN (open_close_indicator = 'C' AND buy_sell = 'SELL') OR (open_close_indicator = 'O' AND buy_sell = 'BUY') THEN 'LONG'
+                    WHEN (open_close_indicator = 'C' AND buy_sell = 'BUY') OR (open_close_indicator = 'O' AND buy_sell = 'SELL') THEN 'SHORT'
+                    ELSE buy_sell
+                END as side,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
-            GROUP BY buy_sell
-        """)
+            {where_clause}
+            GROUP BY side
+        """, params)
         sides = []
         for r in cursor.fetchall():
             cnt = r["trades_count"]
             wins = r["wins"]
             wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
             sides.append({
-                "side": r["buy_sell"],
+                "side": r["side"],
                 "trades_count": cnt,
                 "win_rate": wr,
                 "net_pnl": round(r["net_pnl"], 2)

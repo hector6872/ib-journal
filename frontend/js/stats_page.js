@@ -1111,21 +1111,50 @@ const StatsPage = {
                         </div>
 
                         ${optionsSummary.total_trades > 0 ? `
-                            <div class="option-expiration-stat-box" style="margin-top: 14px; padding: 12px 14px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
-                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">${sp.optionExpirationsTitle || 'Option Expirations & Auto-Liquidations'}</span>
-                                    <span class="badge-pill" style="font-size: 10px; padding: 2px 7px; background: var(--bg-card); border: 1px solid var(--border-default); font-weight: 700; color: var(--text-main);">${optionsSummary.expired_count} / ${optionsSummary.total_trades} (${optionsSummary.expired_pct}%)</span>
-                                </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11.5px;">
-                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
-                                        <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.expiredLabel || 'Expired / Auto-Liquidated'}</span>
-                                        <strong class="mono ${this.getPnlClass(optionsSummary.expired_net_pnl)}" style="font-size: 13px;">${State.formatCurrency(optionsSummary.expired_net_pnl)}</strong>
-                                        <span style="font-size: 10px; color: var(--text-muted);">${optionsSummary.expired_count} trades (${optionsSummary.expired_win_rate}% WR)</span>
+                            <div class="option-expiration-stat-box" style="margin-top: 14px; padding: 12px 14px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xs); display: flex; flex-direction: column; gap: 10px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">${sp.optionExpirationsTitle || 'Option Exit Discipline & Expirations'}</span>
+                                        ${this.renderInfoIcon(sp.optionExpirationsTooltip || 'Detailed analysis of option exit execution: unmanaged positions auto-settled at $0.00 upon expiration vs positions actively closed before expiry.')}
                                     </div>
-                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
-                                        <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.manualLabel || 'Closed Before Expiration'}</span>
-                                        <strong class="mono ${this.getPnlClass(optionsSummary.manual_net_pnl)}" style="font-size: 13px;">${State.formatCurrency(optionsSummary.manual_net_pnl)}</strong>
-                                        <span style="font-size: 10px; color: var(--text-muted);">${optionsSummary.manual_count} trades (${optionsSummary.manual_win_rate}% WR)</span>
+                                    <span class="badge-pill" style="font-size: 10px; padding: 2px 7px; background: var(--bg-card); border: 1px solid var(--border-default); font-weight: 700; color: var(--text-main); font-family: var(--font-mono);">
+                                        ${optionsSummary.expired_count} Expired / ${optionsSummary.total_trades} Total (${optionsSummary.expired_pct}%)
+                                    </span>
+                                </div>
+
+                                <!-- Dual Visual Progress Bar -->
+                                <div style="display: flex; height: 6px; width: 100%; border-radius: 3px; overflow: hidden; background: var(--border-subtle);">
+                                    <div style="width: ${optionsSummary.expired_pct}%; background: var(--color-loss, #ef4444); transition: width 0.3s ease;" title="Expired at $0.00: ${optionsSummary.expired_pct}%"></div>
+                                    <div style="width: ${optionsSummary.manual_pct}%; background: var(--color-profit, #10b981); transition: width 0.3s ease;" title="Closed in Market: ${optionsSummary.manual_pct}%"></div>
+                                </div>
+
+                                <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+                                    <strong>${optionsSummary.expired_count} of ${optionsSummary.total_trades}</strong> ${sp.expiredSubNotice || 'held to expiration ($0.00 auto-settlement)'} (${optionsSummary.expired_pct}%), and <strong>${optionsSummary.manual_count}</strong> ${sp.manualSubNotice || 'actively closed in the market before expiry'} (${optionsSummary.manual_pct}%).
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11.5px;">
+                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.expiredLabel || 'Expired at $0.00'}</span>
+                                            <span style="font-size: 10px; color: var(--color-loss); font-weight: 700;">${optionsSummary.expired_pct}%</span>
+                                        </div>
+                                        <strong class="mono ${this.getPnlClass(optionsSummary.expired_net_pnl)}" style="font-size: 14px; margin-top: 2px;">${State.formatCurrency(optionsSummary.expired_net_pnl)}</strong>
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                                            <span>${optionsSummary.expired_count} trades</span>
+                                            <span>${optionsSummary.expired_win_rate}% Win Rate</span>
+                                        </div>
+                                    </div>
+
+                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.manualLabel || 'Closed in Market'}</span>
+                                            <span style="font-size: 10px; color: var(--color-profit); font-weight: 700;">${optionsSummary.manual_pct}%</span>
+                                        </div>
+                                        <strong class="mono ${this.getPnlClass(optionsSummary.manual_net_pnl)}" style="font-size: 14px; margin-top: 2px;">${State.formatCurrency(optionsSummary.manual_net_pnl)}</strong>
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                                            <span>${optionsSummary.manual_count} trades</span>
+                                            <span>${optionsSummary.manual_win_rate}% Win Rate</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -396,7 +396,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.netPnl}</span>
-                            ${this.renderInfoIcon(sp.tipNetPnl)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.net_pnl)}">
                             ${State.formatCurrency(ov.net_pnl || 0)}
@@ -438,7 +437,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="exp">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
-                            ${this.renderInfoIcon(sp.tipExpectancy)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.expectancy)}">
                             ${State.formatCurrency(ov.expectancy || 0)}
@@ -452,7 +450,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.totalTrades}</span>
-                            ${this.renderInfoIcon(sp.tipTotalTrades)}
                         </div>
                         <span class="stat-card-value mono pnl-neutral">
                             ${State.formatNumber(ov.total_trades || 0)}
@@ -466,7 +463,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="avg-win">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgWin}</span>
-                            ${this.renderInfoIcon(sp.tipAvgWin)}
                         </div>
                         <span class="stat-card-value mono ${ov.avg_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
                             ${State.formatCurrency(ov.avg_win || 0)}
@@ -480,7 +476,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="avg-loss">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.avgLoss}</span>
-                            ${this.renderInfoIcon(sp.tipAvgLoss)}
                         </div>
                         <span class="stat-card-value mono ${ov.avg_loss > 0 ? 'pnl-negative' : 'pnl-neutral'}">
                             ${State.formatCurrency(-(ov.avg_loss || 0))}
@@ -494,7 +489,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.largestWin}</span>
-                            ${this.renderInfoIcon(sp.tipLargestWin)}
                         </div>
                         <span class="stat-card-value mono ${ov.largest_win > 0 ? 'pnl-positive' : 'pnl-neutral'}">
                             ${State.formatCurrency(ov.largest_win || 0)}
@@ -508,7 +502,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-risk-drawdown">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.largestLoss}</span>
-                            ${this.renderInfoIcon(sp.tipLargestLoss)}
                         </div>
                         <span class="stat-card-value mono ${ov.largest_loss < 0 ? 'pnl-negative' : 'pnl-neutral'}">
                             ${State.formatCurrency(ov.largest_loss || 0)}
@@ -578,7 +571,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.grossPnl}</span>
-                            ${this.renderInfoIcon(sp.tipGrossPnl)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.gross_pnl)}">
                             ${State.formatCurrency(ov.gross_pnl || 0)}
@@ -592,7 +584,6 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-pnl-symbol">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${sp.totalCommissions}</span>
-                            ${this.renderInfoIcon(sp.tipCommissions)}
                         </div>
                         <span class="stat-card-value mono ${(ov.total_commissions || 0) > 0 ? 'pnl-negative' : 'pnl-neutral'}">
                             -${State.currency}${(ov.total_commissions || 0).toFixed(2)}

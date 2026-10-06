@@ -926,7 +926,13 @@ const StatsPage = {
             }
         }
 
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const headerOffset = 76;
+        const elementPosition = el.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({
+            top: Math.max(0, offsetPosition),
+            behavior: 'smooth'
+        });
         el.classList.remove('section-highlight-pulse');
         void el.offsetWidth;
         el.classList.add('section-highlight-pulse');

@@ -331,6 +331,7 @@ const StatsPage = {
         const categories = data.categories || [];
         const sides = data.sides || [];
         const optionStrategies = data.option_strategies || [];
+        const optionsSummary = data.options_summary || {};
 
         // Update global header banner
         if (typeof StatsController !== 'undefined' && StatsController.renderOverview) {
@@ -1108,6 +1109,27 @@ const StatsPage = {
                                 </tbody>
                             </table>
                         </div>
+
+                        ${optionsSummary.total_trades > 0 ? `
+                            <div class="option-expiration-stat-box" style="margin-top: 14px; padding: 12px 14px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">${sp.optionExpirationsTitle || 'Option Expirations & Auto-Liquidations'}</span>
+                                    <span class="badge-pill" style="font-size: 10px; padding: 2px 7px; background: var(--bg-card); border: 1px solid var(--border-default); font-weight: 700; color: var(--text-main);">${optionsSummary.expired_count} / ${optionsSummary.total_trades} (${optionsSummary.expired_pct}%)</span>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11.5px;">
+                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                        <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.expiredLabel || 'Expired / Auto-Liquidated'}</span>
+                                        <strong class="mono ${this.getPnlClass(optionsSummary.expired_net_pnl)}" style="font-size: 13px;">${State.formatCurrency(optionsSummary.expired_net_pnl)}</strong>
+                                        <span style="font-size: 10px; color: var(--text-muted);">${optionsSummary.expired_count} trades (${optionsSummary.expired_win_rate}% WR)</span>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                        <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.manualLabel || 'Closed Before Expiration'}</span>
+                                        <strong class="mono ${this.getPnlClass(optionsSummary.manual_net_pnl)}" style="font-size: 13px;">${State.formatCurrency(optionsSummary.manual_net_pnl)}</strong>
+                                        <span style="font-size: 10px; color: var(--text-muted);">${optionsSummary.manual_count} trades (${optionsSummary.manual_win_rate}% WR)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>

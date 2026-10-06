@@ -994,6 +994,39 @@
     margin-bottom: 2px;
 }
 
+@media (max-width: 768px) {
+    .stats-header-bar {
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 6px;
+    }
+    .stats-header-bar .segmented-control {
+        flex-shrink: 1;
+    }
+    .stats-header-bar .segmented-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-header-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .stats-header-bar .segmented-control {
+        width: 100%;
+        display: flex;
+    }
+    .stats-header-bar .segmented-btn {
+        flex: 1;
+        text-align: center;
+        padding: 5px 6px;
+    }
+}
+
 /* ============================================================
    Stats Section Layouts & Charts
    ============================================================ */

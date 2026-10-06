@@ -596,6 +596,11 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     tags_base.append("Option: Put")
                 else:
                     tags_base.append("Option Trade")
+
+                t_notes_lower = str(t.get("notes") or "").lower()
+                t_time_full = str(t.get("trade_time") or "")
+                if price == 0.0 or "16:20" in t_time_full or "expire" in t_notes_lower or "assign" in t_notes_lower:
+                    tags_base.append("Option: Expired / Auto-Liquidation")
             elif cat == "STK":
                 if 0 < price < 5.0:
                     tags_base.append("Penny Stock (<$5)")
@@ -952,7 +957,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 buy_sell,
                 open_close_indicator,
                 realized_pnl,
-                ib_commission
+                ib_commission,
+                trade_price,
+                trade_time,
+                notes
             FROM trades
             {opt_where}
         """, params)
@@ -964,6 +972,16 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "short_call": {"strategy": "Short Call (Sell Call)", "type": "CALL", "side": "SHORT", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
             "short_put": {"strategy": "Short Put (Sell Put)", "type": "PUT", "side": "SHORT", "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
         }
+
+        expired_count = 0
+        expired_wins = 0
+        expired_losses = 0
+        expired_net_pnl = 0.0
+
+        manual_count = 0
+        manual_wins = 0
+        manual_losses = 0
+        manual_net_pnl = 0.0
 
         for t in opt_rows:
             sym = (t["symbol"] or "").upper()
@@ -983,14 +1001,51 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             elif is_put:
                 strat_key = "long_put" if is_long else "short_put"
 
+            net = (t["realized_pnl"] or 0.0) - (t["ib_commission"] or 0.0)
             if strat_key:
-                net = (t["realized_pnl"] or 0.0) - (t["ib_commission"] or 0.0)
                 opt_stats[strat_key]["trades_count"] += 1
-                if t["realized_pnl"] > 0:
+                if (t["realized_pnl"] or 0.0) > 0:
                     opt_stats[strat_key]["wins"] += 1
-                elif t["realized_pnl"] < 0:
+                elif (t["realized_pnl"] or 0.0) < 0:
                     opt_stats[strat_key]["losses"] += 1
                 opt_stats[strat_key]["net_pnl"] += net
+
+            price = float(t["trade_price"] or 0.0)
+            time_str = str(t["trade_time"] or "")
+            notes_str = str(t["notes"] or "").lower()
+            is_expired = price == 0.0 or "16:20" in time_str or "expire" in notes_str or "assign" in notes_str
+
+            if is_expired:
+                expired_count += 1
+                expired_net_pnl += net
+                if (t["realized_pnl"] or 0.0) > 0:
+                    expired_wins += 1
+                elif (t["realized_pnl"] or 0.0) < 0:
+                    expired_losses += 1
+            else:
+                manual_count += 1
+                manual_net_pnl += net
+                if (t["realized_pnl"] or 0.0) > 0:
+                    manual_wins += 1
+                elif (t["realized_pnl"] or 0.0) < 0:
+                    manual_losses += 1
+
+        total_opt_count = len(opt_rows)
+        options_summary = {
+            "total_trades": total_opt_count,
+            "expired_count": expired_count,
+            "expired_pct": round((expired_count / total_opt_count * 100), 1) if total_opt_count > 0 else 0.0,
+            "expired_net_pnl": round(expired_net_pnl, 2),
+            "expired_wins": expired_wins,
+            "expired_losses": expired_losses,
+            "expired_win_rate": round((expired_wins / expired_count * 100), 1) if expired_count > 0 else 0.0,
+            "manual_count": manual_count,
+            "manual_pct": round((manual_count / total_opt_count * 100), 1) if total_opt_count > 0 else 0.0,
+            "manual_net_pnl": round(manual_net_pnl, 2),
+            "manual_wins": manual_wins,
+            "manual_losses": manual_losses,
+            "manual_win_rate": round((manual_wins / manual_count * 100), 1) if manual_count > 0 else 0.0
+        }
 
         option_strategies = []
         for k, val in opt_stats.items():
@@ -1024,7 +1079,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         "order_types": order_types,
         "categories": categories,
         "sides": sides,
-        "option_strategies": option_strategies
+        "option_strategies": option_strategies,
+        "options_summary": options_summary
     }
 
 

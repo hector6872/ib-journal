@@ -158,6 +158,9 @@ const STRINGS = {
         longPutLabel: "Long Put (Buy Put)",
         shortCallLabel: "Short Call (Sell Call)",
         shortPutLabel: "Short Put (Sell Put)",
+        optionExpirationsTitle: "Option Expirations & Auto-Liquidations",
+        expiredLabel: "Expired / Auto-Liquidated",
+        manualLabel: "Closed Before Expiration",
         
         // Risk & Drawdown
         riskTitle: "RISK & DRAWDOWN",

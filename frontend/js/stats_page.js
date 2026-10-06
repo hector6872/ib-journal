@@ -1832,8 +1832,9 @@ const StatsPage = {
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const t = tags[idx];
-                                const wr = t ? t.win_rate : 0;
-                                const cnt = t ? t.trades_count : 0;
+                                if (!t) return ' No tags recorded';
+                                const wr = t.win_rate || 0;
+                                const cnt = t.trades_count || 0;
                                 return ` Net P&L: ${State.formatCurrency(context.parsed.x)} | WR: ${wr}% (${cnt} trades)`;
                             }
                         }

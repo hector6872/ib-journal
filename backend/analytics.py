@@ -1,5 +1,6 @@
 import calendar
 import math
+import re
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -560,11 +561,16 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         for t in all_trades:
             is_closed = (t.get("open_close_indicator") or "").upper() == "C" or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
+            if not is_closed:
+                continue
+            cat = (t.get("asset_category") or "STK").upper()
+            if cat == "CASH":
+                continue
+
             notes = t.get("notes") or ""
             tags = []
             if notes:
                 # Support tag patterns: "Setup: Scalp", "Mistake: Wrong direction", "[tag]", "#tag", comma separated
-                import re
                 chunks = re.split(r'[,;\n\r]+', notes)
                 for chunk in chunks:
                     c = chunk.strip()
@@ -576,19 +582,46 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                             c = c[1:].strip()
                         tags.append(c)
 
-            # Execution derived tags
-            dur_tag = trade_durations.get(t["id"], "Day Trade (<1d)")
-            tags.append(f"Duration: {dur_tag}")
+            sym = (t.get("symbol") or "").upper()
+            price = float(t.get("trade_price") or 0.0)
+            t_time = str(t.get("trade_time") or "")[:5]
 
-            cat = (t.get("asset_category") or "STK").upper()
-            tags.append(f"Asset: {cat_labels.get(cat, cat)}")
+            # 1. Option Strategy Classification
+            if cat == "OPT":
+                if sym.endswith(" C") or "CALL" in sym or re.search(r'\d[C]\d', sym):
+                    tags.append("Option: Call")
+                elif sym.endswith(" P") or "PUT" in sym or re.search(r'\d[P]\d', sym):
+                    tags.append("Option: Put")
+                else:
+                    tags.append("Option Trade")
+            elif cat == "STK":
+                if 0 < price < 5.0:
+                    tags.append("Penny Stock (<$5)")
+                elif price >= 5.0:
+                    tags.append("Stock (≥$5)")
 
-            side = (t.get("buy_sell") or "BUY").upper()
-            side_label = "Long (Buy)" if "BUY" in side or "LONG" in side else "Short (Sell)"
-            tags.append(f"Side: {side_label}")
+            # 2. Market Index / Major ETF
+            if any(idx in sym for idx in ["SPY", "QQQ", "IWM", "DIA", "VXX", "UVXY", "TQQQ", "SQQQ"]):
+                tags.append("Index ETF")
 
-            exch = (t.get("exchange") or "SMART").upper()
-            tags.append(f"Exchange: {exch}")
+            # 3. Market Session Time
+            if t_time and ":" in t_time:
+                try:
+                    parts = t_time.split(":")
+                    hh, mm = int(parts[0]), int(parts[1])
+                    total_min = hh * 60 + mm
+                    if total_min < 9 * 60 + 30:
+                        tags.append("Pre-Market (<09:30)")
+                    elif total_min <= 10 * 60 + 30:
+                        tags.append("Market Open (09:30-10:30)")
+                    elif total_min <= 14 * 60:
+                        tags.append("Midday (10:30-14:00)")
+                    elif total_min <= 16 * 60:
+                        tags.append("Power Hour (14:00-16:00)")
+                    else:
+                        tags.append("After Hours (>16:00)")
+                except Exception:
+                    pass
 
             for tag in tags:
                 if tag not in tag_map:
@@ -599,12 +632,11 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                         "losses": 0,
                         "net_pnl": 0.0
                     }
-                if is_closed:
-                    tag_map[tag]["trades_count"] += 1
-                    if t["realized_pnl"] > 0:
-                        tag_map[tag]["wins"] += 1
-                    elif t["realized_pnl"] < 0:
-                        tag_map[tag]["losses"] += 1
+                tag_map[tag]["trades_count"] += 1
+                if t["realized_pnl"] > 0:
+                    tag_map[tag]["wins"] += 1
+                elif t["realized_pnl"] < 0:
+                    tag_map[tag]["losses"] += 1
                 tag_map[tag]["net_pnl"] += t["net_pnl"]
 
         tags_list = []
@@ -808,6 +840,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             })
 
         # 8. Buy vs Sell / Long vs Short Position Direction
+        side_where = "WHERE asset_category != 'CASH' AND ABS(quantity) > 0.0001"
+        if where_clause:
+            side_where = f"{where_clause} AND asset_category != 'CASH' AND ABS(quantity) > 0.0001"
+
         cursor.execute(f"""
             SELECT
                 CASE 
@@ -819,7 +855,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
-            {where_clause}
+            {side_where}
             GROUP BY side
         """, params)
         sides = []

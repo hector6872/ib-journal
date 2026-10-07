@@ -73,6 +73,7 @@ const STRINGS = {
         notConfiguredTooltip: "Configure IBKR_TOKEN and IBKR_ACTIVITY_QUERY_ID in .env to enable automated sync",
         syncFailed: "Sync Failed",
         marketClosed: "Market Closed",
+        marketClosedWithTime: "Market Closed (Opens {time})",
         marketOpen: "Market Open",
         success: "Sync completed successfully",
         error: "Sync error",
@@ -81,7 +82,8 @@ const STRINGS = {
         dailyHour: "Daily {hour}",
         nextInMinutes: "Next in {minutes}m",
         activityOnlyTooltip: "Activity sync active (Daily {hour}). Set IBKR_TRADE_QUERY_ID for intraday fills.",
-        dualSyncTooltip: "Dual-sync active (Intraday every {interval}m + Daily {hour}).",
+        dualSyncTooltip: "Dual-sync active (Intraday fills every {interval}m during market hours + Daily EOD at {hour}).",
+        dualSyncClosedTooltip: "Market is closed. Intraday fills will resume at market open ({openTime}). Daily EOD at {hour}.",
         defaultTooltip: "Click to synchronize trades from IBKR",
         syncSuccess: "Synchronized {trades} trades, {cash} transfers ({scope})",
         syncWarning: "Synchronized with warnings: {warning}",
@@ -454,6 +456,14 @@ const STRINGS = {
             return this.format(this.sync.activityOnlyTooltip, { hour: hourFormatted });
         }
         if (status.has_trade_query === true && status.has_activity_query === true) {
+            if (status.is_market_hours === false && status.next_sync_time) {
+                const nextDate = new Date(status.next_sync_time);
+                const openTimeFormatted = nextDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return this.format(this.sync.dualSyncClosedTooltip, {
+                    openTime: openTimeFormatted,
+                    hour: hourFormatted
+                });
+            }
             return this.format(this.sync.dualSyncTooltip, {
                 interval: status.sync_interval_minutes || 15,
                 hour: hourFormatted
@@ -489,6 +499,10 @@ const STRINGS = {
             const nextDate = new Date(status.next_sync_time);
             const diffMs = nextDate - new Date();
             const diffMins = Math.max(0, Math.round(diffMs / 60000));
+            if (status.is_market_hours === false) {
+                const openTimeFormatted = nextDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return this.format(this.sync.marketClosedWithTime, { time: openTimeFormatted });
+            }
             return this.format(this.sync.nextInMinutes, { minutes: diffMins });
         }
         return '';

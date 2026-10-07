@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, Optional
+from zoneinfo import ZoneInfo
 
 from backend.config import (
     DAILY_ACTIVITY_SYNC_HOUR,
@@ -20,6 +21,9 @@ from backend.database import db_session, upsert_cash_transactions, upsert_trades
 from backend.flex_client import IBKRFlexClient
 
 logger = logging.getLogger("ib-journal.scheduler")
+
+TZ_NY = ZoneInfo("America/New_York")
+TZ_EU = ZoneInfo("Europe/Madrid")
 
 
 def classify_ibkr_error(err: Any) -> Dict[str, Any]:
@@ -111,13 +115,14 @@ class SyncScheduler:
             return True
 
         if mode in ("western", "eu_us", "standard"):
-            # 0 = Monday, 6 = Sunday
-            if now.weekday() >= 5:
-                return False
-            # 07:00 UTC to 21:15 UTC
-            return (now.hour > 7 or (now.hour == 7 and now.minute >= 0)) and (
-                now.hour < 21 or (now.hour == 21 and now.minute <= 15)
-            )
+            # Timezone-aware detection (immune to Daylight Saving Time / Summer-Winter clock shifts):
+            # 1. US Markets: Monday-Friday 04:00 to 20:05 in America/New_York (Pre-market + Regular + Full After-Hours)
+            # 2. European Markets: Monday-Friday 08:30 to 18:00 in Europe/Madrid
+            ny_dt = now.astimezone(TZ_NY)
+            eu_dt = now.astimezone(TZ_EU)
+            us_active = (ny_dt.weekday() < 5) and (time(4, 0) <= ny_dt.time() <= time(20, 5))
+            eu_active = (eu_dt.weekday() < 5) and (time(8, 30) <= eu_dt.time() <= time(18, 0))
+            return us_active or eu_active
 
         # Default: 'global' (24/5 from Sunday 22:00 UTC to Friday 22:00 UTC)
         weekday = now.weekday()
@@ -170,22 +175,19 @@ class SyncScheduler:
         if mode in ("western", "eu_us", "standard"):
             if self.is_market_hours(now):
                 candidate = now + timedelta(minutes=SYNC_INTERVAL_MINUTES)
-                close_dt = datetime.combine(now.date(), time(21, 15), tzinfo=timezone.utc)
-                if candidate <= close_dt:
+                if self.is_market_hours(candidate):
                     return candidate
 
-            # Calculate next market open (07:00 UTC next business day)
-            next_day = now.date()
-            candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
-            if candidate_open <= now:
-                next_day += timedelta(days=1)
-                candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
+            # When closed overnight or weekend, next open is 08:30 Europe/Madrid
+            eu_dt = now.astimezone(TZ_EU)
+            candidate_open = datetime.combine(eu_dt.date(), time(8, 30), tzinfo=TZ_EU)
+            if candidate_open <= eu_dt:
+                candidate_open += timedelta(days=1)
 
-            while candidate_open.weekday() >= 5:  # Skip weekends
-                next_day += timedelta(days=1)
-                candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
+            while candidate_open.weekday() >= 5:  # Skip Saturday & Sunday
+                candidate_open += timedelta(days=1)
 
-            return candidate_open
+            return candidate_open.astimezone(timezone.utc)
 
         # 'global' (Sunday 22:00 UTC to Friday 22:00 UTC)
         if self.is_market_hours(now):

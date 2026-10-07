@@ -4,7 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
+# Change 'pi' to your system user (e.g. 'dietpi', 'ubuntu', or your current username)
 User=pi
+# Change paths to match your installation directory (e.g. /home/dietpi/ib-journal or /root/ib-journal)
 WorkingDirectory=/home/pi/ib-journal
 ExecStart=/home/pi/ib-journal/.venv/bin/python3 -m backend.main
 Restart=always

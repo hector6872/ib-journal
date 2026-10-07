@@ -192,23 +192,31 @@ sudo reboot
 
 ## 🚀 Running as a Background Systemd Service
 
-To keep the journal running automatically when your Raspberry Pi or Linux server boots:
+To keep the journal running automatically when your Raspberry Pi, DietPi, or Linux server boots:
 
-1. Copy the systemd service file:
+### Option A: Automatic Installer (Recommended)
+The installer script automatically detects your active user (`dietpi`, `pi`, `ubuntu`, etc.), project directory, and Python virtual environment:
+```bash
+sudo ./scripts/install_service.sh
+```
+
+### Option B: Manual Installation
+1. Copy the systemd service template:
    ```bash
    sudo cp ib-journal.service /etc/systemd/system/
    ```
-2. (Optional) If your username or folder path differs from `/home/pi/ib-journal`, edit the path in `/etc/systemd/system/ib-journal.service`.
+2. Edit `/etc/systemd/system/ib-journal.service` to match your user and directory (e.g. `User=dietpi` and `WorkingDirectory=/home/dietpi/ib-journal`).
 3. Enable and start the service:
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now ib-journal
    ```
-4. Check status or live logs:
-   ```bash
-   sudo systemctl status ib-journal
-   journalctl -u ib-journal -f
-   ```
+
+### Check Status & Logs
+```bash
+sudo systemctl status ib-journal
+journalctl -u ib-journal -f
+```
 
 ---
 

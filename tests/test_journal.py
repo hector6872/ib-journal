@@ -959,17 +959,17 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
             next_sync = scheduler.calculate_next_sync_time(mon_open)
             self.assertEqual(next_sync, datetime(2026, 10, 5, 10, 15, tzinfo=timezone.utc))
 
-            # Monday at 22:00 UTC (closed)
-            mon_closed = datetime(2026, 10, 5, 22, 0, tzinfo=timezone.utc)
-            self.assertFalse(scheduler.is_market_hours(mon_closed))
-            next_open = scheduler.calculate_next_sync_time(mon_closed)
-            self.assertEqual(next_open, datetime(2026, 10, 6, 7, 0, tzinfo=timezone.utc))
+            # Tuesday at 02:00 UTC (overnight closed window, 04:00 CET)
+            tue_closed = datetime(2026, 10, 6, 2, 0, tzinfo=timezone.utc)
+            self.assertFalse(scheduler.is_market_hours(tue_closed))
+            next_open = scheduler.calculate_next_sync_time(tue_closed)
+            self.assertEqual(next_open, datetime(2026, 10, 6, 6, 30, tzinfo=timezone.utc))
 
             # Saturday at 12:00 UTC (weekend closed)
             sat = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
             self.assertFalse(scheduler.is_market_hours(sat))
             next_open = scheduler.calculate_next_sync_time(sat)
-            self.assertEqual(next_open, datetime(2026, 10, 12, 7, 0, tzinfo=timezone.utc))
+            self.assertEqual(next_open, datetime(2026, 10, 12, 6, 30, tzinfo=timezone.utc))
 
         # 2. 'global' mode (24/5 Sun 22:00 UTC to Fri 22:00 UTC)
         with patch("backend.scheduler.SYNC_MODE", "global"):

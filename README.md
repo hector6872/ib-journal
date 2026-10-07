@@ -121,7 +121,7 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 | `IBKR_QUERY_ID` | *None* | Legacy single-query alias. |
 | `PORT` | `8000` | HTTP port the server listens on. |
 | `HOST` | `0.0.0.0` | Bind host address (`0.0.0.0` allows LAN access). |
-| `SYNC_MODE` | `global` | Schedule mode: `global` (24/5 Sun-Fri), `western` (07:00-21:15 UTC Mon-Fri), `always` (24/7). |
+| `SYNC_MODE` | `global` | Schedule mode: `global` (24/5 Sun-Fri), `western` (07:00-00:00 UTC / 09:00-02:00 CET Mon-Fri), `always` (24/7). |
 | `SYNC_INTERVAL_MINUTES` | `15` | Intraday trade sync frequency during market hours (minutes). |
 | `SYNC_COOLDOWN_SECONDS` | `300` | Cooldown period between manual sync requests (seconds). |
 | `DAILY_ACTIVITY_SYNC_HOUR` | `6` | UTC hour for daily activity consolidation (`6` = 06:00 UTC). |

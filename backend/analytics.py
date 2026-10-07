@@ -390,8 +390,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
             ]
             day_pnl = sum(t["net_pnl"] for t in day_closed_trades)
-            day_wins = sum(1 for t in day_closed_trades if t["realized_pnl"] > 0)
-            day_losses = sum(1 for t in day_closed_trades if t["realized_pnl"] < 0)
+            day_wins = sum(1 for t in day_closed_trades if t["net_pnl"] > 0)
+            day_losses = sum(1 for t in day_closed_trades if t["net_pnl"] < 0)
             running_cumulative += day_pnl
 
             if running_cumulative > peak_equity:
@@ -463,10 +463,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             }
         )
 
-        # Metric Evolution Series (Day, Week, Month)
+        # Metric Evolution Series (Day, Week, Month) - Only for periods with closed trades
         def build_evolution_series(group_by: str) -> List[Dict[str, Any]]:
             grouped: Dict[str, List[Dict[str, Any]]] = {}
-            for t in all_trades:
+            for t in closed_trades:
                 dt_str = t["trade_date"]
                 try:
                     dt = datetime.strptime(dt_str, "%Y-%m-%d")
@@ -486,18 +486,14 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             series = []
             cum_pnl = 0.0
             for k in sorted(grouped.keys()):
-                group_trades = grouped[k]
-                closed_group_trades = [
-                    t
-                    for t in group_trades
-                    if (t.get("open_close_indicator") or "").upper() == "C"
-                    or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
-                ]
+                closed_group_trades = grouped[k]
                 tot = len(closed_group_trades)
-                wins = sum(1 for t in closed_group_trades if t["realized_pnl"] > 0)
-                losses = sum(1 for t in closed_group_trades if t["realized_pnl"] < 0)
-                g_profit = sum(t["realized_pnl"] for t in closed_group_trades if t["realized_pnl"] > 0)
-                g_loss = abs(sum(t["realized_pnl"] for t in closed_group_trades if t["realized_pnl"] < 0))
+                if tot == 0:
+                    continue
+                wins = sum(1 for t in closed_group_trades if t["net_pnl"] > 0)
+                losses = sum(1 for t in closed_group_trades if t["net_pnl"] < 0)
+                g_profit = sum(t["net_pnl"] for t in closed_group_trades if t["net_pnl"] > 0)
+                g_loss = abs(sum(t["net_pnl"] for t in closed_group_trades if t["net_pnl"] < 0))
                 pnl = sum(t["net_pnl"] for t in closed_group_trades)
                 cum_pnl += pnl
 
@@ -512,7 +508,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 series.append(
                     {
                         "period": k,
-                        "date": group_trades[0]["trade_date"],
+                        "date": closed_group_trades[0]["trade_date"],
                         "pnl": round(pnl, 2),
                         "cumulative_pnl": round(cum_pnl, 2),
                         "win_rate": wr,

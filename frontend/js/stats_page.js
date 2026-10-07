@@ -2035,11 +2035,19 @@ const StatsPage = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (items) => {
+                                if (!items || !items.length) return '';
+                                const idx = items[0].dataIndex;
+                                const item = series[idx];
+                                const dateStr = item ? (item.period || item.date) : '';
+                                const tradesStr = item ? ` (${item.trades_count} closed trade${item.trades_count === 1 ? '' : 's'})` : '';
+                                return `${dateStr}${tradesStr}`;
+                            },
                             label: (context) => {
                                 const datasetLabel = context.dataset.label || '';
                                 const val = context.parsed.y;
                                 if (datasetLabel.includes('%')) return ` ${datasetLabel}: ${val.toFixed(1)}%`;
-                                if (datasetLabel.includes('Factor')) return ` ${datasetLabel}: ${val.toFixed(2)}`;
+                                if (datasetLabel.includes('Factor') || datasetLabel.includes('R:R') || datasetLabel === 'Profit Factor' || datasetLabel === 'R:R') return ` ${datasetLabel}: ${val.toFixed(2)}`;
                                 return ` ${datasetLabel}: ${State.formatCurrency(val)}`;
                             }
                         }

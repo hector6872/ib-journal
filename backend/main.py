@@ -37,11 +37,9 @@ from backend.settings import get_all_settings, update_settings
 
 # Logging configuration (Stdout / RAM-friendly)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ib-journal.app")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,11 +56,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     scheduler.stop()
 
+
 app = FastAPI(
     title="IBKR Trading Journal API",
     description="Ultra-lightweight self-hosted Trading Journal for Raspberry Pi",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -79,16 +78,13 @@ app.add_middleware(
 # REST API Endpoints
 # -------------------------------------------------------------
 
+
 @app.get("/api/config")
 async def get_app_config():
     """Returns frontend runtime settings."""
     base_curr = get_active_base_currency()
     curr_sym = get_currency_symbol(base_curr)
-    return {
-        "base_currency": base_curr,
-        "currency_symbol": curr_sym,
-        "is_configured": is_ibkr_configured()
-    }
+    return {"base_currency": base_curr, "currency_symbol": curr_sym, "is_configured": is_ibkr_configured()}
 
 
 @app.get("/api/settings")
@@ -125,10 +121,7 @@ async def api_calendar_year(year: Optional[int] = Query(default=None)):
 
 
 @app.get("/api/calendar/month")
-async def api_calendar_month(
-    year: Optional[int] = Query(default=None),
-    month: Optional[int] = Query(default=None)
-):
+async def api_calendar_month(year: Optional[int] = Query(default=None), month: Optional[int] = Query(default=None)):
     """Returns monthly calendar grid data."""
     today = date.today()
     if year is None:
@@ -159,10 +152,12 @@ async def api_day_trades(date_str: str = Query(..., alias="date")):
         "grouped_count": len(grouped_trades),
     }
 
+
 @app.get("/api/sync/status")
 async def api_sync_status():
     """Returns current sync status, countdown, and cooldown info."""
     return scheduler.get_status()
+
 
 @app.post("/api/trades/import")
 @app.post("/api/import/statement")
@@ -179,9 +174,17 @@ async def api_trades_import(request: Request):
 
         # 1. Check XML
         trimmed = text.strip()
-        if trimmed.startswith("<?xml") or "<FlexStatement" in text or "<FlexQueryResponse" in text or "<Trade" in text or "<CashTransaction" in text or "<Order" in text:
+        if (
+            trimmed.startswith("<?xml")
+            or "<FlexStatement" in text
+            or "<FlexQueryResponse" in text
+            or "<Trade" in text
+            or "<CashTransaction" in text
+            or "<Order" in text
+        ):
             import tempfile
             from scripts.import_trades import parse_xml_cash_transactions, parse_xml_file
+
             with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", encoding="utf-8", delete=False) as tmp:
                 tmp.write(text)
                 tmp_path = Path(tmp.name)
@@ -195,6 +198,7 @@ async def api_trades_import(request: Request):
         elif trimmed.startswith("[") or trimmed.startswith("{"):
             try:
                 import json
+
                 data = json.loads(text)
                 trades = data if isinstance(data, list) else data.get("trades", [])
                 cash_txs = data.get("cash_transactions", []) if isinstance(data, dict) else []
@@ -212,6 +216,7 @@ async def api_trades_import(request: Request):
                 parse_generic_ibkr_csv,
                 parse_ibkr_activity_statement_csv,
             )
+
             lines = text.splitlines()
             delimiter = detect_csv_delimiter(lines)
 
@@ -221,7 +226,12 @@ async def api_trades_import(request: Request):
                 tokens = parse_csv_line_tokens(line_item, delimiter)
                 if len(tokens) >= 2:
                     sec = tokens[0].strip().lower().strip('"')
-                    if sec in TRADES_SECTIONS or sec in ACCOUNT_SECTIONS or sec in CASH_SECTIONS or sec in ("statement", "extracto", "informe", "estado"):
+                    if (
+                        sec in TRADES_SECTIONS
+                        or sec in ACCOUNT_SECTIONS
+                        or sec in CASH_SECTIONS
+                        or sec in ("statement", "extracto", "informe", "estado")
+                    ):
                         is_activity = True
                         break
 
@@ -240,16 +250,17 @@ async def api_trades_import(request: Request):
         if not trades and not cash_txs:
             raise HTTPException(
                 status_code=400,
-                detail="No trade executions or cash transactions found in statement. Please ensure it is an IBKR Activity Statement CSV/XML, Flex Query export, or Trade Confirmation report."
+                detail="No trade executions or cash transactions found in statement. Please ensure it is an IBKR Activity Statement CSV/XML, Flex Query export, or Trade Confirmation report.",
             )
 
         from datetime import datetime, timezone
+
         prev_currency = get_active_base_currency()
         count = upsert_trades(trades) if trades else 0
         cash_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
         new_currency = get_active_base_currency()
         new_symbol = get_currency_symbol(new_currency)
-        currency_changed = (prev_currency != new_currency)
+        currency_changed = prev_currency != new_currency
 
         with db_session() as conn:
             cursor = conn.cursor()
@@ -258,10 +269,13 @@ async def api_trades_import(request: Request):
                 SET resolved_at = CURRENT_TIMESTAMP
                 WHERE resolved_at IS NULL;
             """)
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
                 VALUES ('manual_import', 'success', ?, CURRENT_TIMESTAMP);
-            """, (count,))
+            """,
+                (count,),
+            )
 
         scheduler.last_sync_time = datetime.now(timezone.utc)
         scheduler.last_trades_count = count
@@ -281,23 +295,23 @@ async def api_trades_import(request: Request):
             "currency_symbol": new_symbol,
             "currency_changed": currency_changed,
             "prev_currency": prev_currency,
-            "message": f"Successfully processed statement. {msg_str} recorded."
+            "message": f"Successfully processed statement. {msg_str} recorded.",
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"Error importing statement: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Error importing statement: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Error importing statement: {str(e)}")
+
 
 import_historical_statement = api_trades_import
+
 
 @app.get("/api/cash/transactions")
 async def api_get_cash_transactions():
     """Returns all cash transactions (deposits, withdrawals, transfers) and summary totals."""
     return get_cash_summary()
+
 
 @app.post("/api/cash/transactions")
 async def api_add_cash_transaction(payload: dict):
@@ -307,6 +321,7 @@ async def api_add_cash_transaction(payload: dict):
     record = add_manual_cash_transaction(payload)
     return {"status": "success", "transaction": record, "summary": get_cash_summary()}
 
+
 @app.delete("/api/cash/transactions/{tx_id}")
 async def api_delete_cash_transaction(tx_id: str):
     """Deletes a cash transaction by ID."""
@@ -314,6 +329,7 @@ async def api_delete_cash_transaction(tx_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Transaction not found.")
     return {"status": "success", "summary": get_cash_summary()}
+
 
 @app.post("/api/sync/gap/resolve")
 async def api_sync_gap_resolve():
@@ -335,10 +351,8 @@ async def api_sync_gap_resolve():
         """)
 
     scheduler.last_sync_time = now
-    return {
-        "status": "success",
-        "message": "Sync gap marked as resolved."
-    }
+    return {"status": "success", "message": "Sync gap marked as resolved."}
+
 
 @app.post("/api/sync/trigger")
 async def api_sync_trigger():
@@ -346,14 +360,14 @@ async def api_sync_trigger():
     cooldown = scheduler.get_cooldown_remaining_seconds()
     if cooldown > 0:
         raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit cooldown active. Please wait {cooldown} seconds before syncing again."
+            status_code=429, detail=f"Rate limit cooldown active. Please wait {cooldown} seconds before syncing again."
         )
 
     result = await scheduler.execute_sync(sync_type="manual")
     if result["status"] == "failed":
         raise HTTPException(status_code=400, detail=result["message"])
     return result
+
 
 # -------------------------------------------------------------
 # Static Frontend Serving
@@ -367,6 +381,8 @@ if frontend_dir.exists():
     async def serve_index():
         return FileResponse(frontend_dir / "index.html")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("backend.main:app", host=HOST, port=PORT, reload=False)

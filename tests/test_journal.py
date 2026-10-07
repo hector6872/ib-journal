@@ -13,7 +13,6 @@ from scripts.import_trades import parse_datetime_str, parse_ibkr_activity_statem
 
 
 class TestIBKRJournal(unittest.TestCase):
-
     def setUp(self):
         """Creates an isolated temporary SQLite database for each test run."""
         self.tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -26,12 +25,14 @@ class TestIBKRJournal(unittest.TestCase):
         init_db()
 
         from backend.scheduler import scheduler
+
         scheduler.last_sync_time = None
         scheduler.last_api_sync_time = None
         scheduler.last_trades_count = 0
 
     def tearDown(self):
         from backend.scheduler import scheduler
+
         scheduler.last_sync_time = None
         scheduler.last_api_sync_time = None
         scheduler.last_trades_count = 0
@@ -147,7 +148,7 @@ class TestIBKRJournal(unittest.TestCase):
                 "open_close_indicator": "C",
                 "order_type": "MKT",
                 "exchange": "NASDAQ",
-            }
+            },
         ]
 
         upsert_trades(sample_trades)
@@ -395,30 +396,32 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
 
         # 2. Add a trade from 10 days ago
         ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()
-        upsert_trades([
-            {
-                "ib_exec_id": "EXEC_OLD_1",
-                "trade_id": "T_OLD",
-                "account_id": "U123456",
-                "symbol": "AAPL",
-                "description": "APPLE INC",
-                "asset_category": "STK",
-                "currency": "EUR",
-                "buy_sell": "BUY",
-                "quantity": 1.0,
-                "trade_price": 150.0,
-                "trade_money": 150.0,
-                "proceeds": -150.0,
-                "ib_commission": 1.0,
-                "realized_pnl": 0.0,
-                "trade_date": ten_days_ago,
-                "trade_time": "10:00:00",
-                "trade_date_time": f"{ten_days_ago}T10:00:00",
-                "open_close_indicator": "O",
-                "order_type": "MKT",
-                "exchange": "NASDAQ",
-            }
-        ])
+        upsert_trades(
+            [
+                {
+                    "ib_exec_id": "EXEC_OLD_1",
+                    "trade_id": "T_OLD",
+                    "account_id": "U123456",
+                    "symbol": "AAPL",
+                    "description": "APPLE INC",
+                    "asset_category": "STK",
+                    "currency": "EUR",
+                    "buy_sell": "BUY",
+                    "quantity": 1.0,
+                    "trade_price": 150.0,
+                    "trade_money": 150.0,
+                    "proceeds": -150.0,
+                    "ib_commission": 1.0,
+                    "realized_pnl": 0.0,
+                    "trade_date": ten_days_ago,
+                    "trade_time": "10:00:00",
+                    "trade_date_time": f"{ten_days_ago}T10:00:00",
+                    "open_close_indicator": "O",
+                    "order_type": "MKT",
+                    "exchange": "NASDAQ",
+                }
+            ]
+        )
 
         status = scheduler.get_status()
         self.assertTrue(status["has_sync_gap"])
@@ -453,10 +456,13 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
         # Previous sync was 35 days ago
         with db_session() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
                 VALUES ('scheduled', 'success', 10, ?);
-            """, (thirty_five_days_ago,))
+            """,
+                (thirty_five_days_ago,),
+            )
 
         # Simulate fresh Flex sync running today
         with db_session() as conn:
@@ -468,10 +474,13 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
             prev_tz = prev_dt if prev_dt.tzinfo else prev_dt.replace(tzinfo=timezone.utc)
             days_diff = (now - prev_tz).days
             if days_diff > 7:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO sync_gaps (gap_days, from_date, to_date)
                     VALUES (?, ?, ?);
-                """, (days_diff, prev_tz.isoformat(), now.isoformat()))
+                """,
+                    (days_diff, prev_tz.isoformat(), now.isoformat()),
+                )
 
             cursor.execute("""
                 INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
@@ -491,7 +500,9 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
         with db_session() as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE sync_gaps SET resolved_at = CURRENT_TIMESTAMP WHERE resolved_at IS NULL;")
-            cursor.execute("INSERT INTO sync_history (sync_type, status, trades_count, completed_at) VALUES ('manual_import', 'success', 50, CURRENT_TIMESTAMP);")
+            cursor.execute(
+                "INSERT INTO sync_history (sync_type, status, trades_count, completed_at) VALUES ('manual_import', 'success', 50, CURRENT_TIMESTAMP);"
+            )
 
         status = scheduler.get_status()
         self.assertFalse(status["has_sync_gap"])
@@ -504,10 +515,13 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
         now = datetime.now(timezone.utc)
         with db_session() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO sync_gaps (gap_days, from_date, to_date)
                 VALUES (40, ?, ?);
-            """, ((now - timedelta(days=40)).isoformat(), now.isoformat()))
+            """,
+                ((now - timedelta(days=40)).isoformat(), now.isoformat()),
+            )
 
         # Gap is active
         status = scheduler.get_status()
@@ -518,7 +532,9 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
         with db_session() as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE sync_gaps SET resolved_at = CURRENT_TIMESTAMP WHERE resolved_at IS NULL;")
-            cursor.execute("INSERT INTO sync_history (sync_type, status, trades_count, completed_at) VALUES ('gap_dismiss', 'success', 0, CURRENT_TIMESTAMP);")
+            cursor.execute(
+                "INSERT INTO sync_history (sync_type, status, trades_count, completed_at) VALUES ('gap_dismiss', 'success', 0, CURRENT_TIMESTAMP);"
+            )
 
         scheduler.last_sync_time = now
         status = scheduler.get_status()
@@ -528,18 +544,23 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
 
     def test_cash_transactions_and_account_equity(self):
         """Verifies cash transactions tracking, starting capital, and account balance / ROI calculation."""
-        from backend.database import add_manual_cash_transaction, delete_cash_transaction, get_cash_summary, upsert_cash_transactions
+        from backend.database import (
+            add_manual_cash_transaction,
+            delete_cash_transaction,
+            get_cash_summary,
+            upsert_cash_transactions,
+        )
         from scripts.import_trades import parse_csv_cash_transactions
 
         # 1. Test CSV parsing of Deposits & Withdrawals
         csv_sample = [
-            'Statement,Data,Title,Activity Statement',
-            'Account Information,Data,Account,U6920617',
-            'Account Information,Data,Base Currency,EUR',
-            'Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount',
+            "Statement,Data,Title,Activity Statement",
+            "Account Information,Data,Account,U6920617",
+            "Account Information,Data,Base Currency,EUR",
+            "Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount",
             'Deposits & Withdrawals,Data,EUR,2023-01-15,"Electronic Funds Transfer",5000.00',
             'Deposits & Withdrawals,Data,EUR,2023-06-20,"Cash Withdrawal",-1000.00',
-            'Deposits & Withdrawals,Total,,EUR,,4000.00',
+            "Deposits & Withdrawals,Total,,EUR,,4000.00",
         ]
         parsed_cash = parse_csv_cash_transactions(csv_sample)
         self.assertEqual(len(parsed_cash), 2)
@@ -556,29 +577,30 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
         self.assertEqual(summary["net_cash_flow"], 4000.0)
 
         # 2. Add manual cash transaction
-        manual_record = add_manual_cash_transaction({
-            "type": "DEPOSIT",
-            "amount": 2000.0,
-            "transaction_date": "2023-07-01",
-            "description": "Manual Deposit"
-        })
+        manual_record = add_manual_cash_transaction(
+            {"type": "DEPOSIT", "amount": 2000.0, "transaction_date": "2023-07-01", "description": "Manual Deposit"}
+        )
         self.assertTrue(manual_record["is_manual"])
         summary_after_manual = get_cash_summary()
         self.assertEqual(summary_after_manual["total_deposits"], 7000.0)
         self.assertEqual(summary_after_manual["net_cash_flow"], 6000.0)
 
         # 3. Add closed trades to test account balance and ROI
-        upsert_trades([{
-            "ib_exec_id": "TRADE_CASH_1",
-            "symbol": "AAPL",
-            "buy_sell": "SELL",
-            "quantity": 10,
-            "trade_price": 150.0,
-            "ib_commission": 2.0,
-            "realized_pnl": 500.0,
-            "trade_date": "2023-08-01",
-            "open_close_indicator": "C"
-        }])
+        upsert_trades(
+            [
+                {
+                    "ib_exec_id": "TRADE_CASH_1",
+                    "symbol": "AAPL",
+                    "buy_sell": "SELL",
+                    "quantity": 10,
+                    "trade_price": 150.0,
+                    "ib_commission": 2.0,
+                    "realized_pnl": 500.0,
+                    "trade_date": "2023-08-01",
+                    "open_close_indicator": "C",
+                }
+            ]
+        )
 
         # Set starting capital
         orig_settings_path = settings_mod.SETTINGS_PATH
@@ -593,7 +615,7 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
             self.assertEqual(stats["total_deposits"], 7000.0)
             self.assertEqual(stats["total_withdrawals"], 1000.0)
             self.assertEqual(stats["net_cash_flow"], 6000.0)
-            self.assertEqual(stats["net_pnl"], 498.0) # 500 - 2
+            self.assertEqual(stats["net_pnl"], 498.0)  # 500 - 2
             # Account Balance = 10000 + 6000 + 498 = 16498.0
             self.assertEqual(stats["account_balance"], 16498.0)
             # Capital Base = 10000 + 7000 = 17000.0
@@ -644,6 +666,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
             # When testing under minimal system python without FastAPI installed
             from scripts.import_trades import parse_csv_cash_transactions, parse_ibkr_activity_statement_csv
             from backend.database import upsert_cash_transactions, upsert_trades
+
             csv_lines = [
                 "Statement,Header,Field Name,Field Value",
                 "Statement,Data,BrokerName,Interactive Brokers",
@@ -651,7 +674,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "Deposits & Withdrawals,Data,EUR,2021-01-15,Wire In,5000.00",
                 "Deposits & Withdrawals,Data,EUR,,Total,5000.00",
                 "Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds,Comm/Fee,Realized P/L,Code",
-                "Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O"
+                "Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O",
             ]
             trades = parse_ibkr_activity_statement_csv(csv_lines)
             cash_txs = parse_csv_cash_transactions(csv_lines)
@@ -673,18 +696,23 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
         self.assertEqual(get_currency_symbol("CHF"), "CHF")
 
         # After importing trade with base_currency EUR, active currency updates to EUR
-        upsert_trades([{
-            "ib_exec_id": "TEST_CURR_1",
-            "symbol": "AAPL",
-            "currency": "USD",
-            "base_currency": "EUR",
-            "quantity": 10.0,
-            "trade_price": 150.0,
-            "trade_date": "2023-01-01",
-            "trade_time": "10:00:00"
-        }])
+        upsert_trades(
+            [
+                {
+                    "ib_exec_id": "TEST_CURR_1",
+                    "symbol": "AAPL",
+                    "currency": "USD",
+                    "base_currency": "EUR",
+                    "quantity": 10.0,
+                    "trade_price": 150.0,
+                    "trade_date": "2023-01-01",
+                    "trade_time": "10:00:00",
+                }
+            ]
+        )
         self.assertEqual(get_active_base_currency(), "EUR")
         self.assertEqual(get_currency_symbol(), "€")
+
     def test_group_executions_to_trades(self):
         from backend.analytics import group_executions_to_trades, format_trade_duration
 
@@ -708,7 +736,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "realized_pnl": 0.0,
                 "trade_date": "2026-10-01",
                 "trade_time": "11:20:38",
-                "open_close_indicator": "O"
+                "open_close_indicator": "O",
             },
             {
                 "id": 2,
@@ -723,7 +751,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "realized_pnl": -13.80,
                 "trade_date": "2026-10-01",
                 "trade_time": "11:23:42",
-                "open_close_indicator": "C"
+                "open_close_indicator": "C",
             },
             {
                 "id": 3,
@@ -738,8 +766,8 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "realized_pnl": -4.20,
                 "trade_date": "2026-10-01",
                 "trade_time": "11:27:52",
-                "open_close_indicator": "C"
-            }
+                "open_close_indicator": "C",
+            },
         ]
 
         grouped = group_executions_to_trades(executions)
@@ -775,7 +803,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "realized_pnl": 0.0,
                 "trade_date": "2026-10-01",
                 "trade_time": "14:00:00",
-                "open_close_indicator": "C"
+                "open_close_indicator": "C",
             }
         ]
         cash_grouped = group_executions_to_trades(cash_execs)
@@ -799,7 +827,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "realized_pnl": 0.0,
                 "trade_date": "2026-10-01",
                 "trade_time": "15:30:00",
-                "open_close_indicator": "O"
+                "open_close_indicator": "O",
             },
             {
                 "id": 21,
@@ -814,8 +842,8 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "realized_pnl": 150.0,
                 "trade_date": "2026-10-01",
                 "trade_time": "16:00:00",
-                "open_close_indicator": "C"
-            }
+                "open_close_indicator": "C",
+            },
         ]
         put_grouped = group_executions_to_trades(put_execs)
         self.assertEqual(len(put_grouped), 1)
@@ -876,7 +904,7 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
                 "realized_pnl": -4.20,
                 "trade_date": "2026-10-01",
                 "trade_time": "11:27:52",
-                "open_close_indicator": "C"
+                "open_close_indicator": "C",
             }
         ]
         upsert_trades(csv_trade)
@@ -899,7 +927,7 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
                 "realized_pnl": -4.2014,
                 "trade_date": "2026-10-01",
                 "trade_time": "11:27:52",
-                "open_close_indicator": "C"
+                "open_close_indicator": "C",
             }
         ]
         upsert_trades(flex_trade)
@@ -976,6 +1004,3 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-

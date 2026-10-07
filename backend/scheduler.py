@@ -75,7 +75,9 @@ class SyncScheduler:
             try:
                 with db_session() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT MAX(completed_at) as last_api FROM sync_history WHERE sync_type IN ('scheduled', 'manual') AND status = 'success';")
+                    cursor.execute(
+                        "SELECT MAX(completed_at) as last_api FROM sync_history WHERE sync_type IN ('scheduled', 'manual') AND status = 'success';"
+                    )
                     row = cursor.fetchone()
                     if row and row["last_api"]:
                         last_api = datetime.fromisoformat(row["last_api"])
@@ -148,8 +150,6 @@ class SyncScheduler:
         target_date = now.date() + timedelta(days=days_to_sunday)
         return datetime.combine(target_date, time(22, 0), tzinfo=timezone.utc)
 
-
-
     async def execute_sync(self, sync_type: str = "scheduled") -> Dict[str, Any]:
         """
         Executes the sync operation against IBKR Flex Query.
@@ -157,16 +157,10 @@ class SyncScheduler:
         if not is_ibkr_configured():
             self.last_sync_status = "unconfigured"
             self.last_sync_message = "IBKR credentials are not configured in .env."
-            return {
-                "status": "unconfigured",
-                "message": self.last_sync_message
-            }
+            return {"status": "unconfigured", "message": self.last_sync_message}
 
         if self.is_syncing:
-            return {
-                "status": "in_progress",
-                "message": "A synchronization is already currently in progress."
-            }
+            return {"status": "in_progress", "message": "A synchronization is already currently in progress."}
 
         self.is_syncing = True
         self.last_sync_status = "in_progress"
@@ -192,19 +186,27 @@ class SyncScheduler:
                         days_diff = (now - prev_tz).days
                         if days_diff > 7:
                             # A gap was created because Flex Query only covers 7 days
-                            cursor.execute("""
+                            cursor.execute(
+                                """
                                 INSERT INTO sync_gaps (gap_days, from_date, to_date)
                                 VALUES (?, ?, ?);
-                            """, (days_diff, prev_tz.isoformat(), now.isoformat()))
-                            logger.warning(f"Sync gap of {days_diff} days detected after server downtime/vacation. Created pending sync_gap record.")
+                            """,
+                                (days_diff, prev_tz.isoformat(), now.isoformat()),
+                            )
+                            logger.warning(
+                                f"Sync gap of {days_diff} days detected after server downtime/vacation. Created pending sync_gap record."
+                            )
                     except Exception as ex:
                         logger.debug(f"Error checking previous sync gap: {ex}")
 
                 # Record successful sync
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
                     VALUES (?, 'success', ?, CURRENT_TIMESTAMP);
-                """, (sync_type, count))
+                """,
+                    (sync_type, count),
+                )
 
             self.last_sync_time = now
             self.last_api_sync_time = now
@@ -219,12 +221,14 @@ class SyncScheduler:
                 "message": self.last_sync_message,
                 "trades_count": count,
                 "last_sync_time": self.last_sync_time.isoformat(),
-                "next_sync_time": self.next_sync_time.isoformat()
+                "next_sync_time": self.next_sync_time.isoformat(),
             }
 
         except Exception as e:
             err_str = str(e)
-            if any(term in err_str for term in ["nodename nor servname", "gaierror", "Failed to resolve", "getaddrinfo"]):
+            if any(
+                term in err_str for term in ["nodename nor servname", "gaierror", "Failed to resolve", "getaddrinfo"]
+            ):
                 clean_msg = "Unable to connect to Interactive Brokers servers. Please check your internet connection."
             elif "1018" in err_str or "IP address not allowed" in err_str:
                 clean_msg = "IBKR Error (1018): IP address not authorized in IBKR Flex Web Service settings."
@@ -236,10 +240,7 @@ class SyncScheduler:
             self.last_sync_status = "failed"
             self.last_sync_message = clean_msg
             logger.error(f"Sync failed: {e}")
-            return {
-                "status": "failed",
-                "message": clean_msg
-            }
+            return {"status": "failed", "message": clean_msg}
         finally:
             self.is_syncing = False
 
@@ -319,7 +320,9 @@ class SyncScheduler:
                     last_trade_date = r["max_date"]
 
                 if not last_sync_dt:
-                    cursor.execute("SELECT MAX(completed_at) as last_completed FROM sync_history WHERE status = 'success';")
+                    cursor.execute(
+                        "SELECT MAX(completed_at) as last_completed FROM sync_history WHERE status = 'success';"
+                    )
                     sr = cursor.fetchone()
                     if sr and sr["last_completed"]:
                         try:
@@ -359,7 +362,13 @@ class SyncScheduler:
             "sync_mode": SYNC_MODE,
             "is_auto_sync_enabled": in_prod,
             "last_sync_time": self.last_sync_time.isoformat() if (configured and self.last_sync_time) else None,
-            "next_sync_time": (self.next_sync_time.isoformat() if (self.next_sync_time and in_prod) else (self.calculate_next_sync_time().isoformat() if in_prod else None)) if configured else None,
+            "next_sync_time": (
+                self.next_sync_time.isoformat()
+                if (self.next_sync_time and in_prod)
+                else (self.calculate_next_sync_time().isoformat() if in_prod else None)
+            )
+            if configured
+            else None,
             "status": status_val,
             "message": msg_val,
             "trades_count": self.last_trades_count if configured else 0,
@@ -370,7 +379,7 @@ class SyncScheduler:
             "gap_days": gap_days,
             "gap_from": gap_from,
             "gap_to": gap_to,
-            "last_trade_date": last_trade_date
+            "last_trade_date": last_trade_date,
         }
 
 

@@ -10,6 +10,7 @@ logger = logging.getLogger("ib-journal.settings")
 
 ALLOWED_SERVER_SETTINGS = {"starting_capital"}
 
+
 def get_all_settings() -> Dict[str, Any]:
     """Reads server-level settings from data/settings.json."""
     if not SETTINGS_PATH.exists():
@@ -24,6 +25,7 @@ def get_all_settings() -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"Could not read settings.json: {e}")
         return {}
+
 
 def update_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
     """Updates server-level settings in data/settings.json using safe atomic writing."""

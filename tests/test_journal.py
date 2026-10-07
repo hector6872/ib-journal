@@ -214,7 +214,7 @@ Trades,Data,Order,Forex,AUD,EUR.AUD,"2023-12-14, 12:18:41",-77,1.63815,,126.1375
         """Tests Spanish IBKR Activity Statement, semicolon delimiter, and European comma numbers."""
         from scripts.import_trades import clean_num, parse_csv_cash_transactions, parse_ibkr_activity_statement_csv
 
-        # Test clean_num with European commas, thousands dots, and accounting parentheses
+        # Test clean_num with European commas, thousands dots, accounting parentheses, and Russian space/ruble formats
         self.assertEqual(clean_num("180,50"), 180.50)
         self.assertEqual(clean_num("-180,50"), -180.50)
         self.assertEqual(clean_num("(180,50)"), -180.50)
@@ -222,6 +222,11 @@ Trades,Data,Order,Forex,AUD,EUR.AUD,"2023-12-14, 12:18:41",-77,1.63815,,126.1375
         self.assertEqual(clean_num("1,234.56"), 1234.56)
         self.assertEqual(clean_num("(1,234.56)"), -1234.56)
         self.assertEqual(clean_num("100 €"), 100.0)
+        self.assertEqual(clean_num("1 234,56 ₽"), 1234.56)
+        self.assertEqual(clean_num("1\u00a0234,56 руб"), 1234.56)
+        self.assertEqual(clean_num("-1 234,56"), -1234.56)
+        self.assertEqual(clean_num("1'234.56 CHF"), 1234.56)
+        self.assertEqual(clean_num("1’234’567.89"), 1234567.89)
 
         # Spanish Activity statement with semicolon delimiters
         spanish_activity_semicolon = """Informe;Encabezado;Nombre de campo;Valor de campo

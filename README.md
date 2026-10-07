@@ -174,7 +174,10 @@ python3 scripts/import_trades.py ~/Downloads/ibkr_statements/
 python3 scripts/import_trades.py --dry-run ~/Downloads/2023.csv
 ```
 
-> 📖 **Read the full step-by-step import guide**: [IBKR_IMPORT_GUIDE.md](IBKR_IMPORT_GUIDE.md)
+### 🌍 Universal Multilingual & Multi-Currency Support
+The parser natively auto-detects statement languages (English, Spanish, German, French, Italian, Portuguese, Dutch, Chinese, Japanese, Russian), auto-detects CSV delimiters (`,`, `;`, `\t`), international decimal formats (US, Continental European, International/Russian/Nordic with space, and Swiss with apostrophes), and performs dynamic FX conversions to your account's base currency.
+
+> 📖 **Read the full step-by-step import & troubleshooting guide**: [IBKR_IMPORT_GUIDE.md](IBKR_IMPORT_GUIDE.md)
 
 ---
 

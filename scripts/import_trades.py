@@ -46,9 +46,12 @@ def clean_num(val: Any, default: float = 0.0) -> float:
     if not s or s in ("--", "-", "N/A", "n/a", "null", "None"):
         return default
 
-    # Remove currency symbols and surrounding whitespace
-    for sym in ["€", "$", "£", "¥", "CHF", "cad", "CAD", "usd", "USD", "eur", "EUR", "aud", "AUD", " "]:
+    # Remove currency symbols and surrounding whitespace (including Russian, Asian, Latin currencies and non-breaking spaces)
+    for sym in ["€", "$", "£", "¥", "₽", "руб", "CHF", "cad", "CAD", "usd", "USD", "eur", "EUR", "aud", "AUD", "gbp", "GBP", "jpy", "JPY", "cny", "CNY", "hkd", "HKD", "kr", "zł", "元", "₹", "₩", "\u00a0", "\u202f", " ", "\t"]:
         s = s.replace(sym, "")
+
+    # Handle Swiss / Liechtenstein apostrophe thousands separators e.g. 1'234.56 or 1’234’567.89
+    s = s.replace("'", "").replace("’", "")
 
     # Handle accounting format negatives e.g. (1,234.56) or (180.50)
     is_neg = False
@@ -651,7 +654,7 @@ COLUMN_ALIASES = {
 
 def _strip_accents(s: str) -> str:
     import unicodedata
-    return unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('utf-8')
+    return "".join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
 
 def get_field_val(row_dict: Dict[str, str], field_key: str) -> str:
@@ -666,23 +669,72 @@ def get_field_val(row_dict: Dict[str, str], field_key: str) -> str:
     norm_row = {_strip_accents("".join(c for c in k.lower() if c.isalnum())): v for k, v in row_dict.items()}
     for alias in aliases:
         norm_alias = _strip_accents("".join(c for c in alias.lower() if c.isalnum()))
-        if norm_alias in norm_row and norm_row[norm_alias].strip():
+        if norm_alias and norm_alias in norm_row and norm_row[norm_alias].strip():
             return norm_row[norm_alias].strip()
 
     return ""
 
 
+def is_cash_section(section_name: str, header_cols: Optional[List[str]] = None) -> bool:
+    """
+    3-Tier Universal Cash Transfers Section Detection.
+    """
+    sec = _strip_accents(section_name.strip().lower())
+    if sec in CASH_SECTIONS or section_name.strip().lower() in CASH_SECTIONS:
+        return True
+    if any(root in sec for root in ("deposit", "withdraw", "transfer", "deposito", "retirada", "reintegro", "virement", "einzahl", "auszahl", "stort", "preliev")):
+        return True
+    if header_cols:
+        col_text = " ".join(header_cols).lower()
+        has_amount = any(w in col_text for w in ("amount", "importe", "monto", "betrag", "montant", "importo"))
+        has_date = any(w in col_text for w in ("date", "fecha", "datum", "data"))
+        if has_amount and has_date:
+            return True
+    return False
+
+
+def is_trades_section(section_name: str, header_cols: Optional[List[str]] = None) -> bool:
+    """
+    3-Tier Universal Trades Section Detection:
+    1. Direct match in TRADES_SECTIONS (O(1)).
+    2. Substring root match (e.g. 'trade', 'operac', 'transac', 'exec', 'ord', 'deal', 'fill', etc.).
+    3. Structural column inference (if table contains symbol, date/time, quantity, price, or pnl columns).
+    """
+    if is_cash_section(section_name):
+        return False
+    sec = _strip_accents(section_name.strip().lower())
+    if sec in TRADES_SECTIONS or section_name.strip().lower() in TRADES_SECTIONS:
+        return True
+    if any(root in sec for root in ("trade", "operac", "transac", "exec", "ord", "geschaf", "negoz", "deal", "fill", "handels", "titre")):
+        return True
+    if header_cols:
+        matches = 0
+        for col_key in ("symbol", "datetime", "quantity", "price", "realized_pnl"):
+            aliases = COLUMN_ALIASES.get(col_key, [])
+            for col in header_cols:
+                clean_col = _strip_accents("".join(c for c in col.lower() if c.isalnum()))
+                for alias in aliases:
+                    clean_alias = _strip_accents("".join(c for c in alias.lower() if c.isalnum()))
+                    if clean_alias and (clean_col == clean_alias or clean_alias in clean_col):
+                        matches += 1
+                        break
+        if matches >= 3:
+            return True
+    return False
+
+
 def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
-    """Parses standard IBKR Activity Statement CSV (universal multilingual) with multi-currency conversion."""
+    """Parses standard IBKR Activity Statement CSV (universal multilingual & structural heuristic) with multi-currency conversion."""
     trades: List[Dict[str, Any]] = []
     headers: List[str] = []
+    trades_section_name: str = ""
     account_id = ""
     base_currency = "EUR"
     fx_rates_to_base: Dict[str, float] = {}
 
     delimiter = detect_csv_delimiter(lines)
 
-    # Pass 1: Extract account Base Currency and FX conversion rates
+    # Pass 1: Extract account Base Currency and FX conversion rates from statement tables
     for line in lines:
         row = parse_csv_line_tokens(line, delimiter)
         if not row or len(row) < 3:
@@ -729,7 +781,8 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
         section = row[0].strip().lower().strip('"')
         record_type = row[1].strip().lower().strip('"')
 
-        if section in TRADES_SECTIONS and record_type in HEADER_RECORD_TYPES:
+        if record_type in HEADER_RECORD_TYPES and (is_trades_section(section, row[2:]) or section == trades_section_name):
+            trades_section_name = section
             raw_headers = [h.strip().lower() for h in row[2:]]
             seen_headers: Dict[str, int] = {}
             unique_headers = []
@@ -738,7 +791,7 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
                 seen_headers[h] = cnt + 1
                 unique_headers.append(h if cnt == 0 else f"{h}_{cnt+1}")
             headers = unique_headers
-        elif section in TRADES_SECTIONS and record_type in DATA_RECORD_TYPES and headers:
+        elif record_type in DATA_RECORD_TYPES and headers and (section == trades_section_name or is_trades_section(section)):
             data = [d.strip() for d in row[2:]]
             if len(data) < len(headers):
                 data += [""] * (len(headers) - len(data))

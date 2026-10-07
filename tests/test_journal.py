@@ -158,6 +158,7 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertEqual(ov["losing_trades"], 1)
         self.assertEqual(ov["win_rate"], 50.0)
         self.assertEqual(ov["net_pnl"], 58.0)
+        self.assertEqual(ov["realized_rr"], 2.41)
 
         detailed = get_detailed_stats()
         self.assertIn("holding_durations", detailed)

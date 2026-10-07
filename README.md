@@ -27,7 +27,7 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
   - **Month Calendar**: Traditional monthly grid with daily P&L badges and trade counters.
   - **Week Breakdown**: 7-day cards view (Monday–Sunday) with volume and executions.
 - **📊 In-Depth Trading Analytics**:
-  - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Expectancy, Net Realized P&L, Total Trades, Commissions).
+  - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Risk/Reward `R:R`, Expectancy, Net Realized P&L, Total Trades, Commissions).
   - Portfolio Capital & Equity Overview strip in Statistics.
   - Risk & Drawdown analysis (Max Drawdown, Current Drawdown, Winning/Losing Streaks).
   - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL) and momentum tracking.

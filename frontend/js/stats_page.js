@@ -12,6 +12,7 @@ const StatsPage = {
     activeMetrics: {
         win_rate: true,
         profit_factor: true,
+        realized_rr: true,
         avg_win: true,
         avg_loss: true,
         expectancy: true,
@@ -138,6 +139,7 @@ const StatsPage = {
             metricColors: {
                 win_rate: '#10b981',
                 profit_factor: '#8b5cf6',
+                realized_rr: '#a855f7',
                 avg_win: '#3b82f6',
                 avg_loss: '#ef4444',
                 expectancy: '#f59e0b',
@@ -293,6 +295,7 @@ const StatsPage = {
         const metricIdMap = {
             'win_rate': 'm-win-rate',
             'profit_factor': 'm-pf',
+            'realized_rr': 'm-rr',
             'avg_win': 'm-avg-win',
             'avg_loss': 'm-avg-loss',
             'expectancy': 'm-exp',
@@ -433,7 +436,21 @@ const StatsPage = {
                         </span>
                     </div>
 
-                    <!-- 4. Expectancy -->
+                    <!-- 4. R:R -->
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="rr">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${STRINGS.kpi.realizedRr}</span>
+                            ${this.renderInfoIcon(sp.tipRealizedRr)}
+                        </div>
+                        <span class="stat-card-value mono ${this.getRatioClass(ov.realized_rr, ov.total_trades)}">
+                            ${ov.total_trades > 0 && ov.realized_rr !== undefined && ov.realized_rr !== null ? `1 : ${(ov.realized_rr || 0).toFixed(2)}` : '--'}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            ${sp.avgWin} / ${sp.avgLoss}
+                        </span>
+                    </div>
+
+                    <!-- 5. Expectancy -->
                     <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="exp">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
@@ -521,7 +538,7 @@ const StatsPage = {
                             ${(ov.adj_win_loss_ratio || 0).toFixed(2)}
                         </span>
                         <span class="stat-card-subtitle mono">
-                            Payoff ${(ov.avg_loss > 0 ? (ov.avg_win / ov.avg_loss).toFixed(2) : '--')}
+                            (Win% × Avg Win) / (Loss% × Avg Loss)
                         </span>
                     </div>
 
@@ -693,6 +710,11 @@ const StatsPage = {
                         <label class="metric-toggle-label" style="--metric-color: #8b5cf6;">
                             <input type="checkbox" id="m-pf" ${this.activeMetrics.profit_factor ? 'checked' : ''}>
                             <span>${sp.profitFactorMetric}</span>
+                        </label>
+
+                        <label class="metric-toggle-label" style="--metric-color: #a855f7;">
+                            <input type="checkbox" id="m-rr" ${this.activeMetrics.realized_rr ? 'checked' : ''}>
+                            <span>${sp.realizedRrMetric}</span>
                         </label>
 
                         <label class="metric-toggle-label" style="--metric-color: #3b82f6;">
@@ -1169,6 +1191,7 @@ const StatsPage = {
             const metricKeyMap = {
                 'win-rate': 'win_rate',
                 'pf': 'profit_factor',
+                'rr': 'realized_rr',
                 'avg-win': 'avg_win',
                 'avg-loss': 'avg_loss',
                 'exp': 'expectancy',
@@ -1281,6 +1304,7 @@ const StatsPage = {
         const metricMap = {
             'm-win-rate': 'win_rate',
             'm-pf': 'profit_factor',
+            'm-rr': 'realized_rr',
             'm-avg-win': 'avg_win',
             'm-avg-loss': 'avg_loss',
             'm-exp': 'expectancy',
@@ -1599,6 +1623,19 @@ const StatsPage = {
             });
         }
 
+        if (this.activeMetrics.realized_rr) {
+            datasets.push({
+                label: STRINGS.statsPage.realizedRrMetric,
+                data: series.map(s => s.realized_rr),
+                borderColor: theme.metricColors.realized_rr,
+                backgroundColor: theme.metricColors.realized_rr,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: labels.length > 35 ? 0 : 3,
+                yAxisID: 'yRatio'
+            });
+        }
+
         if (this.activeMetrics.avg_win) {
             datasets.push({
                 label: STRINGS.statsPage.avgWinMetric,
@@ -1672,7 +1709,7 @@ const StatsPage = {
         };
 
         const needsPercent = this.activeMetrics.win_rate;
-        const needsRatio = this.activeMetrics.profit_factor;
+        const needsRatio = this.activeMetrics.profit_factor || this.activeMetrics.realized_rr;
         const needsCurrency = this.activeMetrics.avg_win || this.activeMetrics.avg_loss ||
             this.activeMetrics.expectancy || this.activeMetrics.avg_trade_pnl || this.activeMetrics.cumulative_pnl;
 

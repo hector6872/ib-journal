@@ -435,7 +435,7 @@ def reconcile_fifo_pnl(conn_or_cursor=None):
                 fx_rate = float(fill.get("fx_rate_to_base") or 1.0)
                 existing_pnl = float(fill.get("realized_pnl") or 0.0)
 
-                current_open_qty = sum(l["qty"] for l in open_lots)
+                current_open_qty = sum(lot["qty"] for lot in open_lots)
 
                 if len(open_lots) == 0 or (current_open_qty > 0 and qty > 0) or (current_open_qty < 0 and qty < 0):
                     # Opening lot

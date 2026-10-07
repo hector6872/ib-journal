@@ -103,6 +103,7 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 | `PORT` | `8000` | HTTP port the server listens on. |
 | `HOST` | `0.0.0.0` | Bind host address (`0.0.0.0` allows LAN access). |
 | `CURRENCY_SYMBOL` | `$` | Display currency symbol (`$`, `€`, `£`, `¥`, etc.). |
+| `SYNC_MODE` | `global` | Schedule mode: `global` (24/5 Sun-Fri), `western` (07:00-21:15 UTC Mon-Fri), `always` (24/7). |
 | `SYNC_INTERVAL_MINUTES` | `60` | Background automatic sync frequency in minutes. |
 | `SYNC_COOLDOWN_SECONDS` | `600` | Cooldown period between manual sync requests (seconds). |
 | `DB_PATH` | `data/journal.db` | Relative or absolute path to the SQLite database file. |

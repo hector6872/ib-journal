@@ -10,6 +10,7 @@ from backend.config import (
     IBKR_TOKEN,
     SYNC_COOLDOWN_SECONDS,
     SYNC_INTERVAL_MINUTES,
+    SYNC_MODE,
     is_ibkr_configured,
     is_production,
 )
@@ -32,21 +33,40 @@ class SyncScheduler:
 
     def is_market_hours(self, now: Optional[datetime] = None) -> bool:
         """
-        Automatic market session detection.
-        Covers European & US sessions (07:00 UTC to 21:00 UTC), Monday through Friday.
-        Skips Saturday and Sunday.
+        Market session detection based on configured SYNC_MODE:
+        - 'always' / '24_7': Always active (24/7).
+        - 'global' / '24_5': Active Sunday 22:00 UTC through Friday 22:00 UTC (covers APAC, Europe, US, Forex, Futures).
+        - 'western' / 'eu_us': Active Monday to Friday 07:00 UTC to 21:15 UTC (Europe & US standard sessions).
         """
         if now is None:
             now = datetime.now(timezone.utc)
         else:
             now = now.astimezone(timezone.utc)
 
-        # 0 = Monday, 6 = Sunday
-        if now.weekday() >= 5:
-            return False
+        mode = (SYNC_MODE or "global").strip().lower()
 
-        # 07:00 UTC (European open prep) to 21:15 UTC (US close buffer)
-        return (now.hour > 7 or (now.hour == 7 and now.minute >= 0)) and (now.hour < 21 or (now.hour == 21 and now.minute <= 15))
+        if mode in ("always", "24_7", "all"):
+            return True
+
+        if mode in ("western", "eu_us", "standard"):
+            # 0 = Monday, 6 = Sunday
+            if now.weekday() >= 5:
+                return False
+            # 07:00 UTC to 21:15 UTC
+            return (now.hour > 7 or (now.hour == 7 and now.minute >= 0)) and (
+                now.hour < 21 or (now.hour == 21 and now.minute <= 15)
+            )
+
+        # Default: 'global' (24/5 from Sunday 22:00 UTC to Friday 22:00 UTC)
+        weekday = now.weekday()
+        if weekday == 5:  # Saturday
+            return False
+        if weekday == 6:  # Sunday
+            return now.hour >= 22
+        if weekday == 4:  # Friday
+            return now.hour < 22 or (now.hour == 22 and now.minute == 0)
+        # Monday to Thursday
+        return True
 
     def get_cooldown_remaining_seconds(self) -> int:
         """Returns remaining seconds for remote Flex API sync cooldown."""
@@ -71,30 +91,63 @@ class SyncScheduler:
         remaining = int(SYNC_COOLDOWN_SECONDS - elapsed)
         return max(0, remaining)
 
-    def calculate_next_sync_time(self) -> datetime:
-        """Calculates next sync timestamp based on market hours and interval."""
-        now = datetime.now(timezone.utc)
+    def calculate_next_sync_time(self, now: Optional[datetime] = None) -> datetime:
+        """Calculates next sync timestamp based on sync mode, market hours, and interval."""
+        if now is None:
+            now = datetime.now(timezone.utc)
+        else:
+            now = now.astimezone(timezone.utc)
 
-        # If currently in market hours, add SYNC_INTERVAL_MINUTES
+        mode = (SYNC_MODE or "global").strip().lower()
+
+        if mode in ("always", "24_7", "all"):
+            return now + timedelta(minutes=SYNC_INTERVAL_MINUTES)
+
+        if mode in ("western", "eu_us", "standard"):
+            if self.is_market_hours(now):
+                candidate = now + timedelta(minutes=SYNC_INTERVAL_MINUTES)
+                close_dt = datetime.combine(now.date(), time(21, 15), tzinfo=timezone.utc)
+                if candidate <= close_dt:
+                    return candidate
+
+            # Calculate next market open (07:00 UTC next business day)
+            next_day = now.date()
+            candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
+            if candidate_open <= now:
+                next_day += timedelta(days=1)
+                candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
+
+            while candidate_open.weekday() >= 5:  # Skip weekends
+                next_day += timedelta(days=1)
+                candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
+
+            return candidate_open
+
+        # 'global' (Sunday 22:00 UTC to Friday 22:00 UTC)
         if self.is_market_hours(now):
             candidate = now + timedelta(minutes=SYNC_INTERVAL_MINUTES)
-            close_dt = datetime.combine(now.date(), time(21, 15), tzinfo=timezone.utc)
-            if candidate <= close_dt:
-                return candidate
+            if now.weekday() == 4:  # Friday
+                close_dt = datetime.combine(now.date(), time(22, 0), tzinfo=timezone.utc)
+                if candidate <= close_dt:
+                    return candidate
+                # Candidate past Friday 22:00 -> Sunday 22:00 UTC
+                return datetime.combine(now.date() + timedelta(days=2), time(22, 0), tzinfo=timezone.utc)
+            return candidate
 
-        # Otherwise calculate next market open (07:00 UTC)
-        next_day = now.date()
-        candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
+        # Weekend / closed hours for 'global': next open is Sunday 22:00 UTC
+        weekday = now.weekday()
+        if weekday == 4:  # Friday after 22:00
+            days_to_sunday = 2
+        elif weekday == 5:  # Saturday
+            days_to_sunday = 1
+        elif weekday == 6:  # Sunday before 22:00
+            days_to_sunday = 0
+        else:
+            days_to_sunday = 0
 
-        if candidate_open <= now:
-            next_day += timedelta(days=1)
-            candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
+        target_date = now.date() + timedelta(days=days_to_sunday)
+        return datetime.combine(target_date, time(22, 0), tzinfo=timezone.utc)
 
-        while candidate_open.weekday() >= 5: # Skip weekends
-            next_day += timedelta(days=1)
-            candidate_open = datetime.combine(next_day, time(7, 0), tzinfo=timezone.utc)
-
-        return candidate_open
 
 
     async def execute_sync(self, sync_type: str = "scheduled") -> Dict[str, Any]:
@@ -303,6 +356,7 @@ class SyncScheduler:
         return {
             "is_configured": configured,
             "environment": ENVIRONMENT,
+            "sync_mode": SYNC_MODE,
             "is_auto_sync_enabled": in_prod,
             "last_sync_time": self.last_sync_time.isoformat() if (configured and self.last_sync_time) else None,
             "next_sync_time": (self.next_sync_time.isoformat() if (self.next_sync_time and in_prod) else (self.calculate_next_sync_time().isoformat() if in_prod else None)) if configured else None,

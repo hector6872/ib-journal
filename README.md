@@ -116,39 +116,29 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 | Variable | Default | Description |
 |---|---|---|
 | `IBKR_TOKEN` | *None* | Interactive Brokers Flex Web Service Token. |
-| `IBKR_QUERY_ID` | *None* | Flex Query ID configured in IBKR Client Portal. |
+| `IBKR_ACTIVITY_QUERY_ID` | *None* | **(Essential)** Activity Flex Query ID for daily EOD consolidation & cash movements at `DAILY_ACTIVITY_SYNC_HOUR` UTC. |
+| `IBKR_TRADE_QUERY_ID` | *None* | **(Optional)** Trade Confirmation Flex Query ID for real-time intraday fills every 15 min during market hours. |
+| `IBKR_QUERY_ID` | *None* | Legacy single-query alias. |
 | `PORT` | `8000` | HTTP port the server listens on. |
 | `HOST` | `0.0.0.0` | Bind host address (`0.0.0.0` allows LAN access). |
 | `SYNC_MODE` | `global` | Schedule mode: `global` (24/5 Sun-Fri), `western` (07:00-21:15 UTC Mon-Fri), `always` (24/7). |
-| `SYNC_INTERVAL_MINUTES` | `60` | Background automatic sync frequency in minutes. |
-| `SYNC_COOLDOWN_SECONDS` | `600` | Cooldown period between manual sync requests (seconds). |
+| `SYNC_INTERVAL_MINUTES` | `15` | Intraday trade sync frequency during market hours (minutes). |
+| `SYNC_COOLDOWN_SECONDS` | `300` | Cooldown period between manual sync requests (seconds). |
+| `DAILY_ACTIVITY_SYNC_HOUR` | `6` | UTC hour for daily activity consolidation (`6` = 06:00 UTC). |
 | `DB_PATH` | `data/journal.db` | Relative or absolute path to the SQLite database file. |
 | `ENVIRONMENT` | `prod` | Runtime environment (`prod` enables scheduler, `dev` disables it). |
 | `DEBUG` | `false` | Enable debug logging mode. |
 
 ---
 
-## 🔄 IBKR Flex Query Configuration Guide
+## 🔄 Automated Synchronization (Dual-Sync Architecture)
 
-To enable automated trade ingestion from Interactive Brokers, you need two values in `.env`: `IBKR_TOKEN` and `IBKR_QUERY_ID`.
+The journal implements a **Dual-Sync pipeline** to overcome IBKR's API batch limitations:
+* **Core Foundation (Essential — `IBKR_ACTIVITY_QUERY_ID`)**: Runs once daily at `DAILY_ACTIVITY_SYNC_HOUR` UTC to consolidate official settled trades, realized P&L, commissions, and automatically sync bank deposits/withdrawals.
+* **Intraday Companion (Optional — `IBKR_TRADE_QUERY_ID`)**: Runs every 15 minutes during market hours so that current-day fills and live performance appear without having to wait for overnight processing.
+* **Unified Manual Sync**: The *Sync Now* button triggers all configured queries seamlessly with a 5-minute safety cooldown.
 
-1. **Get your Token (`IBKR_TOKEN`)**:
-   - Log into **[IBKR Client Portal](https://www.interactivebrokers.com/)**.
-   - Navigate to **Performance & Reports** (or **Reports**) > **Flex Queries**.
-   - In the **Flex Web Service Status** panel on the right, click the **Gear (⚙️) icon**.
-   - Enable Flex Web Service, generate a new token, and copy it to `IBKR_TOKEN` in `.env`.
-
-2. **Create the Query & get Query ID (`IBKR_QUERY_ID`)**:
-   - In the **Activity Flex Query** section, click **+ (Create New)**:
-     - **Query Name**: `Trading Journal Sync`
-     - **Date Period**: `Last 7 Calendar Days` (or `Last 365 Calendar Days` for initial backfill)
-     - **Format**: `XML`
-     - **Sections**:
-       - Click **Trades**: ensure **`Execution`** and **`Order`** are selected at the top, and check the **`Select All`** checkbox (includes `FIFO P/L Realized`, commissions, prices, etc.).
-       - *(Optional)* Click **Cash Transactions**: check **`Select All`** to sync deposits/withdrawals.
-   - Save the query. Look at the **Query ID** column next to your new query and copy this number to `IBKR_QUERY_ID` in `.env`.
-
-> 💡 **Detailed guide & FAQ**: See [IBKR_IMPORT_GUIDE.md](IBKR_IMPORT_GUIDE.md#--ibkr-automated-synchronization-flex-query-setup) for step-by-step screenshots and troubleshooting.
+> 💡 **Step-by-step setup guide & FAQ**: See [IBKR_IMPORT_GUIDE.md](IBKR_IMPORT_GUIDE.md#--ibkr-automated-synchronization-dual-sync-architecture) for screenshots, query parameters, and recovery tools.
 
 ---
 
@@ -202,23 +192,40 @@ sudo reboot
 
 ## 🚀 Running as a Background Systemd Service
 
-To keep the journal running automatically when your Raspberry Pi or Linux server boots:
+To keep the journal running automatically when your Raspberry Pi, DietPi, or Linux server boots:
 
-1. Copy the systemd service file:
+### Option A: Automatic Installer (Recommended)
+The installer script automatically detects your active user (`dietpi`, `pi`, `ubuntu`, etc.), project directory, and Python virtual environment:
+```bash
+sudo ./scripts/install_service.sh
+```
+
+### Option B: Manual Installation
+1. Copy the systemd service template:
    ```bash
    sudo cp ib-journal.service /etc/systemd/system/
    ```
-2. (Optional) If your username or folder path differs from `/home/pi/ib-journal`, edit the path in `/etc/systemd/system/ib-journal.service`.
+2. Edit `/etc/systemd/system/ib-journal.service` to match your user and directory (e.g. `User=dietpi` and `WorkingDirectory=/home/dietpi/ib-journal`).
 3. Enable and start the service:
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now ib-journal
    ```
-4. Check status or live logs:
-   ```bash
-   sudo systemctl status ib-journal
-   journalctl -u ib-journal -f
-   ```
+
+### Check Status & Logs
+```bash
+sudo systemctl status ib-journal
+journalctl -u ib-journal -f
+```
+
+---
+
+## 🔄 Updating the Journal
+
+To update to the latest version, install any new dependencies, and safely restart the service:
+```bash
+./update.sh
+```
 
 ---
 

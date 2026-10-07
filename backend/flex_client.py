@@ -71,24 +71,25 @@ class IBKRFlexClient:
 
             return await loop.run_in_executor(None, sync_req)
 
-    async def fetch_statement_xml(self) -> str:
+    async def fetch_statement_xml(self, query_id: Optional[str] = None) -> str:
         """
         Executes the two-step IBKR Flex Query Web Service protocol:
         1. SendRequest with Token & Query ID -> get ReferenceCode (with fallback endpoints)
         2. Poll GetStatement with ReferenceCode & Token -> get final XML statement
         """
-        if not self.token or not self.query_id:
-            raise ValueError("IBKR_TOKEN and IBKR_QUERY_ID must be set in .env file.")
+        active_query_id = (query_id or self.query_id or "").strip()
+        if not self.token or not active_query_id:
+            raise ValueError("IBKR_TOKEN and Query ID must be provided.")
 
         # Step 1: Send Request with endpoint fallback
-        logger.info(f"Initiating IBKR Flex Query request for query ID: {self.query_id}")
+        logger.info(f"Initiating IBKR Flex Query request for query ID: {active_query_id}")
         last_network_error: Optional[Exception] = None
         status_code = 0
         resp_text = ""
 
         for send_url, get_url in IBKR_SERVICE_ENDPOINTS:
             try:
-                status_code, resp_text = await self._http_get(send_url, {"t": self.token, "q": self.query_id, "v": "3"})
+                status_code, resp_text = await self._http_get(send_url, {"t": self.token, "q": active_query_id, "v": "3"})
                 if status_code == 200 and "<Status>Success</Status>" in resp_text:
                     self._active_get_url = get_url
                     last_network_error = None
@@ -173,90 +174,248 @@ class IBKRFlexClient:
             logger.error(f"Failed to parse IBKR XML: {e}")
             raise
 
-        # Find all <Trade> or <Order> elements
-        for trade_node in root.iter("Trade"):
-            attrs = trade_node.attrib
+        # Find all <Trade>, <TradeConfirm>, <Execution>, <Order>, or <FlexTrade> elements
+        target_tags = ["Trade", "TradeConfirm", "Execution", "Order", "FlexTrade"]
+        seen_exec_ids = set()
+        for tag in target_tags:
+            for trade_node in root.iter(tag):
+                attrs = trade_node.attrib
 
-            exec_id = attrs.get("ibExecId") or attrs.get("transactionID") or attrs.get("tradeID")
-            if not exec_id:
-                continue
+                exec_id = (
+                    attrs.get("ibExecId")
+                    or attrs.get("ibExecutionId")
+                    or attrs.get("transactionID")
+                    or attrs.get("tradeID")
+                    or attrs.get("executionID")
+                )
+                if not exec_id or exec_id in seen_exec_ids:
+                    continue
+                seen_exec_ids.add(exec_id)
 
-            # Date formatting (IBKR usually provides dateTime="YYYYMMDD;HHMMSS" or dateTime="YYYY-MM-DD, HH:MM:SS")
-            date_time_raw = attrs.get("dateTime") or attrs.get("tradeDate") or ""
-            trade_date = ""
-            trade_time = ""
-            trade_datetime_iso = ""
+                # Date formatting (IBKR usually provides dateTime="YYYYMMDD;HHMMSS" or dateTime="YYYY-MM-DD, HH:MM:SS")
+                date_time_raw = attrs.get("dateTime") or attrs.get("tradeDate") or attrs.get("reportDate") or ""
+                trade_date = ""
+                trade_time = ""
+                trade_datetime_iso = ""
 
-            if date_time_raw:
-                cleaned = date_time_raw.replace(";", " ").replace(",", " ")
-                parts = cleaned.split()
-                if len(parts) >= 1:
-                    raw_d = parts[0].replace("-", "")
-                    if len(raw_d) == 8:
-                        trade_date = f"{raw_d[:4]}-{raw_d[4:6]}-{raw_d[6:]}"
-                    else:
-                        trade_date = parts[0]
-                if len(parts) >= 2:
-                    raw_t = parts[1].replace(":", "")
-                    if len(raw_t) >= 6:
-                        trade_time = f"{raw_t[:2]}:{raw_t[2:4]}:{raw_t[4:6]}"
-                    else:
-                        trade_time = parts[1]
-                trade_datetime_iso = f"{trade_date}T{trade_time}" if trade_time else trade_date
+                if date_time_raw:
+                    cleaned = date_time_raw.replace(";", " ").replace(",", " ")
+                    parts = cleaned.split()
+                    if len(parts) >= 1:
+                        raw_d = parts[0].replace("-", "")
+                        if len(raw_d) == 8:
+                            trade_date = f"{raw_d[:4]}-{raw_d[4:6]}-{raw_d[6:]}"
+                        else:
+                            trade_date = parts[0]
+                    if len(parts) >= 2:
+                        raw_t = parts[1].replace(":", "")
+                        if len(raw_t) >= 6:
+                            trade_time = f"{raw_t[:2]}:{raw_t[2:4]}:{raw_t[4:6]}"
+                        else:
+                            trade_time = parts[1]
+                    trade_datetime_iso = f"{trade_date}T{trade_time}" if trade_time else trade_date
 
-            if not trade_date:
-                trade_date = date.today().isoformat()
+                if not trade_date:
+                    trade_date = date.today().isoformat()
 
-            # PnL & Money calculations
-            fx_rate = float(attrs.get("fxRateToBase") or 1.0)
-            raw_currency = (attrs.get("currency") or "EUR").upper()
-            base_currency = (attrs.get("baseCurrency") or "EUR").upper()
+                # PnL & Money calculations
+                fx_rate = float(attrs.get("fxRateToBase") or attrs.get("fxRate") or 1.0)
+                raw_currency = (attrs.get("currency") or attrs.get("tradeCurrency") or "EUR").upper()
+                base_currency = (attrs.get("baseCurrency") or attrs.get("accountBaseCurrency") or "EUR").upper()
 
-            raw_pnl = float(attrs.get("fifoPnlRealized") or attrs.get("realizedPNL") or attrs.get("fxPnl") or 0.0)
-            raw_comm = abs(float(attrs.get("ibCommission") or attrs.get("taxes") or 0.0))
+                raw_pnl = float(
+                    attrs.get("fifoPnlRealized")
+                    or attrs.get("realizedPNL")
+                    or attrs.get("realizedPnl")
+                    or attrs.get("fxPnl")
+                    or attrs.get("pnl")
+                    or attrs.get("fifoPnl")
+                    or attrs.get("mtmPnl")
+                    or 0.0
+                )
+                raw_comm = abs(
+                    float(
+                        attrs.get("ibCommission")
+                        or attrs.get("commission")
+                        or attrs.get("totalCommission")
+                        or attrs.get("taxes")
+                        or attrs.get("fee")
+                        or attrs.get("commissionAmount")
+                        or attrs.get("totalFee")
+                        or 0.0
+                    )
+                )
 
-            # Convert to base currency using fxRateToBase
-            realized_pnl = round(raw_pnl * fx_rate, 4) if fx_rate > 0 else raw_pnl
-            commission = round(raw_comm * fx_rate, 4) if fx_rate > 0 else raw_comm
+                # Convert to base currency using fxRateToBase
+                realized_pnl = round(raw_pnl * fx_rate, 4) if fx_rate > 0 else raw_pnl
+                commission = round(raw_comm * fx_rate, 4) if fx_rate > 0 else raw_comm
 
-            quantity = float(attrs.get("quantity") or 0.0)
-            trade_price = float(attrs.get("tradePrice") or 0.0)
-            trade_money = float(attrs.get("tradeMoney") or (abs(quantity) * trade_price))
-            proceeds = float(attrs.get("proceeds") or 0.0)
+                raw_sym = attrs.get("symbol") or attrs.get("underlyingSymbol") or attrs.get("contractDescription") or "UNKNOWN"
+                desc = attrs.get("description") or attrs.get("contractDescription") or ""
+                asset_category = (attrs.get("assetCategory") or attrs.get("secType") or "STK").upper()
+                norm_symbol = normalize_symbol(raw_sym, desc, asset_category)
+                if asset_category == "STK" and ("OPT" in norm_symbol or " " in raw_sym):
+                    asset_category = "OPT"
 
-            raw_sym = attrs.get("symbol") or "UNKNOWN"
-            desc = attrs.get("description") or ""
-            asset_category = attrs.get("assetCategory") or "STK"
-            norm_symbol = normalize_symbol(raw_sym, desc, asset_category)
+                multiplier = float(attrs.get("multiplier") or attrs.get("contractMultiplier") or (100.0 if asset_category == "OPT" else 1.0))
+                if multiplier <= 0:
+                    multiplier = 100.0 if asset_category == "OPT" else 1.0
 
-            trade_record = {
-                "ib_exec_id": exec_id,
-                "trade_id": attrs.get("tradeID") or exec_id,
-                "account_id": attrs.get("accountId") or "",
-                "symbol": norm_symbol,
-                "description": desc or norm_symbol,
-                "asset_category": asset_category,
-                "currency": raw_currency,
-                "raw_currency": raw_currency,
-                "base_currency": base_currency,
-                "buy_sell": (attrs.get("buySell") or "BUY").upper(),
-                "quantity": quantity,
-                "trade_price": trade_price,
-                "trade_money": trade_money,
-                "proceeds": proceeds,
-                "fx_rate_to_base": fx_rate,
-                "raw_commission": raw_comm,
-                "raw_realized_pnl": raw_pnl,
-                "ib_commission": commission,
-                "realized_pnl": realized_pnl,
-                "trade_date": trade_date,
-                "trade_time": trade_time,
-                "trade_date_time": trade_datetime_iso,
-                "open_close_indicator": attrs.get("openCloseIndicator") or "C",
-                "order_type": (attrs.get("orderType") or "MKT").upper(),
-                "exchange": (attrs.get("exchange") or "SMART").upper(),
-            }
-            trades.append(trade_record)
+                quantity = float(
+                    attrs.get("quantity")
+                    or attrs.get("shares")
+                    or attrs.get("size")
+                    or attrs.get("filledQuantity")
+                    or attrs.get("filledShares")
+                    or attrs.get("volume")
+                    or attrs.get("execQty")
+                    or 0.0
+                )
+                
+                trade_price = float(
+                    attrs.get("tradePrice")
+                    or attrs.get("price")
+                    or attrs.get("orderPrice")
+                    or attrs.get("avgPrice")
+                    or attrs.get("tradePriceUSD")
+                    or attrs.get("priceUSD")
+                    or attrs.get("executionPrice")
+                    or attrs.get("execPrice")
+                    or 0.0
+                )
+
+                proceeds = float(
+                    attrs.get("proceeds")
+                    or attrs.get("netCash")
+                    or attrs.get("netAmount")
+                    or attrs.get("grossProceeds")
+                    or 0.0
+                )
+
+                # Mathematical fallbacks if direct attributes are omitted in Trade Confirmation queries
+                if trade_price == 0.0 and proceeds != 0.0 and quantity != 0.0:
+                    trade_price = round(abs(proceeds) / (abs(quantity) * multiplier), 4)
+
+                side_raw = (attrs.get("buySell") or attrs.get("side") or attrs.get("action") or ("BUY" if quantity > 0 else "SELL")).upper()
+                buy_sell = "BUY" if ("BUY" in side_raw or "BOT" in side_raw) else ("SELL" if ("SELL" in side_raw or "SLD" in side_raw) else side_raw)
+
+                if proceeds == 0.0 and quantity != 0.0 and trade_price > 0.0:
+                    sign = -1.0 if buy_sell == "BUY" else 1.0
+                    proceeds = round(sign * abs(quantity) * trade_price * multiplier, 4)
+
+                trade_money = float(
+                    attrs.get("tradeMoney")
+                    or attrs.get("grossAmount")
+                    or attrs.get("amount")
+                    or attrs.get("value")
+                    or (abs(quantity) * trade_price * multiplier)
+                )
+
+                trade_record = {
+                    "ib_exec_id": exec_id,
+                    "trade_id": attrs.get("tradeID") or exec_id,
+                    "account_id": attrs.get("accountId") or attrs.get("clientAccountId") or "",
+                    "symbol": norm_symbol,
+                    "description": desc or norm_symbol,
+                    "asset_category": asset_category,
+                    "currency": raw_currency,
+                    "raw_currency": raw_currency,
+                    "base_currency": base_currency,
+                    "buy_sell": buy_sell,
+                    "quantity": quantity,
+                    "trade_price": trade_price,
+                    "trade_money": trade_money,
+                    "proceeds": proceeds,
+                    "fx_rate_to_base": fx_rate,
+                    "raw_commission": raw_comm,
+                    "raw_realized_pnl": raw_pnl,
+                    "ib_commission": commission,
+                    "realized_pnl": realized_pnl,
+                    "trade_date": trade_date,
+                    "trade_time": trade_time,
+                    "trade_date_time": trade_datetime_iso,
+                    "open_close_indicator": (attrs.get("openCloseIndicator") or attrs.get("code") or attrs.get("openClose") or "C").upper(),
+                    "order_type": (attrs.get("orderType") or attrs.get("order_type") or "MKT").upper(),
+                    "exchange": (attrs.get("exchange") or attrs.get("listingExchange") or attrs.get("execExchange") or "SMART").upper(),
+                }
+                trades.append(trade_record)
 
         logger.info(f"Parsed {len(trades)} trade executions from XML statement.")
         return trades
+
+    def parse_cash_transactions_xml(self, xml_content: str) -> List[Dict[str, Any]]:
+        """
+        Parses XML statement extracting cash transactions (deposits, withdrawals, transfers, dividends).
+        """
+        txs: List[Dict[str, Any]] = []
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse IBKR XML for cash transactions: {e}")
+            return []
+
+        base_currency = "EUR"
+        for node in root.iter("AccountInformation"):
+            base_currency = (node.attrib.get("baseCurrency") or "EUR").upper()
+
+        seen_tx_ids = set()
+        for node in root.iter("CashTransaction"):
+            attrs = node.attrib
+            amount_raw = float(attrs.get("amount") or 0.0)
+            if amount_raw == 0:
+                continue
+
+            tx_type_raw = (attrs.get("type") or "DEPOSIT").upper()
+            tx_type = "DEPOSIT"
+            if "WITHDRAW" in tx_type_raw or amount_raw < 0:
+                tx_type = "WITHDRAWAL"
+            elif "DIVIDEND" in tx_type_raw or "WITHHOLDING" in tx_type_raw:
+                tx_type = "DIVIDEND"
+            elif "TRANSFER" in tx_type_raw:
+                tx_type = "TRANSFER"
+
+            date_raw = attrs.get("dateTime") or attrs.get("reportDate") or attrs.get("settleDate") or ""
+            t_date = ""
+            if date_raw:
+                raw_clean = date_raw.replace(";", " ").replace(",", " ").split()[0].replace("-", "")
+                if len(raw_clean) == 8:
+                    t_date = f"{raw_clean[:4]}-{raw_clean[4:6]}-{raw_clean[6:]}"
+                else:
+                    t_date = date_raw.split()[0]
+            if not t_date:
+                t_date = date.today().isoformat()
+
+            curr = (attrs.get("currency") or base_currency).upper()
+            fx_rate = float(attrs.get("fxRateToBase") or 1.0)
+            amount_base = round(amount_raw * fx_rate, 2)
+
+            desc = attrs.get("description") or attrs.get("type") or ""
+            account_id = attrs.get("accountId") or ""
+            tx_id = (
+                attrs.get("transactionID")
+                or attrs.get("id")
+                or f"XML_CASH_{account_id}_{t_date}_{abs(amount_raw)}_{curr}"
+            )
+
+            if tx_id in seen_tx_ids:
+                continue
+            seen_tx_ids.add(tx_id)
+
+            txs.append(
+                {
+                    "transaction_id": tx_id,
+                    "account_id": account_id,
+                    "transaction_date": t_date,
+                    "transaction_type": tx_type,
+                    "amount": amount_raw,
+                    "currency": curr,
+                    "amount_in_base": amount_base,
+                    "base_currency": base_currency,
+                    "fx_rate_to_base": fx_rate,
+                    "description": desc,
+                }
+            )
+
+        if txs:
+            logger.info(f"Parsed {len(txs)} cash transactions from XML statement.")
+        return txs

@@ -47,6 +47,20 @@ const STRINGS = {
         trades: "TRADES"
     },
 
+    // Structured Error Codes & Machine-Readable Errors
+    errors: {
+        ERR_CONNECTION_FAILED: "Connection failed (Check internet or DNS)",
+        ERR_IBKR_IP_UNAUTHORIZED: "IBKR Error 1018: IP address not authorized in Flex Web Service",
+        ERR_IBKR_INVALID_TOKEN: "IBKR Error 1014: Invalid or expired token",
+        ERR_IBKR_STATEMENT_GENERATING: "Statement is generating (Try again shortly)",
+        ERR_IBKR_TIMEOUT: "IBKR request timed out",
+        ERR_COOLDOWN_ACTIVE: "Rate limit cooldown active. Please wait {seconds}s",
+        ERR_UNCONFIGURED: "Configure IBKR credentials in .env",
+        ERR_SYNC_IN_PROGRESS: "Synchronization is already in progress",
+        ERR_HTTP_ERROR: "HTTP Error: {detail}",
+        ERR_GENERIC_SYNC: "Sync error: {detail}",
+    },
+
     // Sync Widget & Rate Limiting
     sync: {
         syncNow: "Sync Now",
@@ -56,14 +70,24 @@ const STRINGS = {
         nextSync: "Next in",
         notConfiguredTitle: "Not configured",
         notConfiguredSubtitle: "Set credentials in .env",
+        notConfiguredTooltip: "Configure IBKR_TOKEN and IBKR_ACTIVITY_QUERY_ID in .env to enable automated sync",
         syncFailed: "Sync Failed",
         marketClosed: "Market Closed",
         marketOpen: "Market Open",
         success: "Sync completed successfully",
         error: "Sync error",
         devMode: "Dev Mode (Manual only)",
+        devModeHour: "Dev Mode ({hour})",
+        dailyHour: "Daily {hour}",
+        nextInMinutes: "Next in {minutes}m",
+        activityOnlyTooltip: "Activity sync active (Daily {hour}). Set IBKR_TRADE_QUERY_ID for intraday fills.",
+        dualSyncTooltip: "Dual-sync active (Intraday every {interval}m + Daily {hour}).",
+        defaultTooltip: "Click to synchronize trades from IBKR",
+        syncSuccess: "Synchronized {trades} trades, {cash} transfers ({scope})",
+        syncWarning: "Synchronized with warnings: {warning}",
         importBtn: "Import",
         desync: "Desync",
+        desyncBadge: "Desync ({days}d)",
         desyncTitle: "Desync detected. Click to import manual statement.",
         importTitle: "Import manual statement (CSV / XML)",
         cashTitle: "Capital & Cash Transfers"
@@ -387,6 +411,87 @@ const STRINGS = {
         loading: "Loading trading data...",
         errorLoading: "Failed to load data. Please verify your backend connection.",
         currency: "$"
+    },
+
+    /**
+     * String template interpolation: replaces {param} with params[param]
+     */
+    format(template, params = {}) {
+        if (!template || typeof template !== 'string') return '';
+        return template.replace(/\{(\w+)\}/g, (match, key) => {
+            return params[key] !== undefined ? params[key] : match;
+        });
+    },
+
+    /**
+     * Resolves a localized error message from an error code or error object
+     */
+    getErrorMessage(err) {
+        if (!err) return this.sync.error;
+        if (typeof err === 'string') return err;
+        const code = err.error_code || err.code;
+        const params = err.error_params || err.params || {};
+        if (code && this.errors[code]) {
+            return this.format(this.errors[code], params);
+        }
+        return err.message || err.detail || this.sync.error;
+    },
+
+    /**
+     * Resolves a localized tooltip for the sync widget
+     */
+    getSyncTooltip(status) {
+        if (!status) return this.sync.defaultTooltip;
+        if (status.is_configured === false || status.status === 'unconfigured') {
+            return this.sync.notConfiguredTooltip;
+        }
+        if (status.status === 'failed') {
+            return this.getErrorMessage(status);
+        }
+        const dailyHour = status.daily_activity_sync_hour_utc !== undefined ? status.daily_activity_sync_hour_utc : 6;
+        const hourFormatted = `${String(dailyHour).padStart(2, '0')}:00 UTC`;
+        if (status.has_trade_query === false && status.has_activity_query === true) {
+            return this.format(this.sync.activityOnlyTooltip, { hour: hourFormatted });
+        }
+        if (status.has_trade_query === true && status.has_activity_query === true) {
+            return this.format(this.sync.dualSyncTooltip, {
+                interval: status.sync_interval_minutes || 15,
+                hour: hourFormatted
+            });
+        }
+        return status.message || this.sync.defaultTooltip;
+    },
+
+    /**
+     * Resolves a localized subtitle countdown/info for the sync widget
+     */
+    getSyncSubtitle(status) {
+        if (!status) return '';
+        if (status.is_configured === false || status.status === 'unconfigured') {
+            return this.sync.notConfiguredSubtitle;
+        }
+        if (status.status === 'failed') {
+            const err = this.getErrorMessage(status);
+            return err.length > 25 ? err.slice(0, 25) + '...' : err;
+        }
+        const dailyHour = status.daily_activity_sync_hour_utc !== undefined ? status.daily_activity_sync_hour_utc : 6;
+        const hourFormatted = `${String(dailyHour).padStart(2, '0')}:00 UTC`;
+
+        if (status.is_auto_sync_enabled === false) {
+            return status.has_trade_query === false
+                ? this.format(this.sync.devModeHour, { hour: hourFormatted })
+                : this.sync.devMode;
+        }
+        if (status.has_trade_query === false) {
+            return this.format(this.sync.dailyHour, { hour: hourFormatted });
+        }
+        if (status.next_sync_time) {
+            const nextDate = new Date(status.next_sync_time);
+            const diffMs = nextDate - new Date();
+            const diffMins = Math.max(0, Math.round(diffMs / 60000));
+            return this.format(this.sync.nextInMinutes, { minutes: diffMins });
+        }
+        return '';
     }
 };
 

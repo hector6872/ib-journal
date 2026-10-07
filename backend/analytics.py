@@ -1614,6 +1614,15 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                 current_trade["duration"] = format_trade_duration(
                     current_trade["open_time"], current_trade["close_time"]
                 )
+                multiplier = 100.0 if current_trade["asset_category"] == "OPT" else 1.0
+                if abs(current_trade["gross_pnl"]) < 1e-6 and (current_trade["entry_val"] > 0 or current_trade["exit_val"] > 0):
+                    if current_trade["is_initial_buy"]:
+                        raw_calc_pnl = (current_trade["exit_val"] - current_trade["entry_val"]) * multiplier
+                    else:
+                        raw_calc_pnl = (current_trade["entry_val"] - current_trade["exit_val"]) * multiplier
+                    current_trade["raw_gross_pnl"] = round(raw_calc_pnl, 2)
+                    current_trade["gross_pnl"] = round(raw_calc_pnl * current_trade["fx_rate_to_base"], 2)
+
                 current_trade["net_pnl"] = round(current_trade["gross_pnl"] - current_trade["commission"], 2)
                 current_trade["gross_pnl"] = round(current_trade["gross_pnl"], 2)
                 current_trade["commission"] = round(current_trade["commission"], 2)

@@ -370,8 +370,7 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
 
         if trades_to_insert:
             cursor.executemany(sql, trades_to_insert)
-            return len(trades_to_insert)
-        return 0
+        return len(sanitized_trades)
 
 def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
     """

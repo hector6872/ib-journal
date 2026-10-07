@@ -182,6 +182,9 @@ Trades,Data,Order,Equity and Index Options,EUR,SPY 230120C400000,"2023-01-16, 16
 Statement,Data,BrokerName,Interactive Brokers Ireland Limited
 Account Information,Header,Field Name,Field Value
 Account Information,Data,Account,U6920617
+Account Information,Data,Base Currency,EUR
+Forex Balances,Header,Asset Class,Currency,Currency,Quantity,Cost Price,Cost Basis,Close Price,Value
+Forex Balances,Data,Forex,CAD,CAD,0,0,0,0.684,0
 Net Asset Value,Header,Asset Class,Prior Total,Current Long,Current Short,Current Total,Change
 Net Asset Value,Data,Stock,641.46,1342.39,0,1342.39,700.92
 Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
@@ -206,6 +209,129 @@ Trades,Data,Order,Forex,AUD,EUR.AUD,"2023-12-14, 12:18:41",-77,1.63815,,126.1375
         self.assertEqual(t_date, "2023-05-12")
         self.assertEqual(t_time, "14:32:00")
         self.assertEqual(t_iso, "2023-05-12T14:32:00")
+
+    def test_multilingual_and_semicolon_statements(self):
+        """Tests Spanish IBKR Activity Statement, semicolon delimiter, and European comma numbers."""
+        from scripts.import_trades import clean_num, parse_csv_cash_transactions, parse_ibkr_activity_statement_csv
+
+        # Test clean_num with European commas, thousands dots, and accounting parentheses
+        self.assertEqual(clean_num("180,50"), 180.50)
+        self.assertEqual(clean_num("-180,50"), -180.50)
+        self.assertEqual(clean_num("(180,50)"), -180.50)
+        self.assertEqual(clean_num("1.234,56"), 1234.56)
+        self.assertEqual(clean_num("1,234.56"), 1234.56)
+        self.assertEqual(clean_num("(1,234.56)"), -1234.56)
+        self.assertEqual(clean_num("100 €"), 100.0)
+
+        # Spanish Activity statement with semicolon delimiters
+        spanish_activity_semicolon = """Informe;Encabezado;Nombre de campo;Valor de campo
+Informe;Datos;BrokerName;Interactive Brokers Ireland Limited
+Información de la cuenta;Encabezado;Nombre de campo;Valor de campo
+Información de la cuenta;Datos;Cuenta;U1234567
+Información de la cuenta;Datos;Divisa principal;EUR
+Depósitos y retiradas;Encabezado;Divisa;Fecha de liquidación;Descripción;Importe
+Depósitos y retiradas;Datos;EUR;2023-05-10;Transferencia bancaria;5000,00
+Operaciones;Encabezado;Discriminador de datos;Categoría del activo;Divisa;Símbolo;Fecha/Hora;Cantidad;Precio de trans.;Ingresos;Comisión/Tarifa;P/G realizada;Código
+Operaciones;Datos;Orden;Stocks;EUR;SAN;2023-05-12, 11:30:00;100;3,45;-345,00;-1,25;0,00;O
+Operaciones;Datos;Orden;Stocks;EUR;SAN;2023-05-15, 14:00:00;-100;3,80;380,00;-1,25;35,00;C
+"""
+        trades = parse_ibkr_activity_statement_csv(spanish_activity_semicolon.splitlines())
+        self.assertEqual(len(trades), 2)
+        self.assertEqual(trades[0]["symbol"], "SAN")
+        self.assertEqual(trades[0]["buy_sell"], "BUY")
+        self.assertEqual(trades[0]["quantity"], 100.0)
+        self.assertEqual(trades[0]["trade_price"], 3.45)
+        self.assertEqual(trades[0]["account_id"], "U1234567")
+        self.assertEqual(trades[1]["buy_sell"], "SELL")
+        self.assertEqual(trades[1]["realized_pnl"], 35.0)
+
+        cash = parse_csv_cash_transactions(spanish_activity_semicolon.splitlines())
+        self.assertEqual(len(cash), 1)
+        self.assertEqual(cash[0]["amount"], 5000.0)
+        self.assertEqual(cash[0]["type"], "DEPOSIT")
+
+        # German Activity statement
+        german_activity = """Kontoauszug,Kopfzeile,Feldname,Feldwert
+Kontoinformationen,Daten,Konto,U7891234
+Kontoinformationen,Daten,Basiswährung,EUR
+Ein- und Auszahlungen,Kopfzeile,Währung,Valutadatum,Beschreibung,Betrag
+Ein- und Auszahlungen,Daten,EUR,2023-06-01,Banküberweisung,10000.00
+Transaktionen,Kopfzeile,Datenunterscheider,Anlageklasse,Währung,Symbol,Datum/Uhrzeit,Menge,Kurs,Erlös,Gebühr,Gewinn/Verlust,Code
+Transaktionen,Daten,Auftrag,Aktien,EUR,SAP,"2023-06-02, 09:15:00",50,110.50,-5525.00,-2.00,0.00,O
+Transaktionen,Daten,Auftrag,Aktien,EUR,SAP,"2023-06-05, 16:30:00",-50,115.00,5750.00,-2.00,225.00,C
+"""
+        german_trades = parse_ibkr_activity_statement_csv(german_activity.splitlines())
+        self.assertEqual(len(german_trades), 2)
+        self.assertEqual(german_trades[0]["symbol"], "SAP")
+        self.assertEqual(german_trades[0]["trade_price"], 110.50)
+        self.assertEqual(german_trades[1]["realized_pnl"], 225.0)
+
+        # French Activity statement
+        french_activity = """Relevé,En-tête,Nom de champ,Valeur de champ
+Informations sur le compte,Données,Compte,U4567890
+Informations sur le compte,Données,Devise de base,EUR
+Dépôts et retraits,En-tête,Devise,Date de règlement,Description,Montant
+Dépôts et retraits,Données,EUR,2023-07-01,Virement entrant,3000.00
+Opérations,En-tête,Discriminateur de données,Classe d'actif,Devise,Symbole,Date/Heure,Quantité,Prix,Produit,Commission,P&L réalisé,Code
+Opérations,Données,Ordre,Actions,EUR,BNP,"2023-07-03, 10:00:00",100,55.00,-5500.00,-1.50,0.00,O
+Opérations,Données,Ordre,Actions,EUR,BNP,"2023-07-04, 15:00:00",-100,58.00,5800.00,-1.50,300.00,C
+"""
+        french_trades = parse_ibkr_activity_statement_csv(french_activity.splitlines())
+        self.assertEqual(len(french_trades), 2)
+        self.assertEqual(french_trades[0]["symbol"], "BNP")
+        self.assertEqual(french_trades[1]["realized_pnl"], 300.0)
+
+        # Chinese Activity statement
+        chinese_activity = """对账单,表头,字段名称,字段值
+账户信息,数据,账户,U8888888
+账户信息,数据,基准货币,EUR
+交易,表头,数据分类,资产类别,货币,代码,日期/时间,数量,价格,收入,佣金,已实现盈亏,代码
+交易,数据,订单,股票,EUR,BABA,"2023-08-01, 14:00:00",200,80.00,-16000.00,-3.00,0.00,O
+交易,数据,订单,股票,EUR,BABA,"2023-08-02, 17:00:00",-200,85.00,17000.00,-3.00,1000.00,C
+"""
+        chinese_trades = parse_ibkr_activity_statement_csv(chinese_activity.splitlines())
+        self.assertEqual(len(chinese_trades), 2)
+        self.assertEqual(chinese_trades[0]["symbol"], "BABA")
+        self.assertEqual(chinese_trades[1]["realized_pnl"], 1000.0)
+
+        # Italian Activity statement
+        italian_activity = """Estratto conto,Intestazione,Nome campo,Valore campo
+Informazioni sul conto,Dati,Conto,U3333333
+Informazioni sul conto,Dati,Valuta di base,EUR
+Operazioni,Intestazione,Discriminatore di dati,Classe di attività,Valuta,Simbolo,Data/Ora,Quantità,Prezzo,Ricavo,Commissione,P&L realizzato,Codice
+Operazioni,Dati,Ordine,Azioni,EUR,ENEL,"2023-09-01, 10:00:00",500,6.20,-3100.00,-2.50,0.00,O
+Operazioni,Dati,Ordine,Azioni,EUR,ENEL,"2023-09-05, 12:00:00",-500,6.50,3250.00,-2.50,150.00,C
+"""
+        italian_trades = parse_ibkr_activity_statement_csv(italian_activity.splitlines())
+        self.assertEqual(len(italian_trades), 2)
+        self.assertEqual(italian_trades[0]["symbol"], "ENEL")
+        self.assertEqual(italian_trades[1]["realized_pnl"], 150.0)
+
+        # Portuguese Activity statement
+        portuguese_activity = """Extrato,Cabeçalho,Nome do campo,Valor do campo
+Informações da conta,Dados,Conta,U2222222
+Informações da conta,Dados,Moeda base,EUR
+Operações,Cabeçalho,Discriminador de dados,Classe de ativos,Moeda,Símbolo,Data/Hora,Quantidade,Preço,Receita,Comissão,P&L realizado,Código
+Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-10, 11:00:00",300,4.10,-1230.00,-1.50,0.00,O
+Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00,-1.50,75.00,C
+"""
+        portuguese_trades = parse_ibkr_activity_statement_csv(portuguese_activity.splitlines())
+        self.assertEqual(len(portuguese_trades), 2)
+        self.assertEqual(portuguese_trades[0]["symbol"], "EDP")
+        self.assertEqual(portuguese_trades[1]["realized_pnl"], 75.0)
+
+        # Russian Activity statement
+        russian_activity = """Отчет,Заголовок,Имя поля,Значение поля
+Информация об аккаунте,Данные,Аккаунт,U1111111
+Информация об аккаунте,Данные,Базовая валюта,EUR
+Сделки,Заголовок,Классификатор данных,Класс активов,Валюта,Символ,Дата/Время,Количество,Цена,Выручка,Комиссия,Реализованная прибыль,Код
+Сделки,Данные,Заказ,Акции,EUR,YNDX,"2023-09-15, 13:00:00",100,20.00,-2000.00,-2.00,0.00,O
+Сделки,Данные,Заказ,Акции,EUR,YNDX,"2023-09-18, 15:00:00",-100,22.00,2200.00,-2.00,200.00,C
+"""
+        russian_trades = parse_ibkr_activity_statement_csv(russian_activity.splitlines())
+        self.assertEqual(len(russian_trades), 2)
+        self.assertEqual(russian_trades[0]["symbol"], "YNDX")
+        self.assertEqual(russian_trades[1]["realized_pnl"], 200.0)
 
     def test_settings_persistence(self):
         """Tests reading and updating settings."""

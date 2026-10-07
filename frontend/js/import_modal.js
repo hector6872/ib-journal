@@ -159,6 +159,7 @@ const ImportModal = {
         statusBox.innerHTML = `<div style="color: var(--color-accent); font-weight: 600;">${STRINGS.import?.importingFiles || 'Importing file(s)...'} (${files.length})</div>`;
 
         let totalImported = 0;
+        let totalCashImported = 0;
         let errors = [];
 
         for (let i = 0; i < files.length; i++) {
@@ -167,6 +168,7 @@ const ImportModal = {
                 const text = await this.readFileAsText(file);
                 const res = await API.importTrades(text);
                 totalImported += (res.trades_count || 0);
+                totalCashImported += (res.cash_count || 0);
             } catch (err) {
                 errors.push(`${file.name}: ${err.message}`);
             }
@@ -180,9 +182,14 @@ const ImportModal = {
                 </ul>
             `;
         } else {
+            let summaryParts = [];
+            if (totalImported > 0) summaryParts.push(`${totalImported} ${STRINGS.calendar?.tradesBadge || 'trades'}`);
+            if (totalCashImported > 0) summaryParts.push(`${totalCashImported} cash transfers`);
+            const summaryText = summaryParts.length > 0 ? summaryParts.join(' & ') : `0 ${STRINGS.calendar?.tradesBadge || 'trades'}`;
+
             statusBox.innerHTML = `
                 <div style="color: var(--color-profit); font-weight: 700;">
-                    ✓ ${STRINGS.import?.successMsg || 'Successfully processed statement.'} (${totalImported} ${STRINGS.calendar?.tradesBadge || 'trades'})
+                    ✓ ${STRINGS.import?.successMsg || 'Successfully processed statement.'} (${summaryText})
                 </div>
             `;
             // Refresh current view & sync status

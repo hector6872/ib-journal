@@ -173,7 +173,8 @@ async def api_trades_import(request: Request):
         cash_txs = []
 
         # 1. Check XML
-        if text.strip().startswith("<?xml") or "<FlexStatement" in text or "<Trade" in text or "<CashTransaction" in text:
+        trimmed = text.strip()
+        if trimmed.startswith("<?xml") or "<FlexStatement" in text or "<FlexQueryResponse" in text or "<Trade" in text or "<CashTransaction" in text or "<Order" in text:
             import tempfile
             from scripts.import_trades import parse_xml_cash_transactions, parse_xml_file
             with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", encoding="utf-8", delete=False) as tmp:
@@ -186,7 +187,7 @@ async def api_trades_import(request: Request):
                 if tmp_path.exists():
                     tmp_path.unlink()
         # 2. Check JSON
-        elif text.strip().startswith("[") or text.strip().startswith("{"):
+        elif trimmed.startswith("[") or trimmed.startswith("{"):
             try:
                 import json
                 data = json.loads(text)
@@ -197,28 +198,44 @@ async def api_trades_import(request: Request):
         # 3. Check CSV
         if not trades and not cash_txs:
             from scripts.import_trades import (
+                ACCOUNT_SECTIONS,
+                CASH_SECTIONS,
+                TRADES_SECTIONS,
+                detect_csv_delimiter,
                 parse_csv_cash_transactions,
+                parse_csv_line_tokens,
                 parse_generic_ibkr_csv,
                 parse_ibkr_activity_statement_csv,
             )
             lines = text.splitlines()
-            is_activity = any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") or line_item.startswith("Deposits & Withdrawals,") for line_item in lines)
+            delimiter = detect_csv_delimiter(lines)
+
+            # Check if this is an activity statement
+            is_activity = False
+            for line_item in lines[:30]:
+                tokens = parse_csv_line_tokens(line_item, delimiter)
+                if len(tokens) >= 2:
+                    sec = tokens[0].strip().lower().strip('"')
+                    if sec in TRADES_SECTIONS or sec in ACCOUNT_SECTIONS or sec in CASH_SECTIONS or sec in ("statement", "extracto", "informe", "estado"):
+                        is_activity = True
+                        break
+
             if is_activity:
                 trades = parse_ibkr_activity_statement_csv(lines)
                 cash_txs = parse_csv_cash_transactions(lines)
+                # Fallback to generic parser if activity statement parser found 0 trades
+                if not trades:
+                    trades = parse_generic_ibkr_csv(lines)
             else:
                 trades = parse_generic_ibkr_csv(lines)
+                if not trades:
+                    trades = parse_ibkr_activity_statement_csv(lines)
+                cash_txs = parse_csv_cash_transactions(lines)
 
-        lines = text.splitlines() if not trades and not cash_txs else []
-        is_valid_ibkr_doc = (
-            "<FlexStatement" in text or "<FlexQueryResponse" in text or "<Trade" in text or "<CashTransaction" in text or
-            any(line_item.startswith("Trades,") or line_item.startswith("Statement,") or line_item.startswith("Account Information,") or line_item.startswith("Deposits & Withdrawals,") or line_item.startswith("Financial Instrument Information,") for line_item in lines)
-        )
-
-        if not trades and not cash_txs and not is_valid_ibkr_doc:
+        if not trades and not cash_txs:
             raise HTTPException(
                 status_code=400,
-                detail="Could not extract valid trades or cash transactions from provided content. Please ensure it is an IBKR Activity Statement CSV or Flex XML/CSV export."
+                detail="No trade executions or cash transactions found in statement. Please ensure it is an IBKR Activity Statement CSV/XML, Flex Query export, or Trade Confirmation report."
             )
 
         from datetime import datetime, timezone

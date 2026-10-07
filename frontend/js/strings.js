@@ -174,6 +174,7 @@ const STRINGS = {
         colStrategy: "Strategy",
         colTrades: "Trades",
         colWinRate: "Win Rate",
+        colCommissions: "Commissions",
         colNetPnl: "Net P&L",
         colSide: "Side",
         colDay: "Day",

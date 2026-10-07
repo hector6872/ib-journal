@@ -540,8 +540,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 symbol,
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-                COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
                 COALESCE(SUM(ib_commission), 0.0) as commissions,
                 COALESCE(SUM(ABS(quantity)), 0.0) as total_volume
@@ -695,9 +695,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 if tag not in tag_map_market:
                     tag_map_market[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
                 tag_map_market[tag]["trades_count"] += 1
-                if t["realized_pnl"] > 0:
+                if t["net_pnl"] > 0:
                     tag_map_market[tag]["wins"] += 1
-                elif t["realized_pnl"] < 0:
+                elif t["net_pnl"] < 0:
                     tag_map_market[tag]["losses"] += 1
                 tag_map_market[tag]["net_pnl"] += t["net_pnl"]
 
@@ -709,9 +709,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 if tag not in tag_map_local:
                     tag_map_local[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
                 tag_map_local[tag]["trades_count"] += 1
-                if t["realized_pnl"] > 0:
+                if t["net_pnl"] > 0:
                     tag_map_local[tag]["wins"] += 1
-                elif t["realized_pnl"] < 0:
+                elif t["net_pnl"] < 0:
                     tag_map_local[tag]["losses"] += 1
                 tag_map_local[tag]["net_pnl"] += t["net_pnl"]
 
@@ -747,8 +747,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 strftime('%w', trade_date) as day_of_week,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-                COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
             FROM trades
             {where_clause}
             GROUP BY strftime('%w', trade_date)
@@ -815,18 +815,18 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if h_market is not None and h_market in hourly_market:
                 if is_closed:
                     hourly_market[h_market]["trades_count"] += 1
-                    if t["realized_pnl"] > 0:
+                    if t["net_pnl"] > 0:
                         hourly_market[h_market]["wins"] += 1
-                    elif t["realized_pnl"] < 0:
+                    elif t["net_pnl"] < 0:
                         hourly_market[h_market]["losses"] += 1
                 hourly_market[h_market]["net_pnl"] += t["net_pnl"]
 
             if h_local is not None and h_local in hourly_local:
                 if is_closed:
                     hourly_local[h_local]["trades_count"] += 1
-                    if t["realized_pnl"] > 0:
+                    if t["net_pnl"] > 0:
                         hourly_local[h_local]["wins"] += 1
-                    elif t["realized_pnl"] < 0:
+                    elif t["net_pnl"] < 0:
                         hourly_local[h_local]["losses"] += 1
                 hourly_local[h_local]["net_pnl"] += t["net_pnl"]
 
@@ -894,9 +894,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if dur_key in duration_data:
                 if is_closed:
                     duration_data[dur_key]["trades_count"] = int(duration_data[dur_key]["trades_count"]) + 1
-                    if t["realized_pnl"] > 0:
+                    if t["net_pnl"] > 0:
                         duration_data[dur_key]["wins"] = int(duration_data[dur_key]["wins"]) + 1
-                    elif t["realized_pnl"] < 0:
+                    elif t["net_pnl"] < 0:
                         duration_data[dur_key]["losses"] = int(duration_data[dur_key]["losses"]) + 1
                 duration_data[dur_key]["net_pnl"] = float(duration_data[dur_key]["net_pnl"]) + float(t["net_pnl"])
 
@@ -943,9 +943,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 }
             if is_closed:
                 order_data[ot_label]["trades_count"] += 1
-                if t["realized_pnl"] > 0:
+                if t["net_pnl"] > 0:
                     order_data[ot_label]["wins"] += 1
-                elif t["realized_pnl"] < 0:
+                elif t["net_pnl"] < 0:
                     order_data[ot_label]["losses"] += 1
             order_data[ot_label]["net_pnl"] += t["net_pnl"]
 
@@ -982,7 +982,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             SELECT
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
             {where_clause}
@@ -1014,7 +1014,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     ELSE buy_sell
                 END as side,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
             {side_where}
@@ -1122,9 +1122,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             net = (t["realized_pnl"] or 0.0) - (t["ib_commission"] or 0.0)
             if strat_key:
                 opt_stats[strat_key]["trades_count"] += 1
-                if (t["realized_pnl"] or 0.0) > 0:
+                if net > 0:
                     opt_stats[strat_key]["wins"] += 1
-                elif (t["realized_pnl"] or 0.0) < 0:
+                elif net < 0:
                     opt_stats[strat_key]["losses"] += 1
                 opt_stats[strat_key]["net_pnl"] += net
 
@@ -1136,16 +1136,16 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if is_expired:
                 expired_count += 1
                 expired_net_pnl += net
-                if (t["realized_pnl"] or 0.0) > 0:
+                if net > 0:
                     expired_wins += 1
-                elif (t["realized_pnl"] or 0.0) < 0:
+                elif net < 0:
                     expired_losses += 1
             else:
                 manual_count += 1
                 manual_net_pnl += net
-                if (t["realized_pnl"] or 0.0) > 0:
+                if net > 0:
                     manual_wins += 1
-                elif (t["realized_pnl"] or 0.0) < 0:
+                elif net < 0:
                     manual_losses += 1
 
         total_opt_count = len(opt_rows)

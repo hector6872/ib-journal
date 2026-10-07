@@ -2705,14 +2705,14 @@ const StatsPage = {
             return `<tr><td colspan="6" style="text-align:center; color: var(--text-muted);">No symbols recorded</td></tr>`;
         }
         return symbols.map(s => {
-            const pnlClass = this.getPnlClass(s.net_pnl);
+            const pnlClass = s.trades_count > 0 ? this.getPnlClass(s.net_pnl) : (s.net_pnl !== 0 ? this.getPnlClass(s.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(s.win_rate, s.trades_count);
             return `
                 <tr>
                     <td><strong>${s.symbol}</strong></td>
                     <td><span style="font-size: 10px; color: var(--text-muted);">${s.category}</span></td>
                     <td class="mono">${s.trades_count}</td>
-                    <td class="mono ${wrClass}">${s.win_rate}%</td>
+                    <td class="mono ${wrClass}">${s.trades_count > 0 ? `${s.win_rate}%` : '--'}</td>
                     <td class="mono">${State.currency}${s.commissions.toFixed(2)}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(s.net_pnl)}</td>
                 </tr>
@@ -2725,13 +2725,13 @@ const StatsPage = {
             return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No tags recorded</td></tr>`;
         }
         return tags.map(t => {
-            const pnlClass = this.getPnlClass(t.net_pnl);
+            const pnlClass = t.trades_count > 0 ? this.getPnlClass(t.net_pnl) : (t.net_pnl !== 0 ? this.getPnlClass(t.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(t.win_rate, t.trades_count);
             return `
                 <tr>
                     <td><strong>${t.tag}</strong></td>
                     <td class="mono">${t.trades_count}</td>
-                    <td class="mono ${wrClass}">${t.win_rate}%</td>
+                    <td class="mono ${wrClass}">${t.trades_count > 0 ? `${t.win_rate}%` : '--'}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(t.net_pnl)}</td>
                 </tr>
             `;
@@ -2741,13 +2741,13 @@ const StatsPage = {
     buildDowTableRows(dow) {
         if (!dow || !dow.length) return '';
         return dow.map(d => {
-            const pnlClass = this.getPnlClass(d.net_pnl);
+            const pnlClass = d.trades_count > 0 ? this.getPnlClass(d.net_pnl) : (d.net_pnl !== 0 ? this.getPnlClass(d.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(d.win_rate, d.trades_count);
             return `
                 <tr>
                     <td><strong>${d.day_name}</strong></td>
                     <td class="mono">${d.trades_count}</td>
-                    <td class="mono ${wrClass}">${d.win_rate}%</td>
+                    <td class="mono ${wrClass}">${d.trades_count > 0 ? `${d.win_rate}%` : '--'}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(d.net_pnl)}</td>
                 </tr>
             `;
@@ -2757,13 +2757,13 @@ const StatsPage = {
     buildTodTableRows(tod) {
         if (!tod || !tod.length) return '';
         return tod.map(t => {
-            const pnlClass = this.getPnlClass(t.net_pnl);
+            const pnlClass = t.trades_count > 0 ? this.getPnlClass(t.net_pnl) : (t.net_pnl !== 0 ? this.getPnlClass(t.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(t.win_rate, t.trades_count);
             return `
                 <tr>
                     <td><strong class="mono">${t.label}</strong></td>
                     <td class="mono">${t.trades_count}</td>
-                    <td class="mono ${wrClass}">${t.win_rate}%</td>
+                    <td class="mono ${wrClass}">${t.trades_count > 0 ? `${t.win_rate}%` : '--'}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(t.net_pnl)}</td>
                 </tr>
             `;
@@ -2775,13 +2775,13 @@ const StatsPage = {
             return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No duration records</td></tr>`;
         }
         return durations.map(d => {
-            const pnlClass = this.getPnlClass(d.net_pnl);
+            const pnlClass = d.trades_count > 0 ? this.getPnlClass(d.net_pnl) : (d.net_pnl !== 0 ? this.getPnlClass(d.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(d.win_rate, d.trades_count);
             return `
                 <tr>
                     <td><strong>${d.duration}</strong></td>
                     <td class="mono">${d.trades_count}</td>
-                    <td class="mono ${wrClass}">${d.win_rate}%</td>
+                    <td class="mono ${wrClass}">${d.trades_count > 0 ? `${d.win_rate}%` : '--'}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(d.net_pnl)}</td>
                 </tr>
             `;
@@ -2793,13 +2793,13 @@ const StatsPage = {
             return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No order type records</td></tr>`;
         }
         return orderTypes.map(ot => {
-            const pnlClass = this.getPnlClass(ot.net_pnl);
+            const pnlClass = ot.trades_count > 0 ? this.getPnlClass(ot.net_pnl) : (ot.net_pnl !== 0 ? this.getPnlClass(ot.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(ot.win_rate, ot.trades_count);
             return `
                 <tr>
                     <td><strong>${ot.order_type}</strong></td>
                     <td class="mono">${ot.trades_count}</td>
-                    <td class="mono ${wrClass}">${ot.win_rate}%</td>
+                    <td class="mono ${wrClass}">${ot.trades_count > 0 ? `${ot.win_rate}%` : '--'}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(ot.net_pnl)}</td>
                 </tr>
             `;
@@ -2811,13 +2811,13 @@ const StatsPage = {
             return `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No categories</td></tr>`;
         }
         return categories.map(c => {
-            const pnlClass = this.getPnlClass(c.net_pnl);
+            const pnlClass = c.trades_count > 0 ? this.getPnlClass(c.net_pnl) : (c.net_pnl !== 0 ? this.getPnlClass(c.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(c.win_rate, c.trades_count);
             return `
                 <tr>
                     <td><strong>${c.category}</strong></td>
                     <td class="mono">${c.trades_count}</td>
-                    <td class="mono ${wrClass}">${c.win_rate}%</td>
+                    <td class="mono ${wrClass}">${c.trades_count > 0 ? `${c.win_rate}%` : '--'}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(c.net_pnl)}</td>
                 </tr>
             `;
@@ -2832,14 +2832,14 @@ const StatsPage = {
         return sides.map(s => {
             const sideUpper = (s.side || '').toUpperCase();
             const isLong = sideUpper === 'LONG' || sideUpper === 'BUY';
-            const pnlClass = this.getPnlClass(s.net_pnl);
+            const pnlClass = s.trades_count > 0 ? this.getPnlClass(s.net_pnl) : (s.net_pnl !== 0 ? this.getPnlClass(s.net_pnl) : 'pnl-neutral');
             const wrClass = this.getWinRateClass(s.win_rate, s.trades_count);
             const label = isLong ? (sp.longSideLabel || 'LONG (Buyer)') : (sp.shortSideLabel || 'SHORT (Seller)');
             return `
                 <tr>
                     <td><span class="${isLong ? 'badge-pill-profit' : 'badge-pill-loss'}">${label}</span></td>
                     <td class="mono">${s.trades_count}</td>
-                    <td class="mono ${wrClass}">${s.win_rate}%</td>
+                    <td class="mono ${wrClass}">${s.trades_count > 0 ? `${s.win_rate}%` : '--'}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;">${State.formatCurrency(s.net_pnl)}</td>
                 </tr>
             `;

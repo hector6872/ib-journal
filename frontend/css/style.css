@@ -762,10 +762,16 @@ body {
     display: none !important;
 }
 
-.page-view {
+.page-view,
+#view-stats,
+#view-calendar {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .section-header {

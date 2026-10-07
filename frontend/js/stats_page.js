@@ -1134,8 +1134,8 @@ const StatsPage = {
                                     <strong>${optionsSummary.expired_count} of ${optionsSummary.total_trades}</strong> ${sp.expiredSubNotice || 'held to expiration ($0.00 auto-settlement)'} (${optionsSummary.expired_pct}%), and <strong>${optionsSummary.manual_count}</strong> ${sp.manualSubNotice || 'actively closed in the market before expiry'} (${optionsSummary.manual_pct}%).
                                 </div>
 
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11.5px;">
-                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                <div class="options-summary-subgrid">
+                                    <div class="options-summary-subcard">
                                         <div style="display: flex; align-items: center; justify-content: space-between;">
                                             <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.expiredLabel || 'Expired at $0.00'}</span>
                                             <span style="font-size: 10px; color: var(--color-loss); font-weight: 700;">${optionsSummary.expired_pct}%</span>
@@ -1147,7 +1147,7 @@ const StatsPage = {
                                         </div>
                                     </div>
 
-                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                    <div class="options-summary-subcard">
                                         <div style="display: flex; align-items: center; justify-content: space-between;">
                                             <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.manualLabel || 'Closed in Market'}</span>
                                             <span style="font-size: 10px; color: var(--color-profit); font-weight: 700;">${optionsSummary.manual_pct}%</span>

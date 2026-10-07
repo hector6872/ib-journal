@@ -38,11 +38,29 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 - **📥 Historical Multi-Year Import**: Drag & drop IBKR Activity Statements (CSV / XML) directly in the browser or import bulk files via CLI with zero duplicate risk (`INSERT ON CONFLICT`).
 - **💬 Custom Institutional Dialogs**: Sleek modal dialogs for confirmations, notifications, and error feedback (no standard browser alerts).
 - **🌐 Centralized Copy & Translations (`strings.js`)**: 100% of UI copy, labels, metrics, and messages are centralized in a single dictionary file with automatic DOM attribute bindings (`data-i18n`, `data-i18n-title`, `data-i18n-placeholder`).
+- **📱 100% Responsive Design**: Fluid, mobile-first responsive architecture with touch-friendly navigation, collapsible cards, and adaptive SVG/Canvas charts optimized across desktops, tablets, and mobile phones.
 - **🌓 Light / Dark / System Themes**: Instant theme toggling with smooth transitions and persistent user preferences.
 
 ---
 
 ## 📸 Layout & Interface
+
+> [!IMPORTANT]
+> **Disclaimer**: The trading statistics, metrics, and performance figures displayed in the screenshots below are **synthetic demo data** generated solely for interface demonstration and screenshot purposes.
+
+<p align="center">
+  <img src="screenshots/calendar-desktop.png" alt="IBKR Trading Journal - Calendar & Overview Dashboard (Desktop)" width="742" style="max-width: 100%; height: auto;" />
+</p>
+
+<p align="center">
+  <img src="screenshots/stats-desktop.png" alt="IBKR Trading Journal - Detailed Statistics & Analytics (Desktop)" width="742" style="max-width: 100%; height: auto;" />
+</p>
+
+<p align="center">
+  <img src="screenshots/stats-mobile.png" alt="Statistics & Performance KPIs (Mobile)" width="360" style="max-width: 48%; height: auto;" />
+  &nbsp;
+  <img src="screenshots/calendar-mobile.png" alt="Calendar Weekly Breakdown (Mobile)" width="360" style="max-width: 48%; height: auto;" />
+</p>
 
 - **Executive KPI Bar**: Real-time Net Realized P&L, Win Rate %, Profit Factor, Expectancy, and Trade counts.
 - **Calendar Tab**: Week, Month, and Year calendar views with instant execution breakdown modals on any trading day.

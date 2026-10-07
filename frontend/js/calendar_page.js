@@ -154,8 +154,8 @@ const CalendarPage = {
         }
 
         const expClass = State.getPnlClass(stats.expectancy);
-        const winRateClass = !hasTrades ? 'pnl-neutral' : (parseFloat(stats.winRate) > 50 ? 'pnl-positive' : (parseFloat(stats.winRate) < 50 && parseFloat(stats.winRate) > 0 ? 'pnl-negative' : 'pnl-neutral'));
-        const pfClass = !hasTrades ? 'pnl-neutral' : (parseFloat(stats.profitFactor) >= 1 ? 'pnl-positive' : 'pnl-negative');
+        const winRateClass = State.getWinRateClass(parseFloat(stats.winRate), stats.totalTrades);
+        const pfClass = State.getRatioClass(parseFloat(stats.profitFactor), stats.totalTrades);
 
         const avgWinDisplay = stats.avgWin > 0
             ? `<span class="pnl-positive">+${State.currency}${stats.avgWin.toFixed(2)}</span>`

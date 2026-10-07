@@ -50,6 +50,24 @@ const State = {
         if (rounded > 0) return 'pnl-positive';
         if (rounded < 0) return 'pnl-negative';
         return 'pnl-neutral';
+    },
+
+    getWinRateClass(wr, totalTrades) {
+        if (totalTrades === undefined || totalTrades === null || totalTrades === 0) return 'pnl-neutral';
+        if (wr === undefined || wr === null || isNaN(wr)) return 'pnl-neutral';
+        const num = Number(wr);
+        if (num > 50) return 'pnl-positive';
+        if (num < 50) return 'pnl-negative';
+        return 'pnl-neutral';
+    },
+
+    getRatioClass(ratio, totalTrades) {
+        if (totalTrades === undefined || totalTrades === null || totalTrades === 0) return 'pnl-neutral';
+        if (ratio === undefined || ratio === null || isNaN(ratio)) return 'pnl-neutral';
+        const num = Number(ratio);
+        if (num > 1.0) return 'pnl-positive';
+        if (num < 1.0) return 'pnl-negative';
+        return 'pnl-neutral';
     }
 };
 

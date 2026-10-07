@@ -469,6 +469,7 @@ def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
     curr = (data.get("currency") or "EUR").upper()
 
     tx_id = f"MAN_{uuid.uuid4().hex[:12]}"
+    base_curr = get_active_base_currency()
     record = {
         "transaction_id": tx_id,
         "account_id": data.get("account_id", "MANUAL"),
@@ -477,7 +478,7 @@ def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
         "raw_amount": amount,
         "currency": curr,
         "raw_currency": curr,
-        "base_currency": curr,
+        "base_currency": curr or base_curr,
         "fx_rate_to_base": 1.0,
         "transaction_date": tx_date,
         "transaction_time": data.get("transaction_time", "12:00:00"),
@@ -496,3 +497,51 @@ def delete_cash_transaction(tx_id_or_id: Any) -> bool:
             WHERE id = ? OR transaction_id = ?
         """, (str(tx_id_or_id), str(tx_id_or_id)))
         return cursor.rowcount > 0
+
+
+CURRENCY_SYMBOLS: Dict[str, str] = {
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥",
+    "CAD": "C$",
+    "AUD": "A$",
+    "CHF": "CHF",
+    "CNY": "¥",
+    "HKD": "HK$",
+    "NZD": "NZ$",
+    "SEK": "kr",
+    "NOK": "kr",
+    "DKK": "kr",
+    "PLN": "zł",
+    "BRL": "R$",
+    "RUB": "₽",
+    "INR": "₹",
+    "MXN": "Mex$"
+}
+
+
+def get_active_base_currency() -> str:
+    """Returns the account's active base currency from the most recent imported trade or cash tx, defaulting to USD."""
+    try:
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT base_currency FROM trades WHERE base_currency IS NOT NULL AND base_currency != '' ORDER BY trade_date DESC, id DESC LIMIT 1;")
+            row = cursor.fetchone()
+            if row and row["base_currency"]:
+                return str(row["base_currency"]).strip().upper()
+
+            cursor.execute("SELECT base_currency FROM cash_transactions WHERE base_currency IS NOT NULL AND base_currency != '' ORDER BY transaction_date DESC, id DESC LIMIT 1;")
+            row = cursor.fetchone()
+            if row and row["base_currency"]:
+                return str(row["base_currency"]).strip().upper()
+    except Exception:
+        pass
+    return "USD"
+
+
+def get_currency_symbol(currency_code: Optional[str] = None) -> str:
+    """Maps ISO 3-letter currency code to UI display symbol, defaulting to '$' for USD."""
+    code = (currency_code or get_active_base_currency()).strip().upper()
+    return CURRENCY_SYMBOLS.get(code, "$")
+

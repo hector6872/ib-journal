@@ -18,13 +18,15 @@ from backend.analytics import (
     get_year_calendar,
     group_executions_to_trades,
 )
-from backend.config import BASE_DIR, CURRENCY_SYMBOL, HOST, PORT, is_ibkr_configured
+from backend.config import BASE_DIR, HOST, PORT, is_ibkr_configured
 
 from backend.database import (
     add_manual_cash_transaction,
     db_session,
     delete_cash_transaction,
+    get_active_base_currency,
     get_cash_summary,
+    get_currency_symbol,
     init_db,
     upsert_cash_transactions,
     upsert_trades,
@@ -80,8 +82,11 @@ app.add_middleware(
 @app.get("/api/config")
 async def get_app_config():
     """Returns frontend runtime settings."""
+    base_curr = get_active_base_currency()
+    curr_sym = get_currency_symbol(base_curr)
     return {
-        "currency_symbol": CURRENCY_SYMBOL,
+        "base_currency": base_curr,
+        "currency_symbol": curr_sym,
         "is_configured": is_ibkr_configured()
     }
 
@@ -239,8 +244,12 @@ async def api_trades_import(request: Request):
             )
 
         from datetime import datetime, timezone
+        prev_currency = get_active_base_currency()
         count = upsert_trades(trades) if trades else 0
         cash_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
+        new_currency = get_active_base_currency()
+        new_symbol = get_currency_symbol(new_currency)
+        currency_changed = (prev_currency != new_currency)
 
         with db_session() as conn:
             cursor = conn.cursor()
@@ -268,6 +277,10 @@ async def api_trades_import(request: Request):
             "status": "success",
             "trades_count": count,
             "cash_count": cash_count,
+            "base_currency": new_currency,
+            "currency_symbol": new_symbol,
+            "currency_changed": currency_changed,
+            "prev_currency": prev_currency,
             "message": f"Successfully processed statement. {msg_str} recorded."
         }
     except HTTPException:

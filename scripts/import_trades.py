@@ -321,7 +321,7 @@ def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
             "symbol": symbol,
             "description": desc or symbol,
             "asset_category": asset_cat,
-            "currency": attrs.get("currency") or "EUR",
+            "currency": attrs.get("currency") or "USD",
             "buy_sell": side,
             "quantity": qty,
             "trade_price": price,
@@ -346,9 +346,9 @@ def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
     tree = ET.parse(filepath)
     root = tree.getroot()
 
-    base_currency = "EUR"
+    base_currency = "USD"
     for node in root.iter("AccountInformation"):
-        base_currency = (node.attrib.get("baseCurrency") or "EUR").upper()
+        base_currency = (node.attrib.get("baseCurrency") or "USD").upper()
 
     for node in root.iter("CashTransaction"):
         attrs = node.attrib
@@ -457,7 +457,7 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
     """Parses Deposits & Withdrawals and Cash Transactions from IBKR Activity CSV (multilingual)."""
     cash_txs: List[Dict[str, Any]] = []
     account_id = ""
-    base_currency = "EUR"
+    base_currency = "USD"
     fx_rates_to_base: Dict[str, float] = {}
 
     delimiter = detect_csv_delimiter(lines)
@@ -729,7 +729,7 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
     headers: List[str] = []
     trades_section_name: str = ""
     account_id = ""
-    base_currency = "EUR"
+    base_currency = "USD"
     fx_rates_to_base: Dict[str, float] = {}
 
     delimiter = detect_csv_delimiter(lines)
@@ -826,8 +826,13 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             raw_comm = abs(clean_num(get_field_val(row_dict, "commission")))
             raw_pnl = clean_num(get_field_val(row_dict, "realized_pnl"))
 
-            if "comm in eur" in headers and base_currency == "EUR" and row_dict.get("comm in eur"):
-                comm_in_base = raw_comm
+            base_comm_key = f"comm in {base_currency.lower()}"
+            if base_comm_key in headers and row_dict.get(base_comm_key):
+                comm_in_base = abs(clean_num(row_dict.get(base_comm_key)))
+            elif "comm in eur" in headers and base_currency == "EUR" and row_dict.get("comm in eur"):
+                comm_in_base = abs(clean_num(row_dict.get("comm in eur")))
+            elif "comm in usd" in headers and base_currency == "USD" and row_dict.get("comm in usd"):
+                comm_in_base = abs(clean_num(row_dict.get("comm in usd")))
             else:
                 comm_in_base = round(raw_comm * fx_rate, 4)
 

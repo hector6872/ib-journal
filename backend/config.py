@@ -58,9 +58,6 @@ def is_production() -> bool:
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
-# Display Settings
-CURRENCY_SYMBOL = os.getenv("CURRENCY_SYMBOL", "$")
-
 # Sync Settings
 SYNC_MODE = os.getenv("SYNC_MODE", "global").strip().lower()
 SYNC_INTERVAL_MINUTES = int(os.getenv("SYNC_INTERVAL_MINUTES", "60"))

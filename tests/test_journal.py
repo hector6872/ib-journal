@@ -660,9 +660,31 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
             self.assertEqual(count, 1)
             self.assertEqual(cash_count, 1)
 
+    def test_dynamic_base_currency_and_symbols(self):
+        """Verifies get_active_base_currency and get_currency_symbol default to USD and dynamically resolve from imported data."""
+        from backend.database import get_active_base_currency, get_currency_symbol, upsert_trades
 
+        # Empty DB defaults to USD and $
+        self.assertEqual(get_active_base_currency(), "USD")
+        self.assertEqual(get_currency_symbol(), "$")
+        self.assertEqual(get_currency_symbol("EUR"), "€")
+        self.assertEqual(get_currency_symbol("GBP"), "£")
+        self.assertEqual(get_currency_symbol("JPY"), "¥")
+        self.assertEqual(get_currency_symbol("CHF"), "CHF")
 
-class TestTradeGrouping(unittest.TestCase):
+        # After importing trade with base_currency EUR, active currency updates to EUR
+        upsert_trades([{
+            "ib_exec_id": "TEST_CURR_1",
+            "symbol": "AAPL",
+            "currency": "USD",
+            "base_currency": "EUR",
+            "quantity": 10.0,
+            "trade_price": 150.0,
+            "trade_date": "2023-01-01",
+            "trade_time": "10:00:00"
+        }])
+        self.assertEqual(get_active_base_currency(), "EUR")
+        self.assertEqual(get_currency_symbol(), "€")
     def test_group_executions_to_trades(self):
         from backend.analytics import group_executions_to_trades, format_trade_duration
 

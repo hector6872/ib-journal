@@ -25,7 +25,13 @@ const StatsPage = {
         dow: 'chart',
         tod: 'chart',
         duration: 'chart',
-        order_type: 'chart'
+        order_type: 'chart',
+        stk_sizing: 'chart',
+        opt_sizing: 'chart'
+    },
+    sizingDimension: {
+        stock: 'capital',
+        option: 'premium'
     },
     tableSort: {
         symbol: { col: 'net_pnl', dir: 'desc' },
@@ -36,7 +42,11 @@ const StatsPage = {
         order_type: { col: 'net_pnl', dir: 'desc' },
         category: { col: 'net_pnl', dir: 'desc' },
         side: { col: 'net_pnl', dir: 'desc' },
-        option_strategy: { col: 'net_pnl', dir: 'desc' }
+        option_strategy: { col: 'net_pnl', dir: 'desc' },
+        stk_notional: { col: 'net_pnl', dir: 'desc' },
+        stk_shares: { col: 'net_pnl', dir: 'desc' },
+        opt_contracts: { col: 'net_pnl', dir: 'desc' },
+        opt_premium: { col: 'net_pnl', dir: 'desc' }
     },
     equityCurveMetrics: {
         cum_pnl: true,
@@ -68,6 +78,7 @@ const StatsPage = {
             this.rollingWindow = String(SettingsManager.get('stats_rolling_window', this.rollingWindow));
             this.activeMetrics = Object.assign({}, this.activeMetrics, SettingsManager.get('stats_active_metrics', null));
             this.viewModes = Object.assign({}, this.viewModes, SettingsManager.get('stats_view_modes', null));
+            this.sizingDimension = Object.assign({}, this.sizingDimension, SettingsManager.get('stats_sizing_dimension', null));
             this.tableSort = Object.assign({}, this.tableSort, SettingsManager.get('stats_table_sort', null));
             this.equityCurveMetrics = Object.assign({}, this.equityCurveMetrics, SettingsManager.get('stats_equity_curve_metrics', null));
         }
@@ -238,7 +249,11 @@ const StatsPage = {
             order_type: this.data.order_types,
             category: this.data.categories,
             side: this.data.sides,
-            option_strategy: this.data.option_strategies
+            option_strategy: this.data.option_strategies,
+            stk_notional: this.data.stock_sizing_notional,
+            stk_shares: this.data.stock_sizing_shares,
+            opt_contracts: this.data.option_sizing_contracts,
+            opt_premium: this.data.option_sizing_premium
         };
         const builderMap = {
             symbol: (items) => this.buildSymbolTableRows(items),
@@ -249,7 +264,11 @@ const StatsPage = {
             order_type: (items) => this.buildOrderTypeTableRows(items),
             category: (items) => this.buildCategoryTableRows(items),
             side: (items) => this.buildSideTableRows(items),
-            option_strategy: (items) => this.buildOptionStrategyTableRows(items)
+            option_strategy: (items) => this.buildOptionStrategyTableRows(items),
+            stk_notional: (items) => this.buildSizingTableRows(items),
+            stk_shares: (items) => this.buildSizingTableRows(items),
+            opt_contracts: (items) => this.buildSizingTableRows(items),
+            opt_premium: (items) => this.buildSizingTableRows(items)
         };
 
         const tbody = document.getElementById(`tbody-table-${tableTarget}`);
@@ -325,6 +344,11 @@ const StatsPage = {
         const sides = data.sides || [];
         const optionStrategies = data.option_strategies || [];
         const optionsSummary = data.options_summary || {};
+        const stkNotional = data.stock_sizing_notional || [];
+        const stkShares = data.stock_sizing_shares || [];
+        const optContracts = data.option_sizing_contracts || [];
+        const optPremium = data.option_sizing_premium || [];
+        const sizingSummary = data.sizing_summary || null;
 
         // Update global header banner
         if (typeof StatsController !== 'undefined' && StatsController.renderOverview) {
@@ -1152,6 +1176,188 @@ const StatsPage = {
                             </div>
                         ` : ''}
                     </div>
+
+                    <!-- 14. POSITION SIZING & RISK EXPOSURE (Stocks & Options) -->
+                    <div class="stats-panel full-width" style="grid-column: 1 / -1;" id="sec-position-sizing">
+                        <div class="section-header" style="margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <h3 class="section-title">${sp.positionSizingTitle || 'POSITION SIZING & RISK EXPOSURE'}</h3>
+                                ${this.renderInfoIcon(sp.tipPositionSizing)}
+                            </div>
+                        </div>
+
+                        <div class="stats-panels-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px;">
+                            <!-- Card 1: Stocks Position Sizing -->
+                            <div class="stats-panel" id="card-stk-sizing" style="padding: 16px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 12px;">
+                                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <h4 style="font-size: 13px; font-weight: 700; color: var(--text-main); margin: 0;">${sp.stocksSizingTitle || 'Stocks Position Sizing'}</h4>
+                                        ${this.renderInfoIcon(sp.tipStocksSizing || sp.tipPositionSizing)}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <!-- Dimension Toggle: Capital vs Shares -->
+                                        <div class="segmented-control" id="control-stk-sizing-dim">
+                                            <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'capital' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="capital">${sp.stockMetricCapital || 'Capital ($/€)'}</button>
+                                            <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'shares' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="shares">${sp.stockMetricShares || 'Shares'}</button>
+                                        </div>
+                                        <!-- View Toggle: Chart vs Table -->
+                                        <div class="segmented-control">
+                                            <button type="button" class="segmented-btn ${this.viewModes.stk_sizing === 'chart' ? 'active' : ''}" data-view-target="stk_sizing" data-view-val="chart">${sp.chartView}</button>
+                                            <button type="button" class="segmented-btn ${this.viewModes.stk_sizing === 'table' ? 'active' : ''}" data-view-target="stk_sizing" data-view-val="table">${sp.tableView}</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                ${sizingSummary ? `
+                                    <div class="options-summary-subcard" style="padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
+                                            <div style="display: flex; gap: 6px; align-items: baseline;">
+                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
+                                                <span class="mono pnl-positive" style="font-weight: 700;">${sizingSummary.stk_win_avg_shares} ${sp.sharesUnit || 'shares'} (${State.formatCurrency(sizingSummary.stk_win_avg_capital)})</span>
+                                            </div>
+                                            <div style="display: flex; gap: 6px; align-items: baseline;">
+                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
+                                                <span class="mono pnl-negative" style="font-weight: 700;">${sizingSummary.stk_loss_avg_shares} ${sp.sharesUnit || 'shares'} (${State.formatCurrency(sizingSummary.stk_loss_avg_capital)})</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+
+                                <!-- STOCKS: Capital Dimension Container -->
+                                <div id="dim-wrap-stk-capital" class="${this.sizingDimension.stock === 'capital' ? '' : 'hidden'}">
+                                    <div id="wrap-stk_notional-chart" class="chart-container ${this.viewModes.stk_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                        <canvas id="chart-stk_notional"></canvas>
+                                    </div>
+                                    <div id="wrap-stk_notional-table" class="stats-table-wrapper ${this.viewModes.stk_sizing === 'table' ? '' : 'hidden'}">
+                                        <table class="institutional-table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'bracket')}" data-sort-table="stk_notional" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('stk_notional', 'bracket')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'trades_count')}" data-sort-table="stk_notional" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('stk_notional', 'trades_count')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'win_rate')}" data-sort-table="stk_notional" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('stk_notional', 'win_rate')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'profit_factor')}" data-sort-table="stk_notional" data-sort-col="profit_factor">PF ${this.getSortIndicator('stk_notional', 'profit_factor')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'avg_trade_pnl')}" data-sort-table="stk_notional" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('stk_notional', 'avg_trade_pnl')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'net_pnl')}" data-sort-table="stk_notional" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('stk_notional', 'net_pnl')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-table-stk_notional">
+                                                ${this.buildSizingTableRows(this.sortData('stk_notional', stkNotional))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- STOCKS: Shares Dimension Container -->
+                                <div id="dim-wrap-stk-shares" class="${this.sizingDimension.stock === 'shares' ? '' : 'hidden'}">
+                                    <div id="wrap-stk_shares-chart" class="chart-container ${this.viewModes.stk_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                        <canvas id="chart-stk_shares"></canvas>
+                                    </div>
+                                    <div id="wrap-stk_shares-table" class="stats-table-wrapper ${this.viewModes.stk_sizing === 'table' ? '' : 'hidden'}">
+                                        <table class="institutional-table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'bracket')}" data-sort-table="stk_shares" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('stk_shares', 'bracket')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'trades_count')}" data-sort-table="stk_shares" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('stk_shares', 'trades_count')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'win_rate')}" data-sort-table="stk_shares" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('stk_shares', 'win_rate')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'profit_factor')}" data-sort-table="stk_shares" data-sort-col="profit_factor">PF ${this.getSortIndicator('stk_shares', 'profit_factor')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'avg_trade_pnl')}" data-sort-table="stk_shares" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('stk_shares', 'avg_trade_pnl')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'net_pnl')}" data-sort-table="stk_shares" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('stk_shares', 'net_pnl')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-table-stk_shares">
+                                                ${this.buildSizingTableRows(this.sortData('stk_shares', stkShares))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Options Position Sizing -->
+                            <div class="stats-panel" id="card-opt-sizing" style="padding: 16px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 12px;">
+                                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <h4 style="font-size: 13px; font-weight: 700; color: var(--text-main); margin: 0;">${sp.optionsSizingTitle || 'Options Position Sizing'}</h4>
+                                        ${this.renderInfoIcon(sp.tipOptionsSizing || sp.tipPositionSizing)}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <!-- Dimension Toggle: Premium vs Contracts -->
+                                        <div class="segmented-control" id="control-opt-sizing-dim">
+                                            <button type="button" class="segmented-btn ${this.sizingDimension.option === 'premium' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="premium">${sp.optionMetricPremium || 'Total Premium ($/€)'}</button>
+                                            <button type="button" class="segmented-btn ${this.sizingDimension.option === 'contracts' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="contracts">${sp.optionMetricContracts || 'Contracts'}</button>
+                                        </div>
+                                        <!-- View Toggle: Chart vs Table -->
+                                        <div class="segmented-control">
+                                            <button type="button" class="segmented-btn ${this.viewModes.opt_sizing === 'chart' ? 'active' : ''}" data-view-target="opt_sizing" data-view-val="chart">${sp.chartView}</button>
+                                            <button type="button" class="segmented-btn ${this.viewModes.opt_sizing === 'table' ? 'active' : ''}" data-view-target="opt_sizing" data-view-val="table">${sp.tableView}</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                ${sizingSummary ? `
+                                    <div class="options-summary-subcard" style="padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
+                                            <div style="display: flex; gap: 6px; align-items: baseline;">
+                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
+                                                <span class="mono pnl-positive" style="font-weight: 700;">${sizingSummary.opt_win_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.formatCurrency(sizingSummary.opt_win_avg_premium)})</span>
+                                            </div>
+                                            <div style="display: flex; gap: 6px; align-items: baseline;">
+                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
+                                                <span class="mono pnl-negative" style="font-weight: 700;">${sizingSummary.opt_loss_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.formatCurrency(sizingSummary.opt_loss_avg_premium)})</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+
+                                <!-- OPTIONS: Premium Dimension Container -->
+                                <div id="dim-wrap-opt-premium" class="${this.sizingDimension.option === 'premium' ? '' : 'hidden'}">
+                                    <div id="wrap-opt_premium-chart" class="chart-container ${this.viewModes.opt_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                        <canvas id="chart-opt_premium"></canvas>
+                                    </div>
+                                    <div id="wrap-opt_premium-table" class="stats-table-wrapper ${this.viewModes.opt_sizing === 'table' ? '' : 'hidden'}">
+                                        <table class="institutional-table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'bracket')}" data-sort-table="opt_premium" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('opt_premium', 'bracket')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'trades_count')}" data-sort-table="opt_premium" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('opt_premium', 'trades_count')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'win_rate')}" data-sort-table="opt_premium" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('opt_premium', 'win_rate')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'profit_factor')}" data-sort-table="opt_premium" data-sort-col="profit_factor">PF ${this.getSortIndicator('opt_premium', 'profit_factor')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'avg_trade_pnl')}" data-sort-table="opt_premium" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('opt_premium', 'avg_trade_pnl')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'net_pnl')}" data-sort-table="opt_premium" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('opt_premium', 'net_pnl')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-table-opt_premium">
+                                                ${this.buildSizingTableRows(this.sortData('opt_premium', optPremium))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- OPTIONS: Contracts Dimension Container -->
+                                <div id="dim-wrap-opt-contracts" class="${this.sizingDimension.option === 'contracts' ? '' : 'hidden'}">
+                                    <div id="wrap-opt_contracts-chart" class="chart-container ${this.viewModes.opt_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                        <canvas id="chart-opt_contracts"></canvas>
+                                    </div>
+                                    <div id="wrap-opt_contracts-table" class="stats-table-wrapper ${this.viewModes.opt_sizing === 'table' ? '' : 'hidden'}">
+                                        <table class="institutional-table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'bracket')}" data-sort-table="opt_contracts" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('opt_contracts', 'bracket')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'trades_count')}" data-sort-table="opt_contracts" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('opt_contracts', 'trades_count')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'win_rate')}" data-sort-table="opt_contracts" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('opt_contracts', 'win_rate')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'profit_factor')}" data-sort-table="opt_contracts" data-sort-col="profit_factor">PF ${this.getSortIndicator('opt_contracts', 'profit_factor')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'avg_trade_pnl')}" data-sort-table="opt_contracts" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('opt_contracts', 'avg_trade_pnl')}</th>
+                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'net_pnl')}" data-sort-table="opt_contracts" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('opt_contracts', 'net_pnl')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-table-opt_contracts">
+                                                ${this.buildSizingTableRows(this.sortData('opt_contracts', optContracts))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -1314,7 +1520,7 @@ const StatsPage = {
             btnToggleMetrics.addEventListener('click', () => this.toggleAllMetrics());
         }
 
-        // Chart / Table view switchers in 2x2 breakdowns
+        // Chart / Table view switchers
         document.querySelectorAll('[data-view-target]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const target = btn.getAttribute('data-view-target');
@@ -1331,21 +1537,90 @@ const StatsPage = {
                     btn.classList.add('active');
                 }
 
-                // Toggle visibility
-                const chartWrap = document.getElementById(`wrap-${target}-chart`);
-                const tableWrap = document.getElementById(`wrap-${target}-table`);
-                if (val === 'chart') {
-                    if (chartWrap) chartWrap.classList.remove('hidden');
-                    if (tableWrap) tableWrap.classList.add('hidden');
-                    if (target === 'symbol') this.renderSymbolChart();
-                    if (target === 'tag') this.renderTagChart();
-                    if (target === 'dow') this.renderDowChart();
-                    if (target === 'tod') this.renderTodChart();
-                    if (target === 'duration') this.renderDurationChart();
-                    if (target === 'order_type') this.renderOrderTypeChart();
+                if (target === 'stk_sizing') {
+                    const isChart = val === 'chart';
+                    const c1 = document.getElementById('wrap-stk_notional-chart');
+                    const t1 = document.getElementById('wrap-stk_notional-table');
+                    const c2 = document.getElementById('wrap-stk_shares-chart');
+                    const t2 = document.getElementById('wrap-stk_shares-table');
+                    if (c1) c1.classList.toggle('hidden', !isChart);
+                    if (t1) t1.classList.toggle('hidden', isChart);
+                    if (c2) c2.classList.toggle('hidden', !isChart);
+                    if (t2) t2.classList.toggle('hidden', isChart);
+                    if (isChart) {
+                        if (this.sizingDimension.stock === 'capital') this.renderStockNotionalChart();
+                        else this.renderStockSharesChart();
+                    }
+                } else if (target === 'opt_sizing') {
+                    const isChart = val === 'chart';
+                    const c1 = document.getElementById('wrap-opt_premium-chart');
+                    const t1 = document.getElementById('wrap-opt_premium-table');
+                    const c2 = document.getElementById('wrap-opt_contracts-chart');
+                    const t2 = document.getElementById('wrap-opt_contracts-table');
+                    if (c1) c1.classList.toggle('hidden', !isChart);
+                    if (t1) t1.classList.toggle('hidden', isChart);
+                    if (c2) c2.classList.toggle('hidden', !isChart);
+                    if (t2) t2.classList.toggle('hidden', isChart);
+                    if (isChart) {
+                        if (this.sizingDimension.option === 'premium') this.renderOptionPremiumChart();
+                        else this.renderOptionContractsChart();
+                    }
                 } else {
-                    if (chartWrap) chartWrap.classList.add('hidden');
-                    if (tableWrap) tableWrap.classList.remove('hidden');
+                    // Toggle standard breakdown visibility
+                    const chartWrap = document.getElementById(`wrap-${target}-chart`);
+                    const tableWrap = document.getElementById(`wrap-${target}-table`);
+                    if (val === 'chart') {
+                        if (chartWrap) chartWrap.classList.remove('hidden');
+                        if (tableWrap) tableWrap.classList.add('hidden');
+                        if (target === 'symbol') this.renderSymbolChart();
+                        if (target === 'tag') this.renderTagChart();
+                        if (target === 'dow') this.renderDowChart();
+                        if (target === 'tod') this.renderTodChart();
+                        if (target === 'duration') this.renderDurationChart();
+                        if (target === 'order_type') this.renderOrderTypeChart();
+                    } else {
+                        if (chartWrap) chartWrap.classList.add('hidden');
+                        if (tableWrap) tableWrap.classList.remove('hidden');
+                    }
+                }
+            });
+        });
+
+        // Sizing Sub-Dimension Switcher (Capital vs Shares for Stocks, Premium vs Contracts for Options)
+        document.querySelectorAll('[data-sizing-dim]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const dimType = btn.getAttribute('data-sizing-dim'); // 'stock' | 'option'
+                const dimVal = btn.getAttribute('data-dim-val'); // 'capital'|'shares' | 'premium'|'contracts'
+                this.sizingDimension[dimType] = dimVal;
+                if (typeof SettingsManager !== 'undefined') {
+                    SettingsManager.set('stats_sizing_dimension', this.sizingDimension);
+                }
+
+                // Update active class on segmented control
+                const group = btn.closest('.segmented-control');
+                if (group) {
+                    group.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                }
+
+                if (dimType === 'stock') {
+                    const capWrap = document.getElementById('dim-wrap-stk-capital');
+                    const shWrap = document.getElementById('dim-wrap-stk-shares');
+                    if (capWrap) capWrap.classList.toggle('hidden', dimVal !== 'capital');
+                    if (shWrap) shWrap.classList.toggle('hidden', dimVal !== 'shares');
+                    if (this.viewModes.stk_sizing === 'chart') {
+                        if (dimVal === 'capital') this.renderStockNotionalChart();
+                        else this.renderStockSharesChart();
+                    }
+                } else if (dimType === 'option') {
+                    const premWrap = document.getElementById('dim-wrap-opt-premium');
+                    const ctrWrap = document.getElementById('dim-wrap-opt-contracts');
+                    if (premWrap) premWrap.classList.toggle('hidden', dimVal !== 'premium');
+                    if (ctrWrap) ctrWrap.classList.toggle('hidden', dimVal !== 'contracts');
+                    if (this.viewModes.opt_sizing === 'chart') {
+                        if (dimVal === 'premium') this.renderOptionPremiumChart();
+                        else this.renderOptionContractsChart();
+                    }
                 }
             });
         });
@@ -1494,6 +1769,14 @@ const StatsPage = {
         this.renderTodChart();
         this.renderDurationChart();
         this.renderOrderTypeChart();
+        if (this.viewModes.stk_sizing === 'chart') {
+            if (this.sizingDimension.stock === 'capital') this.renderStockNotionalChart();
+            else this.renderStockSharesChart();
+        }
+        if (this.viewModes.opt_sizing === 'chart') {
+            if (this.sizingDimension.option === 'premium') this.renderOptionPremiumChart();
+            else this.renderOptionContractsChart();
+        }
     },
 
     reRenderCharts() {
@@ -1530,6 +1813,7 @@ const StatsPage = {
                 }]
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
@@ -1743,6 +2027,7 @@ const StatsPage = {
                 datasets: datasets
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
@@ -1832,6 +2117,7 @@ const StatsPage = {
                 datasets: datasets
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
@@ -1918,6 +2204,7 @@ const StatsPage = {
                 }]
             },
             options: {
+                animation: false,
                 indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
@@ -2006,6 +2293,7 @@ const StatsPage = {
                 }]
             },
             options: {
+                animation: false,
                 indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
@@ -2087,6 +2375,7 @@ const StatsPage = {
                 }]
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
@@ -2148,6 +2437,7 @@ const StatsPage = {
                 }]
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
@@ -2216,6 +2506,7 @@ const StatsPage = {
                 }]
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
@@ -2276,6 +2567,7 @@ const StatsPage = {
                 }]
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
@@ -2306,6 +2598,105 @@ const StatsPage = {
                 }
             }
         });
+    },
+
+    // 11. Position Sizing Charts & Builders
+    renderSizingChart(canvasId, chartKey, dataList) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        if (this.charts[chartKey]) this.charts[chartKey].destroy();
+
+        const theme = this.getThemeColors();
+        const items = dataList || [];
+
+        const labels = items.map(d => d.bracket);
+        const values = items.map(d => d.net_pnl);
+        const colors = values.map(v => v >= 0 ? theme.profitBar : theme.lossBar);
+        const borders = values.map(v => v >= 0 ? theme.profit : theme.loss);
+
+        this.charts[chartKey] = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels.length ? labels : ['--'],
+                datasets: [{
+                    label: 'Net P&L',
+                    data: values.length ? values : [0],
+                    backgroundColor: colors,
+                    borderColor: borders,
+                    borderWidth: 1,
+                    borderRadius: 3
+                }]
+            },
+            options: {
+                animation: false,
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const idx = context.dataIndex;
+                                const item = items[idx];
+                                return ` Net P&L: ${State.formatCurrency(context.parsed.y)} (${item ? item.trades_count : 0} trades, ${item ? item.win_rate : 0}% WR, PF: ${item ? item.profit_factor : 0})`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: theme.textMain, font: { weight: '700', size: 10 } }
+                    },
+                    y: {
+                        grid: { color: theme.grid },
+                        ticks: {
+                            color: theme.text,
+                            font: { family: 'SF Mono, monospace', size: 10 },
+                            callback: (val) => `${State.currency}${val}`
+                        }
+                    }
+                }
+            }
+        });
+    },
+
+    renderStockNotionalChart() {
+        this.renderSizingChart('chart-stk_notional', 'stkNotional', (this.data && this.data.stock_sizing_notional) || []);
+    },
+
+    renderStockSharesChart() {
+        this.renderSizingChart('chart-stk_shares', 'stkShares', (this.data && this.data.stock_sizing_shares) || []);
+    },
+
+    renderOptionContractsChart() {
+        this.renderSizingChart('chart-opt_contracts', 'optContracts', (this.data && this.data.option_sizing_contracts) || []);
+    },
+
+    renderOptionPremiumChart() {
+        this.renderSizingChart('chart-opt_premium', 'optPremium', (this.data && this.data.option_sizing_premium) || []);
+    },
+
+    buildSizingTableRows(items) {
+        if (!items || !items.length) {
+            return `<tr><td colspan="6" style="text-align:center; color: var(--text-muted);">No sizing records</td></tr>`;
+        }
+        return items.map(s => {
+            const pnlClass = s.trades_count > 0 ? this.getPnlClass(s.net_pnl) : 'pnl-neutral';
+            const wrClass = s.trades_count > 0 ? this.getWinRateClass(s.win_rate, s.trades_count) : 'pnl-neutral';
+            const pfClass = s.trades_count > 0 ? this.getRatioClass(s.profit_factor, s.trades_count) : 'pnl-neutral';
+            const avgPnlClass = s.trades_count > 0 ? this.getPnlClass(s.avg_trade_pnl) : 'pnl-neutral';
+            return `
+                <tr>
+                    <td><strong>${s.bracket}</strong></td>
+                    <td class="mono">${s.trades_count}</td>
+                    <td class="mono ${wrClass}">${s.trades_count > 0 ? `${s.win_rate}%` : '--'}</td>
+                    <td class="mono ${pfClass}">${s.trades_count > 0 ? s.profit_factor.toFixed(2) : '--'}</td>
+                    <td class="mono ${avgPnlClass}">${s.trades_count > 0 ? State.formatCurrency(s.avg_trade_pnl) : '--'}</td>
+                    <td class="mono ${pnlClass}" style="font-weight: 700;">${s.trades_count > 0 ? State.formatCurrency(s.net_pnl) : '--'}</td>
+                </tr>
+            `;
+        }).join('');
     },
 
     // Table Row Builders

@@ -10,6 +10,11 @@ const App = {
             await SettingsManager.init();
         }
 
+        // Global Chart.js Performance - Animations Off for instant snappy renders
+        if (typeof Chart !== 'undefined') {
+            Chart.defaults.animation = false;
+        }
+
         // 2. Initialize Theme Manager (Light by default, Dark, System)
         ThemeManager.init();
 

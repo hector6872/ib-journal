@@ -278,7 +278,27 @@ const STRINGS = {
         pnlByDurationTitle: "P&L BY HOLDING DURATION",
         pnlByOrderTypeTitle: "P&L BY ORDER TYPE",
         colDuration: "Holding Duration",
-        colOrderType: "Order Type"
+        colOrderType: "Order Type",
+
+        // Position Sizing
+        positionSizingTitle: "POSITION SIZING & RISK EXPOSURE",
+        tipPositionSizing: "Analyze trading performance and psychological edge based on position sizing. Tracks Win Rate, Profit Factor, and Net P&L distribution across share count, capital invested, contract count, and total option premium.",
+        stocksSizingTitle: "Stocks Position Sizing",
+        optionsSizingTitle: "Options Position Sizing",
+        tipStocksSizing: "Analyze performance on stocks/ETFs broken down by capital invested ($/€) or share count.",
+        tipOptionsSizing: "Analyze performance on options broken down by total premium invested ($/€) or contract count.",
+        stockMetricCapital: "Capital ($/€)",
+        stockMetricShares: "Shares",
+        optionMetricPremium: "Total Premium ($/€)",
+        optionMetricContracts: "Contracts",
+        colBracket: "Size Bracket",
+        colAvgTradePnl: "Avg P&L / Trade",
+        colProfitFactor: "Profit Factor",
+        sizingWinVsLossTitle: "Size Asymmetry (Wins vs Losses)",
+        sizingWinAvgLabel: "Avg Winner Size",
+        sizingLossAvgLabel: "Avg Loser Size",
+        sharesUnit: "shares",
+        contractsUnit: "contracts"
     },
 
     // Day Trade Modal

@@ -329,6 +329,7 @@ const CalendarPage = {
                 ]
             },
             options: {
+                animation: false,
                 responsive: true,
                 maintainAspectRatio: false,
                 resizeDelay: 50,

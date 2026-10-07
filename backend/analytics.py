@@ -1181,6 +1181,189 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 }
             )
 
+        # 10. Position Sizing Breakdowns (Stocks & Options)
+        sizing_where = "WHERE (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+        if where_clause:
+            sizing_where = f"{where_clause} AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+
+        cursor.execute(
+            f"""
+            SELECT
+                asset_category,
+                quantity,
+                trade_price,
+                trade_money,
+                realized_pnl,
+                ib_commission
+            FROM trades
+            {sizing_where}
+        """,
+            params,
+        )
+        sizing_rows = cursor.fetchall()
+
+        stock_notional_brackets = [
+            {"key": "stk_cap_under_250", "label": "< $250", "min": 0, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_250_500", "label": "$250 – $500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_500_1k", "label": "$500 – $1,000", "min": 500, "max": 1000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_1k_2.5k", "label": "$1,000 – $2,500", "min": 1000, "max": 2500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_2.5k_5k", "label": "$2,500 – $5,000", "min": 2500, "max": 5000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_5k_10k", "label": "$5,000 – $10,000", "min": 5000, "max": 10000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_over_10k", "label": "> $10,000", "min": 10000, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        ]
+
+        stock_shares_brackets = [
+            {"key": "stk_sh_1_10", "label": "1 – 10 shares", "min": 1, "max": 10, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_sh_11_25", "label": "11 – 25 shares", "min": 11, "max": 25, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_sh_26_50", "label": "26 – 50 shares", "min": 26, "max": 50, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_sh_51_100", "label": "51 – 100 shares", "min": 51, "max": 100, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_sh_101_250", "label": "101 – 250 shares", "min": 101, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_sh_over_250", "label": "> 250 shares", "min": 251, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        ]
+
+        option_contracts_brackets = [
+            {"key": "opt_cnt_1", "label": "1 contract", "min": 1, "max": 1, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_cnt_2_3", "label": "2 – 3 contracts", "min": 2, "max": 3, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_cnt_4_5", "label": "4 – 5 contracts", "min": 4, "max": 5, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_cnt_6_10", "label": "6 – 10 contracts", "min": 6, "max": 10, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_cnt_over_10", "label": "> 10 contracts", "min": 11, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        ]
+
+        option_premium_brackets = [
+            {"key": "opt_prem_under_20", "label": "< $20", "min": 0, "max": 20, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_20_50", "label": "$20 – $50", "min": 20, "max": 50, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_50_100", "label": "$50 – $100", "min": 50, "max": 100, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_100_250", "label": "$100 – $250", "min": 100, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_250_500", "label": "$250 – $500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_over_500", "label": "> $500", "min": 500, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        ]
+
+        stk_win_shares, stk_loss_shares = [], []
+        stk_win_cap, stk_loss_cap = [], []
+        opt_win_contracts, opt_loss_contracts = [], []
+        opt_win_prem, opt_loss_prem = [], []
+
+        for sr in sizing_rows:
+            cat = (sr["asset_category"] or "STK").upper()
+            qty = abs(float(sr["quantity"] or 0.0))
+            if qty < 0.0001:
+                continue
+            price = float(sr["trade_price"] or 0.0)
+            tm = abs(float(sr["trade_money"] or 0.0))
+            if tm == 0.0:
+                mult = 100.0 if cat == "OPT" else 1.0
+                tm = qty * price * mult
+
+            pnl = float(sr["realized_pnl"] or 0.0)
+            comm = float(sr["ib_commission"] or 0.0)
+            net = pnl - comm
+            is_win = pnl > 0
+            is_loss = pnl < 0
+
+            if cat in ("STK", "ETF"):
+                if is_win:
+                    stk_win_shares.append(qty)
+                    stk_win_cap.append(tm)
+                elif is_loss:
+                    stk_loss_shares.append(qty)
+                    stk_loss_cap.append(tm)
+
+                for b in stock_notional_brackets:
+                    if b["min"] <= tm < b["max"] or (b["max"] == float("inf") and tm >= b["min"]):
+                        b["trades_count"] += 1
+                        b["net_pnl"] += net
+                        if is_win:
+                            b["wins"] += 1
+                            b["gross_profit"] += pnl
+                        elif is_loss:
+                            b["losses"] += 1
+                            b["gross_loss"] += abs(pnl)
+                        break
+
+                for b in stock_shares_brackets:
+                    if b["min"] <= qty <= b["max"] or (b["max"] == float("inf") and qty >= b["min"]):
+                        b["trades_count"] += 1
+                        b["net_pnl"] += net
+                        if is_win:
+                            b["wins"] += 1
+                            b["gross_profit"] += pnl
+                        elif is_loss:
+                            b["losses"] += 1
+                            b["gross_loss"] += abs(pnl)
+                        break
+
+            elif cat == "OPT":
+                if is_win:
+                    opt_win_contracts.append(qty)
+                    opt_win_prem.append(tm)
+                elif is_loss:
+                    opt_loss_contracts.append(qty)
+                    opt_loss_prem.append(tm)
+
+                for b in option_contracts_brackets:
+                    if b["min"] <= qty <= b["max"] or (b["max"] == float("inf") and qty >= b["min"]):
+                        b["trades_count"] += 1
+                        b["net_pnl"] += net
+                        if is_win:
+                            b["wins"] += 1
+                            b["gross_profit"] += pnl
+                        elif is_loss:
+                            b["losses"] += 1
+                            b["gross_loss"] += abs(pnl)
+                        break
+
+                for b in option_premium_brackets:
+                    if b["min"] <= tm < b["max"] or (b["max"] == float("inf") and tm >= b["min"]):
+                        b["trades_count"] += 1
+                        b["net_pnl"] += net
+                        if is_win:
+                            b["wins"] += 1
+                            b["gross_profit"] += pnl
+                        elif is_loss:
+                            b["losses"] += 1
+                            b["gross_loss"] += abs(pnl)
+                        break
+
+        def _finalize_brackets(b_list):
+            res = []
+            for b in b_list:
+                cnt = b["trades_count"]
+                wins = b["wins"]
+                net = round(b["net_pnl"], 2)
+                wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
+                gp = b["gross_profit"]
+                gl = abs(b["gross_loss"])
+                pf = round(gp / gl, 2) if gl > 0 else (round(gp, 2) if gp > 0 else 0.0)
+                avg_pnl = round(net / cnt, 2) if cnt > 0 else 0.0
+                res.append({
+                    "key": b["key"],
+                    "bracket": b["label"],
+                    "trades_count": cnt,
+                    "wins": wins,
+                    "losses": b["losses"],
+                    "win_rate": wr,
+                    "net_pnl": net,
+                    "profit_factor": pf,
+                    "avg_trade_pnl": avg_pnl
+                })
+            return res
+
+        stock_sizing_notional = _finalize_brackets(stock_notional_brackets)
+        stock_sizing_shares = _finalize_brackets(stock_shares_brackets)
+        option_sizing_contracts = _finalize_brackets(option_contracts_brackets)
+        option_sizing_premium = _finalize_brackets(option_premium_brackets)
+
+        sizing_summary = {
+            "stk_win_avg_shares": round(sum(stk_win_shares) / len(stk_win_shares), 1) if stk_win_shares else 0.0,
+            "stk_loss_avg_shares": round(sum(stk_loss_shares) / len(stk_loss_shares), 1) if stk_loss_shares else 0.0,
+            "stk_win_avg_capital": round(sum(stk_win_cap) / len(stk_win_cap), 2) if stk_win_cap else 0.0,
+            "stk_loss_avg_capital": round(sum(stk_loss_cap) / len(stk_loss_cap), 2) if stk_loss_cap else 0.0,
+            "opt_win_avg_contracts": round(sum(opt_win_contracts) / len(opt_win_contracts), 1) if opt_win_contracts else 0.0,
+            "opt_loss_avg_contracts": round(sum(opt_loss_contracts) / len(opt_loss_contracts), 1) if opt_loss_contracts else 0.0,
+            "opt_win_avg_premium": round(sum(opt_win_prem) / len(opt_win_prem), 2) if opt_win_prem else 0.0,
+            "opt_loss_avg_premium": round(sum(opt_loss_prem) / len(opt_loss_prem), 2) if opt_loss_prem else 0.0,
+        }
+
     return {
         "overview": overview,
         "rolling_win_rate": rolling_win_rate,
@@ -1201,6 +1384,11 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         "sides": sides,
         "option_strategies": option_strategies,
         "options_summary": options_summary,
+        "stock_sizing_notional": stock_sizing_notional,
+        "stock_sizing_shares": stock_sizing_shares,
+        "option_sizing_contracts": option_sizing_contracts,
+        "option_sizing_premium": option_sizing_premium,
+        "sizing_summary": sizing_summary,
     }
 
 

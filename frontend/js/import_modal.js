@@ -159,6 +159,8 @@ const ImportModal = {
         statusBox.innerHTML = `<div style="color: var(--color-accent); font-weight: 600;">${STRINGS.import?.importingFiles || 'Importing file(s)...'} (${files.length})</div>`;
 
         let totalImported = 0;
+        let totalCashImported = 0;
+        let lastResult = null;
         let errors = [];
 
         for (let i = 0; i < files.length; i++) {
@@ -166,7 +168,15 @@ const ImportModal = {
             try {
                 const text = await this.readFileAsText(file);
                 const res = await API.importTrades(text);
+                lastResult = res;
                 totalImported += (res.trades_count || 0);
+                totalCashImported += (res.cash_count || 0);
+                if (res.currency_symbol) {
+                    State.currency = res.currency_symbol;
+                    if (typeof STRINGS !== 'undefined' && STRINGS.common) {
+                        STRINGS.common.currency = res.currency_symbol;
+                    }
+                }
             } catch (err) {
                 errors.push(`${file.name}: ${err.message}`);
             }
@@ -180,10 +190,31 @@ const ImportModal = {
                 </ul>
             `;
         } else {
+            let summaryParts = [];
+            if (totalImported > 0) summaryParts.push(`${totalImported} ${STRINGS.calendar?.tradesBadge || 'trades'}`);
+            if (totalCashImported > 0) summaryParts.push(`${totalCashImported} cash transfers`);
+            const summaryText = summaryParts.length > 0 ? summaryParts.join(' & ') : `0 ${STRINGS.calendar?.tradesBadge || 'trades'}`;
+
+            let currencyNoticeHtml = '';
+            if (lastResult && lastResult.currency_changed) {
+                currencyNoticeHtml = `
+                    <div style="margin-top: 6px; padding: 6px 10px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid var(--color-accent); border-radius: 4px; font-size: 12px; color: var(--text-primary);">
+                        💱 <strong>Base currency updated:</strong> ${lastResult.prev_currency} → <strong>${lastResult.base_currency} (${lastResult.currency_symbol})</strong>. All metrics and charts updated.
+                    </div>
+                `;
+            } else if (lastResult && lastResult.base_currency) {
+                currencyNoticeHtml = `
+                    <div style="margin-top: 4px; font-size: 11px; color: var(--text-muted);">
+                        Base currency: <strong>${lastResult.base_currency} (${lastResult.currency_symbol || '$'})</strong>
+                    </div>
+                `;
+            }
+
             statusBox.innerHTML = `
                 <div style="color: var(--color-profit); font-weight: 700;">
-                    ✓ ${STRINGS.import?.successMsg || 'Successfully processed statement.'} (${totalImported} ${STRINGS.calendar?.tradesBadge || 'trades'})
+                    ✓ ${STRINGS.import?.successMsg || 'Successfully processed statement.'} (${summaryText})
                 </div>
+                ${currencyNoticeHtml}
             `;
             // Refresh current view & sync status
             setTimeout(async () => {

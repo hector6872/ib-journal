@@ -42,6 +42,7 @@ IBKR_SERVICE_ENDPOINTS: List[Tuple[str, str]] = [
     ),
 ]
 
+
 class IBKRFlexClient:
     def __init__(self, token: str = IBKR_TOKEN, query_id: str = IBKR_QUERY_ID):
         self.token = token
@@ -54,18 +55,21 @@ class IBKRFlexClient:
         full_url = f"{url}?{query_string}"
 
         if httpx is not None:
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers={"User-Agent": "IB-Journal/1.0"}) as client:
+            async with httpx.AsyncClient(
+                timeout=30.0, follow_redirects=True, headers={"User-Agent": "IB-Journal/1.0"}
+            ) as client:
                 resp = await client.get(full_url)
                 return resp.status_code, resp.text
         else:
             # Standard library urllib fallback
             req = Request(full_url, headers={"User-Agent": "IB-Journal/1.0"})
             loop = asyncio.get_event_loop()
+
             def sync_req():
                 with urlopen(req, timeout=30) as r:
-                    return r.status, r.read().decode('utf-8')
-            return await loop.run_in_executor(None, sync_req)
+                    return r.status, r.read().decode("utf-8")
 
+            return await loop.run_in_executor(None, sync_req)
 
     async def fetch_statement_xml(self) -> str:
         """
@@ -84,10 +88,7 @@ class IBKRFlexClient:
 
         for send_url, get_url in IBKR_SERVICE_ENDPOINTS:
             try:
-                status_code, resp_text = await self._http_get(
-                    send_url,
-                    {"t": self.token, "q": self.query_id, "v": "3"}
-                )
+                status_code, resp_text = await self._http_get(send_url, {"t": self.token, "q": self.query_id, "v": "3"})
                 if status_code == 200 and "<Status>Success</Status>" in resp_text:
                     self._active_get_url = get_url
                     last_network_error = None
@@ -134,10 +135,7 @@ class IBKRFlexClient:
         for attempt in range(1, max_attempts + 1):
             await asyncio.sleep(attempt * 1.5)  # Progressive backoff
 
-            s_code, stmt_text = await self._http_get(
-                get_url,
-                {"t": self.token, "q": ref_code, "v": "3"}
-            )
+            s_code, stmt_text = await self._http_get(get_url, {"t": self.token, "q": ref_code, "v": "3"})
 
             if s_code != 200:
                 continue
@@ -164,7 +162,6 @@ class IBKRFlexClient:
 
         raise TimeoutError("IBKR statement generation timed out after max retries.")
 
-
     def parse_trades_xml(self, xml_content: str) -> List[Dict[str, Any]]:
         """
         Parses XML statement extracting all trade executions and realized PnL.
@@ -180,11 +177,7 @@ class IBKRFlexClient:
         for trade_node in root.iter("Trade"):
             attrs = trade_node.attrib
 
-            exec_id = (
-                attrs.get("ibExecId") or
-                attrs.get("transactionID") or
-                attrs.get("tradeID")
-            )
+            exec_id = attrs.get("ibExecId") or attrs.get("transactionID") or attrs.get("tradeID")
             if not exec_id:
                 continue
 
@@ -218,10 +211,10 @@ class IBKRFlexClient:
             fx_rate = float(attrs.get("fxRateToBase") or 1.0)
             raw_currency = (attrs.get("currency") or "EUR").upper()
             base_currency = (attrs.get("baseCurrency") or "EUR").upper()
-            
+
             raw_pnl = float(attrs.get("fifoPnlRealized") or attrs.get("realizedPNL") or attrs.get("fxPnl") or 0.0)
             raw_comm = abs(float(attrs.get("ibCommission") or attrs.get("taxes") or 0.0))
-            
+
             # Convert to base currency using fxRateToBase
             realized_pnl = round(raw_pnl * fx_rate, 4) if fx_rate > 0 else raw_pnl
             commission = round(raw_comm * fx_rate, 4) if fx_rate > 0 else raw_comm
@@ -267,4 +260,3 @@ class IBKRFlexClient:
 
         logger.info(f"Parsed {len(trades)} trade executions from XML statement.")
         return trades
-

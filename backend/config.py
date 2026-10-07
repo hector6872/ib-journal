@@ -9,6 +9,7 @@ env_path = BASE_DIR / ".env"
 if env_path.exists():
     try:
         from dotenv import load_dotenv
+
         load_dotenv(env_path)
     except ImportError:
         # Fallback simple env parser
@@ -23,6 +24,7 @@ if env_path.exists():
 IBKR_TOKEN = os.getenv("IBKR_TOKEN", "").strip()
 IBKR_QUERY_ID = os.getenv("IBKR_QUERY_ID", "").strip()
 
+
 def is_ibkr_configured() -> bool:
     """Returns True only if IBKR_TOKEN and IBKR_QUERY_ID are non-empty and not default placeholders."""
     if not IBKR_TOKEN or not IBKR_QUERY_ID:
@@ -33,7 +35,7 @@ def is_ibkr_configured() -> bool:
         "your_token",
         "your_query_id",
         "xxx",
-        "changeme"
+        "changeme",
     }
     if IBKR_TOKEN.lower() in placeholders or IBKR_QUERY_ID.lower() in placeholders:
         return False
@@ -43,6 +45,7 @@ def is_ibkr_configured() -> bool:
 # Environment & Debug Mode
 ENVIRONMENT = os.getenv("ENVIRONMENT", os.getenv("ENV", "prod")).strip().lower()
 DEBUG = os.getenv("DEBUG", "false").strip().lower() in ("true", "1", "yes")
+
 
 def is_production() -> bool:
     """
@@ -58,9 +61,6 @@ def is_production() -> bool:
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
-# Display Settings
-CURRENCY_SYMBOL = os.getenv("CURRENCY_SYMBOL", "$")
-
 # Sync Settings
 SYNC_MODE = os.getenv("SYNC_MODE", "global").strip().lower()
 SYNC_INTERVAL_MINUTES = int(os.getenv("SYNC_INTERVAL_MINUTES", "60"))
@@ -69,5 +69,3 @@ SYNC_COOLDOWN_SECONDS = int(os.getenv("SYNC_COOLDOWN_SECONDS", "600"))
 # Database Path
 DB_PATH = BASE_DIR / os.getenv("DB_PATH", "data/journal.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-

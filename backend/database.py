@@ -3,7 +3,7 @@ import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
-from typing import Any, Dict, Generator, List
+from typing import Any, Dict, Generator, List, Optional
 
 from backend.config import DB_PATH
 
@@ -25,12 +25,12 @@ def normalize_symbol(symbol: str, description: str = "", asset_category: str = "
     cat = (asset_category or "").strip().upper()
 
     # 1. If description contains a clean human-readable option name like 'QQQ 01OCT26 743 C', prefer it for OPT
-    if cat == "OPT" or "OPT" in sym or re.search(r'\b\d{2}[A-Z]{3}\d{2}\b', desc):
-        if re.match(r'^[A-Z0-9\.\s/]+ \d{2}[A-Z]{3}\d{2} [\d\.]+ [CP]$', desc):
+    if cat == "OPT" or "OPT" in sym or re.search(r"\b\d{2}[A-Z]{3}\d{2}\b", desc):
+        if re.match(r"^[A-Z0-9\.\s/]+ \d{2}[A-Z]{3}\d{2} [\d\.]+ [CP]$", desc):
             return " ".join(desc.split())
 
     # 2. Check OCC format in symbol: e.g. 'QQQ   261001C00743000' or 'QQQ261001C00743000'
-    m = re.match(r'^([A-Z0-9\.\s/]+?)\s*(\d{2})(\d{2})(\d{2})([CP])(\d{8})$', sym)
+    m = re.match(r"^([A-Z0-9\.\s/]+?)\s*(\d{2})(\d{2})(\d{2})([CP])(\d{8})$", sym)
     if m:
         root = m.group(1).strip()
         yy = m.group(2)
@@ -87,11 +87,7 @@ def get_connection() -> sqlite3.Connection:
     - Synchronous NORMAL guarantees integrity while avoiding excessive flush cycles.
     - In-memory temp store and generous memory cache minimize disk I/O.
     """
-    conn = sqlite3.connect(
-        str(DB_PATH),
-        timeout=20.0,
-        check_same_thread=False
-    )
+    conn = sqlite3.connect(str(DB_PATH), timeout=20.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
 
     # SD-Card preservation PRAGMAs
@@ -100,10 +96,11 @@ def get_connection() -> sqlite3.Connection:
     cursor.execute("PRAGMA synchronous = NORMAL;")
     cursor.execute("PRAGMA temp_store = MEMORY;")
     cursor.execute("PRAGMA cache_size = -32000;")  # 32 MB in RAM
-    cursor.execute("PRAGMA mmap_size = 67108864;") # 64 MB MMAP
+    cursor.execute("PRAGMA mmap_size = 67108864;")  # 64 MB MMAP
     cursor.close()
 
     return conn
+
 
 @contextmanager
 def db_session() -> Generator[sqlite3.Connection, None, None]:
@@ -117,6 +114,7 @@ def db_session() -> Generator[sqlite3.Connection, None, None]:
         raise
     finally:
         conn.close()
+
 
 def init_db():
     """Initializes the database schema with necessary tables and indexes."""
@@ -239,6 +237,7 @@ def init_db():
 
         logger.info("Database initialized successfully with WAL mode.")
 
+
 def upsert_trades(trades: List[Dict[str, Any]]) -> int:
     """
     Inserts or updates trades in batches for maximum efficiency and minimum disk writes.
@@ -296,33 +295,35 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         raw_sym = t.get("symbol", "")
         sym = normalize_symbol(raw_sym, desc, asset_cat)
 
-        sanitized_trades.append({
-            "ib_exec_id": t.get("ib_exec_id", ""),
-            "trade_id": t.get("trade_id") or t.get("ib_exec_id", ""),
-            "account_id": t.get("account_id", ""),
-            "symbol": sym,
-            "description": desc or sym,
-            "asset_category": asset_cat,
-            "currency": curr,
-            "raw_currency": raw_curr,
-            "base_currency": base_curr,
-            "buy_sell": t.get("buy_sell", "BUY"),
-            "quantity": float(t.get("quantity") or 0.0),
-            "trade_price": float(t.get("trade_price") or 0.0),
-            "trade_money": float(t.get("trade_money") or 0.0),
-            "proceeds": float(t.get("proceeds") or 0.0),
-            "fx_rate_to_base": fx_rate,
-            "raw_commission": raw_comm,
-            "raw_realized_pnl": raw_pnl,
-            "ib_commission": comm,
-            "realized_pnl": pnl,
-            "trade_date": t.get("trade_date", ""),
-            "trade_time": t.get("trade_time", ""),
-            "trade_date_time": t.get("trade_date_time", ""),
-            "open_close_indicator": t.get("open_close_indicator", "C"),
-            "order_type": t.get("order_type", "MKT"),
-            "exchange": t.get("exchange", "SMART"),
-        })
+        sanitized_trades.append(
+            {
+                "ib_exec_id": t.get("ib_exec_id", ""),
+                "trade_id": t.get("trade_id") or t.get("ib_exec_id", ""),
+                "account_id": t.get("account_id", ""),
+                "symbol": sym,
+                "description": desc or sym,
+                "asset_category": asset_cat,
+                "currency": curr,
+                "raw_currency": raw_curr,
+                "base_currency": base_curr,
+                "buy_sell": t.get("buy_sell", "BUY"),
+                "quantity": float(t.get("quantity") or 0.0),
+                "trade_price": float(t.get("trade_price") or 0.0),
+                "trade_money": float(t.get("trade_money") or 0.0),
+                "proceeds": float(t.get("proceeds") or 0.0),
+                "fx_rate_to_base": fx_rate,
+                "raw_commission": raw_comm,
+                "raw_realized_pnl": raw_pnl,
+                "ib_commission": comm,
+                "realized_pnl": pnl,
+                "trade_date": t.get("trade_date", ""),
+                "trade_time": t.get("trade_time", ""),
+                "trade_date_time": t.get("trade_date_time", ""),
+                "open_close_indicator": t.get("open_close_indicator", "C"),
+                "order_type": t.get("order_type", "MKT"),
+                "exchange": t.get("exchange", "SMART"),
+            }
+        )
 
     # In-memory deduplication by ib_exec_id (keep last occurrence in batch)
     unique_trades_map = {}
@@ -339,7 +340,8 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
         # Step 1: For any official (non-GEN_) trade coming in, remove placeholder GEN_ trades matching same execution
         official_trades = [t for t in sanitized_trades if not t["ib_exec_id"].startswith("GEN_")]
         for ot in official_trades:
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM trades
                 WHERE ib_exec_id LIKE 'GEN_%'
                   AND trade_date = ?
@@ -347,13 +349,16 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
                   AND (symbol = ? OR description = ?)
                   AND buy_sell = ?
                   AND ABS(trade_price - ?) < 0.0001;
-            """, (ot["trade_date"], ot["trade_time"], ot["symbol"], ot["symbol"], ot["buy_sell"], ot["trade_price"]))
+            """,
+                (ot["trade_date"], ot["trade_time"], ot["symbol"], ot["symbol"], ot["buy_sell"], ot["trade_price"]),
+            )
 
         # Step 2: For any GEN_ trade coming in, skip if an official trade or identical trade already exists
         trades_to_insert = []
         for t in sanitized_trades:
             if t["ib_exec_id"].startswith("GEN_"):
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT id FROM trades
                     WHERE trade_date = ?
                       AND trade_time = ?
@@ -361,7 +366,17 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
                       AND buy_sell = ?
                       AND ABS(trade_price - ?) < 0.0001
                       AND (ib_exec_id NOT LIKE 'GEN_%' OR ib_exec_id = ?);
-                """, (t["trade_date"], t["trade_time"], t["symbol"], t["symbol"], t["buy_sell"], t["trade_price"], t["ib_exec_id"]))
+                """,
+                    (
+                        t["trade_date"],
+                        t["trade_time"],
+                        t["symbol"],
+                        t["symbol"],
+                        t["buy_sell"],
+                        t["trade_price"],
+                        t["ib_exec_id"],
+                    ),
+                )
                 existing = cursor.fetchone()
                 if existing:
                     # An official or existing trade already exists for this exact fill, skip inserting duplicate
@@ -370,8 +385,8 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
 
         if trades_to_insert:
             cursor.executemany(sql, trades_to_insert)
-            return len(trades_to_insert)
-        return 0
+        return len(sanitized_trades)
+
 
 def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
     """
@@ -412,26 +427,29 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         amount = abs(raw_val) if tx_type in ("DEPOSIT", "DIVIDEND") else -abs(raw_val)
         raw_amount = float(raw_amt_val) if raw_amt_val is not None else amount
         fx = float(tx.get("fx_rate_to_base") or 1.0)
-        sanitized.append({
-            "transaction_id": tx.get("transaction_id", ""),
-            "account_id": tx.get("account_id", ""),
-            "type": tx_type,
-            "amount": amount,
-            "raw_amount": raw_amount,
-            "currency": tx.get("currency", "EUR"),
-            "raw_currency": tx.get("raw_currency", "EUR"),
-            "base_currency": tx.get("base_currency", "EUR"),
-            "fx_rate_to_base": fx,
-            "transaction_date": tx.get("transaction_date", date.today().isoformat()),
-            "transaction_time": tx.get("transaction_time", ""),
-            "description": tx.get("description", ""),
-            "is_manual": 1 if tx.get("is_manual") else 0,
-        })
+        sanitized.append(
+            {
+                "transaction_id": tx.get("transaction_id", ""),
+                "account_id": tx.get("account_id", ""),
+                "type": tx_type,
+                "amount": amount,
+                "raw_amount": raw_amount,
+                "currency": tx.get("currency", "EUR"),
+                "raw_currency": tx.get("raw_currency", "EUR"),
+                "base_currency": tx.get("base_currency", "EUR"),
+                "fx_rate_to_base": fx,
+                "transaction_date": tx.get("transaction_date", date.today().isoformat()),
+                "transaction_time": tx.get("transaction_time", ""),
+                "description": tx.get("description", ""),
+                "is_manual": 1 if tx.get("is_manual") else 0,
+            }
+        )
 
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.executemany(sql, sanitized)
         return cursor.rowcount
+
 
 def get_cash_summary() -> Dict[str, Any]:
     """Returns cash summary metrics and list of transactions."""
@@ -456,12 +474,14 @@ def get_cash_summary() -> Dict[str, Any]:
             "total_withdrawals": round(total_withdrawals, 2),
             "net_cash_flow": round(net_cash_flow, 2),
             "transactions_count": len(rows),
-            "transactions": rows
+            "transactions": rows,
         }
+
 
 def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
     """Adds a manual deposit or withdrawal."""
     import uuid
+
     tx_type = (data.get("type") or "DEPOSIT").upper()
     amount_val = abs(float(data.get("amount") or 0.0))
     amount = amount_val if tx_type == "DEPOSIT" else -amount_val
@@ -470,6 +490,7 @@ def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
     curr = (data.get("currency") or "EUR").upper()
 
     tx_id = f"MAN_{uuid.uuid4().hex[:12]}"
+    base_curr = get_active_base_currency()
     record = {
         "transaction_id": tx_id,
         "account_id": data.get("account_id", "MANUAL"),
@@ -478,22 +499,77 @@ def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
         "raw_amount": amount,
         "currency": curr,
         "raw_currency": curr,
-        "base_currency": curr,
+        "base_currency": curr or base_curr,
         "fx_rate_to_base": 1.0,
         "transaction_date": tx_date,
         "transaction_time": data.get("transaction_time", "12:00:00"),
         "description": desc,
-        "is_manual": True
+        "is_manual": True,
     }
     upsert_cash_transactions([record])
     return record
+
 
 def delete_cash_transaction(tx_id_or_id: Any) -> bool:
     """Deletes a cash transaction by id or transaction_id."""
     with db_session() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             DELETE FROM cash_transactions
             WHERE id = ? OR transaction_id = ?
-        """, (str(tx_id_or_id), str(tx_id_or_id)))
+        """,
+            (str(tx_id_or_id), str(tx_id_or_id)),
+        )
         return cursor.rowcount > 0
+
+
+CURRENCY_SYMBOLS: Dict[str, str] = {
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥",
+    "CAD": "C$",
+    "AUD": "A$",
+    "CHF": "CHF",
+    "CNY": "¥",
+    "HKD": "HK$",
+    "NZD": "NZ$",
+    "SEK": "kr",
+    "NOK": "kr",
+    "DKK": "kr",
+    "PLN": "zł",
+    "BRL": "R$",
+    "RUB": "₽",
+    "INR": "₹",
+    "MXN": "Mex$",
+}
+
+
+def get_active_base_currency() -> str:
+    """Returns the account's active base currency from the most recent imported trade or cash tx, defaulting to USD."""
+    try:
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT base_currency FROM trades WHERE base_currency IS NOT NULL AND base_currency != '' ORDER BY trade_date DESC, id DESC LIMIT 1;"
+            )
+            row = cursor.fetchone()
+            if row and row["base_currency"]:
+                return str(row["base_currency"]).strip().upper()
+
+            cursor.execute(
+                "SELECT base_currency FROM cash_transactions WHERE base_currency IS NOT NULL AND base_currency != '' ORDER BY transaction_date DESC, id DESC LIMIT 1;"
+            )
+            row = cursor.fetchone()
+            if row and row["base_currency"]:
+                return str(row["base_currency"]).strip().upper()
+    except Exception:
+        pass
+    return "USD"
+
+
+def get_currency_symbol(currency_code: Optional[str] = None) -> str:
+    """Maps ISO 3-letter currency code to UI display symbol, defaulting to '$' for USD."""
+    code = (currency_code or get_active_base_currency()).strip().upper()
+    return CURRENCY_SYMBOLS.get(code, "$")

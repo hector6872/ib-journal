@@ -24,6 +24,48 @@ The `scripts/import_trades.py` tool is completely **idempotent** (using `INSERT 
 * **IBKR Activity Statement CSV (`.csv`)** (Standard account activity statements)
 * **IBKR Trade Confirmation Reports (`.csv`)**
 
+---
+
+## 🌍 Multilingual & Multi-Currency Support
+
+The importer is built with an automatic **3-tier detection engine** and universal format normalizer. It parses statements regardless of language, delimiter (`,`, `;`, `\t`), number format (US `1,234.56`, Continental European `1.234,56`, International/Russian/Nordic `1 234,56`, Swiss `1'234.56`, and accounting negatives `(120.50)`), or base currency (`EUR`, `USD`, `GBP`, `CHF`, `CAD`, `JPY`, etc.).
+
+### Officially Supported Languages & Mappings:
+| Language | Code | Trades Section | Symbol / Contract | Date / Time | Quantity | Price | Realized P&L | Cash Transfers |
+|---|---|---|---|---|---|---|---|---|
+| **English** | `EN` | `Trades` | `Symbol` | `Date/Time` | `Quantity` | `T. Price` | `Realized P/L` / `FIFO P/L` | `Deposits & Withdrawals` |
+| **Spanish** | `ES` | `Operaciones` | `Símbolo` / `Contrato` | `Fecha/Hora` | `Cantidad` | `Precio op.` | `P/G Realizada` | `Depósitos y retiradas` |
+| **German** | `DE` | `Transaktionen` / `Trades` | `Wertpapier` | `Datum/Uhrzeit` | `Anzahl` | `Kurs` / `Preis` | `Gewinn/Verlust` | `Ein- und Auszahlungen` |
+| **French** | `FR` | `Opérations` | `Symbole` / `Valeur` | `Date/Heure` | `Quantité` | `Prix` / `Cours` | `P&L Réalisé` | `Dépôts et retraits` |
+| **Italian** | `IT` | `Operazioni` | `Simbolo` | `Data/Ora` | `Quantità` | `Prezzo` | `P&L Realizzato` | `Depositi e prelievi` |
+| **Portuguese**| `PT` | `Operações` | `Símbolo` | `Data/Hora` | `Quantidade` | `Preço` | `P&L Realizado` | `Depósitos e levantamentos`|
+| **Dutch** | `NL` | `Transacties` | `Symbool` | `Datum/Tijd` | `Aantal` | `Koers` | `Gerealiseerd` | `Stortingen en opnames` |
+| **Chinese** | `ZH` | `交易` / `成交` | `代码` / `代碼` | `日期/时间` | `数量` | `价格` | `已实现盈亏` | `出入金` |
+| **Japanese** | `JA` | `取引` / `約定` | `シンボル` / `銘柄` | `日時` | `数量` | `価格` | `実現損益` | `入出金` |
+| **Russian** | `RU` | `Сделки` / `Операции`| `Символ` | `Дата/Время` | `Количество` | `Цена` | `Прибыль` | `Депозиты и снятия` |
+
+> 💡 **3-Tier Heuristic Engine**: If a statement comes in any other language (e.g. Polish, Swedish, Turkish), the parser automatically inspects the column structure. If it identifies the combination of *Symbol + Datetime + Quantity + Price + Realized P&L*, it will ingest the trades regardless of the section label.
+
+---
+
+## 🛠️ Troubleshooting: What to Do if an Import Fails
+
+If you ever encounter an issue or an unsupported custom report format:
+
+### Option A: Switch IBKR Portal Language to English (Universal Standard)
+IBKR allows generating all statements in standard English regardless of your country or bank origin:
+1. Log into your **[IBKR Client Portal](https://www.interactivebrokers.com/)**.
+2. Click on the **User Profile Icon** (top right) $\rightarrow$ **Settings** (or *Configuración del usuario* / *Ajustes de cuenta*).
+3. Under **User Settings** $\rightarrow$ **Language**, select **English**.
+4. Navigate to **Performance & Reports** $\rightarrow$ **Statements** $\rightarrow$ **Activity**.
+5. Select the desired period and click **Download CSV**.
+6. Import the new English CSV into the journal.
+
+### Option B: Use IBKR Flex Query (XML)
+XML Flex queries are standardized globally by Interactive Brokers and bypass all localized string differences. See [Method 2: Flex Query Setup](#-ibkr-automated-synchronization-flex-query-setup).
+
+---
+
 ### Usage Examples:
 
 #### 1. Import a Single File:

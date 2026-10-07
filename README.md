@@ -98,7 +98,6 @@ IBKR_TOKEN=your_ibkr_flex_token_here
 IBKR_QUERY_ID=your_flex_query_id_here
 PORT=8000
 HOST=0.0.0.0
-CURRENCY_SYMBOL=$
 ENVIRONMENT=prod
 DEBUG=false
 ```
@@ -120,7 +119,6 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 | `IBKR_QUERY_ID` | *None* | Flex Query ID configured in IBKR Client Portal. |
 | `PORT` | `8000` | HTTP port the server listens on. |
 | `HOST` | `0.0.0.0` | Bind host address (`0.0.0.0` allows LAN access). |
-| `CURRENCY_SYMBOL` | `$` | Display currency symbol (`$`, `€`, `£`, `¥`, etc.). |
 | `SYNC_MODE` | `global` | Schedule mode: `global` (24/5 Sun-Fri), `western` (07:00-21:15 UTC Mon-Fri), `always` (24/7). |
 | `SYNC_INTERVAL_MINUTES` | `60` | Background automatic sync frequency in minutes. |
 | `SYNC_COOLDOWN_SECONDS` | `600` | Cooldown period between manual sync requests (seconds). |
@@ -174,7 +172,10 @@ python3 scripts/import_trades.py ~/Downloads/ibkr_statements/
 python3 scripts/import_trades.py --dry-run ~/Downloads/2023.csv
 ```
 
-> 📖 **Read the full step-by-step import guide**: [IBKR_IMPORT_GUIDE.md](IBKR_IMPORT_GUIDE.md)
+### 🌍 Universal Multilingual & Multi-Currency Support
+The parser natively auto-detects statement languages (English, Spanish, German, French, Italian, Portuguese, Dutch, Chinese, Japanese, Russian), auto-detects CSV delimiters (`,`, `;`, `\t`), international decimal formats (US, Continental European, International/Russian/Nordic with space, and Swiss with apostrophes), and performs dynamic FX conversions to your account's base currency.
+
+> 📖 **Read the full step-by-step import & troubleshooting guide**: [IBKR_IMPORT_GUIDE.md](IBKR_IMPORT_GUIDE.md)
 
 ---
 

@@ -426,7 +426,7 @@ def reconcile_fifo_pnl(conn_or_cursor=None):
             by_sym[r["symbol"]].append(dict(r))
 
         for sym, fills in by_sym.items():
-            open_lots = []
+            open_lots: list[dict[str, Any]] = []
             for fill in fills:
                 qty = float(fill["quantity"])
                 price = float(fill["trade_price"])

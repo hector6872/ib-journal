@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 import backend.config as config
 import backend.database as database
@@ -659,7 +660,7 @@ Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantit
 Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O
 """
             mock_req = MockRequest(csv_content.encode("utf-8"))
-            result = asyncio.run(import_historical_statement(mock_req))
+            result = asyncio.run(import_historical_statement(cast(Any, mock_req)))
             self.assertEqual(result["status"], "success")
             self.assertEqual(result["trades_count"], 1)
             self.assertEqual(result["cash_count"], 1)

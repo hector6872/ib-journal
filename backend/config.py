@@ -22,24 +22,38 @@ if env_path.exists():
 
 # IBKR Configuration
 IBKR_TOKEN = os.getenv("IBKR_TOKEN", "").strip()
-IBKR_QUERY_ID = os.getenv("IBKR_QUERY_ID", "").strip()
+# Query for real-time intraday trade executions (Trade Confirmation Flex Query)
+IBKR_TRADE_QUERY_ID = os.getenv("IBKR_TRADE_QUERY_ID", "").strip()
+# Query for daily activity consolidation & cash movements (Activity Flex Query)
+IBKR_ACTIVITY_QUERY_ID = os.getenv("IBKR_ACTIVITY_QUERY_ID", "").strip()
+# Legacy fallback if only IBKR_QUERY_ID is defined
+_legacy_id = os.getenv("IBKR_QUERY_ID", "").strip()
+if _legacy_id and not IBKR_TRADE_QUERY_ID and not IBKR_ACTIVITY_QUERY_ID:
+    IBKR_TRADE_QUERY_ID = _legacy_id
+IBKR_QUERY_ID = IBKR_TRADE_QUERY_ID or IBKR_ACTIVITY_QUERY_ID or _legacy_id
 
 
 def is_ibkr_configured() -> bool:
-    """Returns True only if IBKR_TOKEN and IBKR_QUERY_ID are non-empty and not default placeholders."""
-    if not IBKR_TOKEN or not IBKR_QUERY_ID:
+    """Returns True only if IBKR_TOKEN and at least one query ID are non-empty and not default placeholders."""
+    if not IBKR_TOKEN:
         return False
     placeholders = {
         "your_ibkr_flex_token_here",
         "your_flex_query_id_here",
+        "your_trade_query_id_here",
+        "your_activity_query_id_here",
         "your_token",
         "your_query_id",
         "xxx",
         "changeme",
     }
-    if IBKR_TOKEN.lower() in placeholders or IBKR_QUERY_ID.lower() in placeholders:
+    if IBKR_TOKEN.lower() in placeholders:
         return False
-    return True
+    if IBKR_TRADE_QUERY_ID and IBKR_TRADE_QUERY_ID.lower() not in placeholders:
+        return True
+    if IBKR_ACTIVITY_QUERY_ID and IBKR_ACTIVITY_QUERY_ID.lower() not in placeholders:
+        return True
+    return False
 
 
 # Environment & Debug Mode
@@ -63,8 +77,9 @@ PORT = int(os.getenv("PORT", "8000"))
 
 # Sync Settings
 SYNC_MODE = os.getenv("SYNC_MODE", "global").strip().lower()
-SYNC_INTERVAL_MINUTES = int(os.getenv("SYNC_INTERVAL_MINUTES", "60"))
-SYNC_COOLDOWN_SECONDS = int(os.getenv("SYNC_COOLDOWN_SECONDS", "600"))
+SYNC_INTERVAL_MINUTES = int(os.getenv("SYNC_INTERVAL_MINUTES", "15"))
+SYNC_COOLDOWN_SECONDS = int(os.getenv("SYNC_COOLDOWN_SECONDS", "300"))
+DAILY_ACTIVITY_SYNC_HOUR = int(os.getenv("DAILY_ACTIVITY_SYNC_HOUR", "6"))  # 06:00 UTC
 
 # Database Path
 DB_PATH = BASE_DIR / os.getenv("DB_PATH", "data/journal.db")

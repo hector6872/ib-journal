@@ -134,58 +134,77 @@ When you import an IBKR Activity Statement or Flex Query:
 
 ---
 
-## 🔄 IBKR Automated Synchronization (Flex Query Setup)
+---
 
-Automated synchronization requires **two values** in your `.env` file:
-1. `IBKR_TOKEN`: Your private Flex Web Service authentication token.
-2. `IBKR_QUERY_ID`: The unique numeric ID of your Activity Flex Query.
+## 🔄 IBKR Automated Synchronization (Dual-Sync Architecture)
+
+### 💡 Why Dual-Sync? (Architectural Motivation & Rationale)
+
+In Interactive Brokers, there is a fundamental reporting distinction between **Trade Confirmations** and **Activity Statements**:
+
+1. **The Intraday Dilemma (`Trade Confirmation Flex Query`)**:
+   - **Advantage**: Trade Confirmations report executions in near real-time (within 5–15 minutes of order fill) and include same-day trades (`Today`).
+   - **Limitation**: Trade Confirmations **do not include cash transactions** (deposits, withdrawals, dividends, interest) or end-of-day account equity reconciliations.
+
+2. **The End-of-Day Dilemma (`Activity Flex Query`)**:
+   - **Advantage**: Activity Statements are comprehensive and official. They include all settled trades, final FIFO P&L, fees, taxes, and every deposit/withdrawal.
+   - **Limitation**: IBKR only generates Activity Statements **after the daily overnight settlement batch** (between 01:00 and 05:30 UTC). During the active trading day, their `toDate` is strictly yesterday's close; today's open/intraday trades are not included until overnight.
+
+3. **The Dual-Sync Solution**:
+   By uniting both queries into a coordinated multi-tier automated pipeline:
+   - **Tier 1 — Intraday Session (Every 15 min during market hours)**: Runs the **Trade Confirmation Flex Query** (`IBKR_TRADE_QUERY_ID`) to capture today's live fills, orders, and execution prices as you trade.
+   - **Tier 2 — Daily Overnight Consolidation (06:00 UTC daily)**: Runs the **Activity Flex Query** (`IBKR_ACTIVITY_QUERY_ID`) once all global markets are closed and IBKR's overnight batch is complete. This reconciles final official P&L, updates commission precision, and automatically imports bank deposits/withdrawals to keep your Portfolio Equity (NAV) and % ROI completely up-to-date without any manual file uploads.
+   - **Tier 3 — Unified Manual Sync (*Sync Now* button)**: Seamlessly polls both queries, merging trades and cash movements in a single step with a 5-minute safety cooldown.
+   - **Zero Duplicates (Idempotency)**: Both queries merge into SQLite using `ON CONFLICT (ib_exec_id) DO UPDATE` for trades and `ON CONFLICT (transaction_id) DO UPDATE` for cash movements.
 
 ---
 
 ### Step 1: Generate your Flex Web Service Token (`IBKR_TOKEN`)
 
 1. Log into your **[IBKR Client Portal](https://www.interactivebrokers.com/)**.
-2. Navigate to **Performance & Reports** > **Flex Queries** (or **Reports** > **Flex Queries** depending on your portal language/layout).
+2. Navigate to **Performance & Reports** > **Flex Queries** (or **Reports** > **Flex Queries**).
 3. On the right side, find the **Flex Web Service Status** panel and click the **Gear (⚙️) icon** / **Configure**.
 4. Check the box **Enable Flex Web Service**.
 5. Set token expiration (e.g., 1 year / maximum available) and click **Generate Token** / **Save**.
-6. Copy the generated alphanumeric token string and paste it into your `.env`:
+6. Copy the generated token into your `.env`:
    ```ini
    IBKR_TOKEN=123456789012345678901234
    ```
 
 ---
 
-### Step 2: Create the Activity Flex Query (`IBKR_QUERY_ID`)
+### Step 2: Create the Primary Activity Flex Query (`IBKR_ACTIVITY_QUERY_ID`) — Essential / Core Foundation
 
-1. On the **Flex Queries** page, locate the **Activity Flex Query** section and click the **+ (Create / Add)** icon.
-2. Configure the general query parameters:
-   - **Query Name**: `Trading Journal Sync`
-   - **Date Period**: Choose `Last 7 Calendar Days` (recommended for lightweight hourly background polling) or `Last 365 Calendar Days` (for initial sync).
-   - **Format**: Select **`XML`**.
-   - **Accounts**: Ensure your trading account is selected.
-3. In the **Sections** configuration list:
-   - Click on **Trades**:
-     - **Top Options (Boxes)**: Ensure **`Execution`** and **`Order`** are selected (blue checkmark). You can optionally select **`Closed Lots`** as well.
-     - **Columns (Checkboxes)**: Check the **`Select All`** checkbox at the top of the column list (above *Account ID*). This automatically includes all necessary fields: `FIFO P/L Realized` (P&L), `IB Commission`, `Trade Price`, `FX Rate To Base`, `Date/Time`, `Symbol`, etc., without needing to find each field manually.
-     - Click **Save** at the bottom of the modal.
-   - *(Recommended)* Click on **Cash Transactions**:
-     - Check the **`Select All`** checkbox (or enable *Deposits & Withdrawals*) to automatically sync deposits and withdrawals.
-     - Click **Save** at the bottom of the modal.
-4. In the **General Configuration** section (optional settings):
-   - You can leave all settings with their **default values**:
-     - **Date Format**: `yyyyMMdd`
-     - **Time Format**: `HHmmss`
-     - **Date/Time Separator**: `; (semi-colon)`
-     - **Profit and Loss**: `Default` (or `FIFO`)
-     - **Include Currency Rates?**: `No` *(No es necesario activarlo, ya que cada operación ya incluye su tipo de cambio individual en `fxRateToBase`)*.
-     - **Include Offsetting Trade/Cancel Pairs?**: `No`
-     - **Breakout by Day?**: `No`
-5. Scroll down to the bottom of the main query creation page and click **Save Changes** / **Continue** / **Create**.
-6. You will return to the Flex Queries list. Look for your newly created query and locate the numeric **Query ID** column (e.g., `987654`).
-7. Copy this numeric ID into your `.env`:
+> ⭐️ **Essential**: This is the primary query required for the journal. It syncs all official settled trades, realized P&L, commissions, and automatically imports bank deposits and withdrawals.
+
+1. In the **Flex Queries** page, locate **Activity Flex Query** and click the **+ (Add / Create)** icon.
+2. Settings:
+   - **Query Name**: `Trading Journal Daily Activity`
+   - **Date Period**: `Last 7 Calendar Days` (or `Last 365 Calendar Days` for initial setup).
+   - **Format**: `XML`.
+   - **Sections**:
+     - **Trades**: Select **Execution**, **Order**, and check **Select All** on columns (includes `FIFO P/L Realized`, commissions, etc.).
+     - **Cash Transactions**: Select **Deposits & Withdrawals** and check **Select All** on columns.
+3. Save the query and copy the numeric Query ID to `.env`:
    ```ini
-   IBKR_QUERY_ID=987654
+   IBKR_ACTIVITY_QUERY_ID=789012
+   ```
+
+---
+
+### Step 3: (Optional) Create the Trade Confirmation Query (`IBKR_TRADE_QUERY_ID`) — Intraday Real-Time Companion
+
+> ⚡ **Optional Intraday Companion**: Add this if you want today's live trade fills to appear immediately in your journal every 15 minutes during market hours, without waiting for the daily overnight settlement.
+
+1. In the **Flex Queries** page, scroll down to **Trade Confirmation Flex Query** and click **+**.
+2. Settings:
+   - **Query Name**: `Trading Journal Intraday`
+   - **Date Period**: `Last 7 Calendar Days` (or `Today`).
+   - **Format**: `XML`.
+   - **Sections**: Select **Executions** / **Orders** and click **Select All** on columns.
+3. Save the query and copy the Query ID to `.env`:
+   ```ini
+   IBKR_TRADE_QUERY_ID=123456
    ```
 
 ---

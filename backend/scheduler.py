@@ -1,32 +1,55 @@
 import asyncio
 import logging
 from datetime import date, datetime, time, timedelta, timezone
-
 from typing import Any, Dict, Optional
 
 from backend.config import (
+    DAILY_ACTIVITY_SYNC_HOUR,
     ENVIRONMENT,
+    IBKR_ACTIVITY_QUERY_ID,
     IBKR_QUERY_ID,
     IBKR_TOKEN,
+    IBKR_TRADE_QUERY_ID,
     SYNC_COOLDOWN_SECONDS,
     SYNC_INTERVAL_MINUTES,
     SYNC_MODE,
     is_ibkr_configured,
     is_production,
 )
-from backend.database import db_session, upsert_trades
+from backend.database import db_session, upsert_cash_transactions, upsert_trades
 from backend.flex_client import IBKRFlexClient
 
 logger = logging.getLogger("ib-journal.scheduler")
+
+
+def clean_ibkr_error(err: Any) -> str:
+    """Simplifies technical IBKR or network exceptions into short, concise phrases."""
+    s = str(err)
+    if any(k in s for k in ["nodename nor servname", "gaierror", "Failed to resolve", "getaddrinfo"]):
+        return "Connection failed (Check internet/DNS)"
+    if "1018" in s or "IP address not allowed" in s:
+        return "IBKR Error 1018: IP not authorized"
+    if "1014" in s or "Token is invalid" in s:
+        return "IBKR Error 1014: Invalid/expired token"
+    if "1019" in s or "Statement is being generated" in s:
+        return "Statement is generating (Try again shortly)"
+    if "timed out" in s.lower() or "timeout" in s.lower():
+        return "IBKR request timed out"
+    if "HTTP error:" in s:
+        return s.split("HTTP error:")[-1].strip()
+    return s[:60] + "..." if len(s) > 60 else s
 
 
 class SyncScheduler:
     def __init__(self):
         self.last_sync_time: Optional[datetime] = None
         self.last_api_sync_time: Optional[datetime] = None
+        self.last_activity_sync_time: Optional[datetime] = None
+        self.last_daily_sync_date: Optional[str] = None
         self.last_sync_status: str = "idle"
         self.last_sync_message: str = "No sync performed yet."
         self.last_trades_count: int = 0
+        self.last_cash_count: int = 0
         self.is_syncing: bool = False
         self.next_sync_time: Optional[datetime] = None
         self._task: Optional[asyncio.Task] = None
@@ -69,14 +92,14 @@ class SyncScheduler:
         return True
 
     def get_cooldown_remaining_seconds(self) -> int:
-        """Returns remaining seconds for remote Flex API sync cooldown."""
+        """Returns remaining seconds for remote Flex API sync cooldown (default 300s)."""
         last_api = self.last_api_sync_time
         if not last_api:
             try:
                 with db_session() as conn:
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT MAX(completed_at) as last_api FROM sync_history WHERE sync_type IN ('scheduled', 'manual') AND status = 'success';"
+                        "SELECT MAX(completed_at) as last_api FROM sync_history WHERE sync_type IN ('scheduled', 'manual', 'scheduled_daily') AND status = 'success';"
                     )
                     row = cursor.fetchone()
                     if row and row["last_api"]:
@@ -94,7 +117,7 @@ class SyncScheduler:
         return max(0, remaining)
 
     def calculate_next_sync_time(self, now: Optional[datetime] = None) -> datetime:
-        """Calculates next sync timestamp based on sync mode, market hours, and interval."""
+        """Calculates next intraday trade sync timestamp based on sync mode, market hours, and interval."""
         if now is None:
             now = datetime.now(timezone.utc)
         else:
@@ -150,9 +173,24 @@ class SyncScheduler:
         target_date = now.date() + timedelta(days=days_to_sunday)
         return datetime.combine(target_date, time(22, 0), tzinfo=timezone.utc)
 
-    async def execute_sync(self, sync_type: str = "scheduled") -> Dict[str, Any]:
+    def calculate_next_daily_sync_time(self, now: Optional[datetime] = None) -> datetime:
+        """Calculates the next daily activity consolidation time (06:00 UTC)."""
+        if now is None:
+            now = datetime.now(timezone.utc)
+        else:
+            now = now.astimezone(timezone.utc)
+
+        target_today = datetime.combine(now.date(), time(DAILY_ACTIVITY_SYNC_HOUR, 0), tzinfo=timezone.utc)
+        if now < target_today:
+            return target_today
+        return target_today + timedelta(days=1)
+
+    async def execute_sync(self, sync_type: str = "manual") -> Dict[str, Any]:
         """
-        Executes the sync operation against IBKR Flex Query.
+        Executes synchronization against IBKR Flex Web Service.
+        - If sync_type == 'manual': queries both Trade Confirmation and Activity queries (if configured)
+        - If sync_type == 'scheduled': executes intraday Trade Confirmation query
+        - If sync_type == 'scheduled_daily': executes daily Activity consolidation query
         """
         if not is_ibkr_configured():
             self.last_sync_status = "unconfigured"
@@ -165,82 +203,120 @@ class SyncScheduler:
         self.is_syncing = True
         self.last_sync_status = "in_progress"
 
-        try:
-            logger.info("Connecting to IBKR Flex Web Service...")
-            client = IBKRFlexClient(IBKR_TOKEN, IBKR_QUERY_ID)
-            xml_data = await client.fetch_statement_xml()
-            trades = client.parse_trades_xml(xml_data)
+        errors = []
+        queries_run = []
+        total_trades_count = 0
+        total_cash_count = 0
 
-            count = upsert_trades(trades)
+        try:
+            trade_query = IBKR_TRADE_QUERY_ID or IBKR_QUERY_ID
+            activity_query = IBKR_ACTIVITY_QUERY_ID
+
+            client = IBKRFlexClient(IBKR_TOKEN, trade_query or activity_query)
+
+            # 1. Trade executions sync (Intraday / Trade Confirmation)
+            if sync_type in ("scheduled", "manual") and trade_query:
+                try:
+                    logger.info(f"Connecting to IBKR Flex Web Service (Trade query: {trade_query})...")
+                    xml_data = await client.fetch_statement_xml(query_id=trade_query)
+                    trades = client.parse_trades_xml(xml_data)
+                    cash_txs = client.parse_cash_transactions_xml(xml_data)
+
+                    t_count = upsert_trades(trades) if trades else 0
+                    c_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
+                    total_trades_count += t_count
+                    total_cash_count += c_count
+                    queries_run.append("Intraday")
+                except Exception as e_trade:
+                    logger.error(f"Trade query ({trade_query}) failed: {e_trade}")
+                    errors.append(f"Trade: {clean_ibkr_error(e_trade)}")
+
+            # 2. Activity / EOD consolidation sync (Activity Query)
+            if (
+                sync_type == "scheduled_daily"
+                or (sync_type == "manual" and activity_query and activity_query != trade_query)
+            ) and activity_query:
+                try:
+                    logger.info(f"Connecting to IBKR Flex Web Service (Activity query: {activity_query})...")
+                    xml_data_act = await client.fetch_statement_xml(query_id=activity_query)
+                    trades_act = client.parse_trades_xml(xml_data_act)
+                    cash_act = client.parse_cash_transactions_xml(xml_data_act)
+
+                    t_count_act = upsert_trades(trades_act) if trades_act else 0
+                    c_count_act = upsert_cash_transactions(cash_act) if cash_act else 0
+                    total_trades_count += t_count_act
+                    total_cash_count += c_count_act
+                    queries_run.append("Activity")
+                    self.last_activity_sync_time = datetime.now(timezone.utc)
+                except Exception as e_act:
+                    logger.error(f"Activity query ({activity_query}) failed: {e_act}")
+                    errors.append(f"Activity: {clean_ibkr_error(e_act)}")
+
             now = datetime.now(timezone.utc)
 
-            # Check if there is an outage gap between previous sync/import and now
+            # If all attempted queries failed
+            if errors and not queries_run:
+                clean_msg = "; ".join(errors)
+                self.last_sync_status = "failed"
+                self.last_sync_message = clean_msg
+                return {"status": "failed", "message": clean_msg}
+
+            # At least one query succeeded -> record sync history and resolve sync gaps
             with db_session() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT MAX(completed_at) as last_completed FROM sync_history WHERE status = 'success';")
-                sr = cursor.fetchone()
-                if sr and sr["last_completed"]:
-                    try:
-                        prev_dt = datetime.fromisoformat(sr["last_completed"])
-                        prev_tz = prev_dt if prev_dt.tzinfo else prev_dt.replace(tzinfo=timezone.utc)
-                        days_diff = (now - prev_tz).days
-                        if days_diff > 7:
-                            # A gap was created because Flex Query only covers 7 days
-                            cursor.execute(
-                                """
-                                INSERT INTO sync_gaps (gap_days, from_date, to_date)
-                                VALUES (?, ?, ?);
-                            """,
-                                (days_diff, prev_tz.isoformat(), now.isoformat()),
-                            )
-                            logger.warning(
-                                f"Sync gap of {days_diff} days detected after server downtime/vacation. Created pending sync_gap record."
-                            )
-                    except Exception as ex:
-                        logger.debug(f"Error checking previous sync gap: {ex}")
-
-                # Record successful sync
+                cursor.execute("""
+                    UPDATE sync_gaps
+                    SET resolved_at = CURRENT_TIMESTAMP
+                    WHERE resolved_at IS NULL;
+                """)
                 cursor.execute(
                     """
                     INSERT INTO sync_history (sync_type, status, trades_count, completed_at)
                     VALUES (?, 'success', ?, CURRENT_TIMESTAMP);
                 """,
-                    (sync_type, count),
+                    (sync_type, total_trades_count),
                 )
 
             self.last_sync_time = now
             self.last_api_sync_time = now
             self.last_sync_status = "success"
-            self.last_trades_count = count
-            self.last_sync_message = f"Synchronized {count} trades successfully."
+            self.last_trades_count = total_trades_count
+            self.last_cash_count = total_cash_count
+
+            summary_parts = []
+            if total_trades_count > 0:
+                summary_parts.append(f"{total_trades_count} trades")
+            if total_cash_count > 0:
+                summary_parts.append(f"{total_cash_count} cash transfers")
+            recs_str = " and ".join(summary_parts) if summary_parts else "0 new records"
+
+            scope_str = " + ".join(queries_run) if queries_run else "None"
+            if errors:
+                self.last_sync_message = (
+                    f"Synchronized {recs_str} ({scope_str}). Warning: {'; '.join(errors)}"
+                )
+            else:
+                self.last_sync_message = f"Synchronized {recs_str} successfully ({scope_str})."
+
             self.next_sync_time = self.calculate_next_sync_time()
 
             logger.info(self.last_sync_message)
             return {
-                "status": "success",
+                "status": "success" if not errors else "partial_success",
                 "message": self.last_sync_message,
-                "trades_count": count,
+                "trades_count": total_trades_count,
+                "cash_count": total_cash_count,
                 "last_sync_time": self.last_sync_time.isoformat(),
                 "next_sync_time": self.next_sync_time.isoformat(),
+                "next_daily_sync_time": self.calculate_next_daily_sync_time().isoformat(),
             }
 
         except Exception as e:
             err_str = str(e)
-            if any(
-                term in err_str for term in ["nodename nor servname", "gaierror", "Failed to resolve", "getaddrinfo"]
-            ):
-                clean_msg = "Unable to connect to Interactive Brokers servers. Please check your internet connection."
-            elif "1018" in err_str or "IP address not allowed" in err_str:
-                clean_msg = "IBKR Error (1018): IP address not authorized in IBKR Flex Web Service settings."
-            elif "1014" in err_str or "Token is invalid" in err_str:
-                clean_msg = "IBKR Error (1014): Invalid or expired Flex Token."
-            else:
-                clean_msg = err_str
-
             self.last_sync_status = "failed"
-            self.last_sync_message = clean_msg
+            self.last_sync_message = err_str
             logger.error(f"Sync failed: {e}")
-            return {"status": "failed", "message": clean_msg}
+            return {"status": "failed", "message": err_str}
         finally:
             self.is_syncing = False
 
@@ -250,19 +326,33 @@ class SyncScheduler:
             logger.info("IBKR credentials missing or placeholder. Scheduler loop will not run.")
             return
 
-        # Calculate initial next sync
+        # Calculate initial next syncs
         self.next_sync_time = self.calculate_next_sync_time()
 
         while True:
             try:
-                await asyncio.sleep(60)
+                await asyncio.sleep(30)
                 now = datetime.now(timezone.utc)
+                today_str = now.date().isoformat()
 
-                # If market hours and time is past next_sync_time
-                if self.is_market_hours(now) and self.next_sync_time:
+                # 1. Daily Activity Consolidation at 06:00 UTC
+                if (
+                    IBKR_ACTIVITY_QUERY_ID
+                    and now.hour >= DAILY_ACTIVITY_SYNC_HOUR
+                    and self.last_daily_sync_date != today_str
+                    and not self.is_syncing
+                ):
+                    logger.info("Triggering scheduled daily activity consolidation (06:00 UTC)...")
+                    await self.execute_sync(sync_type="scheduled_daily")
+                    self.last_daily_sync_date = today_str
+
+                # 2. Intraday trade sync during market hours (every SYNC_INTERVAL_MINUTES)
+                trade_query = IBKR_TRADE_QUERY_ID or IBKR_QUERY_ID
+                if trade_query and self.is_market_hours(now) and self.next_sync_time:
                     if now >= self.next_sync_time and not self.is_syncing:
-                        logger.info("Triggering scheduled market-hours sync...")
+                        logger.info("Triggering scheduled market-hours intraday sync...")
                         await self.execute_sync(sync_type="scheduled")
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -299,7 +389,6 @@ class SyncScheduler:
             with db_session() as conn:
                 cursor = conn.cursor()
 
-                # 1. Check for unresolved historical downtime gaps (e.g. from vacation/server downtime)
                 cursor.execute("""
                     SELECT gap_days, from_date, to_date
                     FROM sync_gaps
@@ -321,12 +410,15 @@ class SyncScheduler:
 
                 if not last_sync_dt:
                     cursor.execute(
-                        "SELECT MAX(completed_at) as last_completed FROM sync_history WHERE status = 'success';"
+                        "SELECT completed_at, trades_count, status FROM sync_history WHERE status = 'success' ORDER BY id DESC LIMIT 1;"
                     )
                     sr = cursor.fetchone()
-                    if sr and sr["last_completed"]:
+                    if sr and sr["completed_at"]:
                         try:
-                            last_sync_dt = datetime.fromisoformat(sr["last_completed"])
+                            last_sync_dt = datetime.fromisoformat(sr["completed_at"])
+                            if self.last_sync_status == "idle":
+                                status_val = "success"
+                                msg_val = f"Last sync succeeded with {sr['trades_count']} trades."
                         except Exception:
                             pass
         except Exception as e:
@@ -352,16 +444,34 @@ class SyncScheduler:
                 has_sync_gap = True
                 gap_days = max(gap_days, current_gap)
         elif not has_sync_gap:
-            # Database is empty (no syncs and no trades recorded yet)
             has_sync_gap = True
             gap_days = 7
+
+        trades_count_val = self.last_trades_count
+        if not self.last_sync_time:
+            try:
+                with db_session() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT trades_count FROM sync_history WHERE status = 'success' ORDER BY id DESC LIMIT 1;")
+                    last_hist = cursor.fetchone()
+                    if last_hist:
+                        trades_count_val = last_hist["trades_count"]
+            except Exception:
+                pass
+
+        effective_last_sync = self.last_sync_time or last_sync_dt
 
         return {
             "is_configured": configured,
             "environment": ENVIRONMENT,
             "sync_mode": SYNC_MODE,
             "is_auto_sync_enabled": in_prod,
-            "last_sync_time": self.last_sync_time.isoformat() if (configured and self.last_sync_time) else None,
+            "has_trade_query": bool(IBKR_TRADE_QUERY_ID),
+            "has_activity_query": bool(IBKR_ACTIVITY_QUERY_ID),
+            "sync_interval_minutes": SYNC_INTERVAL_MINUTES,
+            "cooldown_seconds": SYNC_COOLDOWN_SECONDS,
+            "daily_activity_sync_hour_utc": DAILY_ACTIVITY_SYNC_HOUR,
+            "last_sync_time": effective_last_sync.isoformat() if (configured and effective_last_sync) else None,
             "next_sync_time": (
                 self.next_sync_time.isoformat()
                 if (self.next_sync_time and in_prod)
@@ -369,9 +479,11 @@ class SyncScheduler:
             )
             if configured
             else None,
+            "next_daily_sync_time": self.calculate_next_daily_sync_time().isoformat() if configured else None,
             "status": status_val,
             "message": msg_val,
-            "trades_count": self.last_trades_count if configured else 0,
+            "trades_count": trades_count_val if configured else 0,
+            "cash_count": self.last_cash_count if configured else 0,
             "is_syncing": self.is_syncing if configured else False,
             "cooldown_remaining_seconds": self.get_cooldown_remaining_seconds() if configured else 0,
             "is_market_hours": self.is_market_hours(),

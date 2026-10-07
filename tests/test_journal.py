@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import backend.config as config
@@ -952,11 +953,11 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
 
         # 1. 'western' mode (07:00 - 21:15 UTC Mon-Fri)
         with patch("backend.scheduler.SYNC_MODE", "western"):
-            # Monday at 10:00 UTC (open)
+            # Monday at 10:00 UTC (open, 15m interval)
             mon_open = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
             self.assertTrue(scheduler.is_market_hours(mon_open))
             next_sync = scheduler.calculate_next_sync_time(mon_open)
-            self.assertEqual(next_sync, datetime(2026, 10, 5, 11, 0, tzinfo=timezone.utc))
+            self.assertEqual(next_sync, datetime(2026, 10, 5, 10, 15, tzinfo=timezone.utc))
 
             # Monday at 22:00 UTC (closed)
             mon_closed = datetime(2026, 10, 5, 22, 0, tzinfo=timezone.utc)
@@ -972,11 +973,11 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
 
         # 2. 'global' mode (24/5 Sun 22:00 UTC to Fri 22:00 UTC)
         with patch("backend.scheduler.SYNC_MODE", "global"):
-            # Tuesday at 02:00 UTC (open during Asian session)
+            # Tuesday at 02:00 UTC (open during Asian session, 15m interval)
             tue_asian = datetime(2026, 10, 6, 2, 0, tzinfo=timezone.utc)
             self.assertTrue(scheduler.is_market_hours(tue_asian))
             next_sync = scheduler.calculate_next_sync_time(tue_asian)
-            self.assertEqual(next_sync, datetime(2026, 10, 6, 3, 0, tzinfo=timezone.utc))
+            self.assertEqual(next_sync, datetime(2026, 10, 6, 2, 15, tzinfo=timezone.utc))
 
             # Sunday at 15:00 UTC (weekend closed)
             sun_closed = datetime(2026, 10, 4, 15, 0, tzinfo=timezone.utc)
@@ -988,8 +989,8 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
             sun_open = datetime(2026, 10, 4, 22, 30, tzinfo=timezone.utc)
             self.assertTrue(scheduler.is_market_hours(sun_open))
 
-            # Friday at 21:30 UTC (near close, next sync candidate 22:30 is past close -> Sunday 22:00)
-            fri_night = datetime(2026, 10, 9, 21, 30, tzinfo=timezone.utc)
+            # Friday at 21:50 UTC (near close, candidate 22:05 is past 22:00 close -> Sunday 22:00)
+            fri_night = datetime(2026, 10, 9, 21, 50, tzinfo=timezone.utc)
             self.assertTrue(scheduler.is_market_hours(fri_night))
             next_sync = scheduler.calculate_next_sync_time(fri_night)
             self.assertEqual(next_sync, datetime(2026, 10, 11, 22, 0, tzinfo=timezone.utc))
@@ -999,7 +1000,53 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
             sat = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
             self.assertTrue(scheduler.is_market_hours(sat))
             next_sync = scheduler.calculate_next_sync_time(sat)
-            self.assertEqual(next_sync, datetime(2026, 10, 10, 13, 0, tzinfo=timezone.utc))
+            self.assertEqual(next_sync, datetime(2026, 10, 10, 12, 15, tzinfo=timezone.utc))
+
+    def test_flex_client_xml_parsers_and_dual_sync(self):
+        """Tests IBKRFlexClient XML parsing of both trades and cash transactions."""
+        from backend.flex_client import IBKRFlexClient
+        from backend.scheduler import scheduler
+
+        sample_xml = """<FlexQueryResponse queryName="Trading Journal" type="AF">
+            <FlexStatements count="1">
+                <FlexStatement accountId="U123456" fromDate="20261001" toDate="20261007">
+                    <AccountInformation accountId="U123456" baseCurrency="EUR" />
+                    <Trades>
+                        <Trade accountId="U123456" symbol="AAPL" description="APPLE INC" assetCategory="STK"
+                               currency="USD" fxRateToBase="0.9" buySell="BUY" quantity="10" tradePrice="150"
+                               tradeMoney="1500" proceeds="-1500" ibCommission="-1" fifoPnlRealized="50"
+                               dateTime="20261007;143000" tradeID="T_XML_1" ibExecId="EXEC_XML_1" openCloseIndicator="O" orderType="LMT" exchange="NASDAQ" />
+                    </Trades>
+                    <CashTransactions>
+                        <CashTransaction accountId="U123456" currency="EUR" fxRateToBase="1.0" amount="5000.0"
+                                         type="Electronic Fund Transfer" dateTime="20261005;090000"
+                                         description="Deposit via Wire" transactionID="CASH_XML_1" />
+                    </CashTransactions>
+                </FlexStatement>
+            </FlexStatements>
+        </FlexQueryResponse>"""
+
+        client = IBKRFlexClient(token="mock_token", query_id="12345")
+        trades = client.parse_trades_xml(sample_xml)
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0]["symbol"], "AAPL")
+        self.assertEqual(trades[0]["ib_exec_id"], "EXEC_XML_1")
+        self.assertAlmostEqual(trades[0]["realized_pnl"], 45.0)  # 50 * 0.9
+
+        cash_txs = client.parse_cash_transactions_xml(sample_xml)
+        self.assertEqual(len(cash_txs), 1)
+        self.assertEqual(cash_txs[0]["transaction_id"], "CASH_XML_1")
+        self.assertEqual(cash_txs[0]["transaction_type"], "TRANSFER")
+        self.assertEqual(cash_txs[0]["amount"], 5000.0)
+
+        # Test daily consolidation time calculation
+        ref_morning = datetime(2026, 10, 7, 4, 0, tzinfo=timezone.utc)
+        next_daily = scheduler.calculate_next_daily_sync_time(ref_morning)
+        self.assertEqual(next_daily, datetime(2026, 10, 7, 6, 0, tzinfo=timezone.utc))
+
+        ref_afternoon = datetime(2026, 10, 7, 8, 0, tzinfo=timezone.utc)
+        next_daily_after = scheduler.calculate_next_daily_sync_time(ref_afternoon)
+        self.assertEqual(next_daily_after, datetime(2026, 10, 8, 6, 0, tzinfo=timezone.utc))
 
 
 if __name__ == "__main__":

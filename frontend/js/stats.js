@@ -177,9 +177,17 @@ const StatsController = {
                 elNext.textContent = errMsg.length > 25 ? errMsg.slice(0, 25) + '...' : errMsg;
             }
         } else {
-            // Normal / Success / Idle State
+            // Normal / Success / Idle / Partial Success State
             btnSync.classList.remove('disabled');
-            btnSync.title = "";
+            const dailyHour = status.daily_activity_sync_hour_utc !== undefined ? status.daily_activity_sync_hour_utc : 6;
+            const hourFormatted = `${String(dailyHour).padStart(2, '0')}:00 UTC`;
+
+            let tooltipMsg = status.message || "Click to synchronize trades from IBKR";
+            if (status.has_trade_query === false && status.has_activity_query === true) {
+                tooltipMsg = `Activity sync active (Daily ${hourFormatted}). Set IBKR_TRADE_QUERY_ID for intraday fills.`;
+            }
+            btnSync.title = tooltipMsg;
+
             if (elLast) {
                 if (status.last_sync_time) {
                     const lastDate = new Date(status.last_sync_time);
@@ -190,7 +198,9 @@ const StatsController = {
             }
             if (elNext) {
                 if (status.is_auto_sync_enabled === false) {
-                    elNext.textContent = STRINGS.sync.devMode;
+                    elNext.textContent = status.has_trade_query === false ? `Dev Mode (${hourFormatted})` : STRINGS.sync.devMode;
+                } else if (status.has_trade_query === false) {
+                    elNext.textContent = `Daily ${hourFormatted}`;
                 } else if (status.next_sync_time) {
                     const nextDate = new Date(status.next_sync_time);
                     const diffMs = nextDate - new Date();

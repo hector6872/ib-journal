@@ -360,12 +360,24 @@ async def api_sync_trigger():
     cooldown = scheduler.get_cooldown_remaining_seconds()
     if cooldown > 0:
         raise HTTPException(
-            status_code=429, detail=f"Rate limit cooldown active. Please wait {cooldown} seconds before syncing again."
+            status_code=429,
+            detail={
+                "error_code": "ERR_COOLDOWN_ACTIVE",
+                "error_params": {"seconds": cooldown},
+                "message": f"Rate limit cooldown active. Please wait {cooldown} seconds before syncing again.",
+            },
         )
 
     result = await scheduler.execute_sync(sync_type="manual")
-    if result["status"] == "failed":
-        raise HTTPException(status_code=400, detail=result["message"])
+    if result.get("status") == "failed":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": result.get("error_code", "ERR_GENERIC_SYNC"),
+                "error_params": result.get("error_params", {}),
+                "message": result.get("message", "Sync failed"),
+            },
+        )
     return result
 
 

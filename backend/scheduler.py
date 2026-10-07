@@ -22,22 +22,57 @@ from backend.flex_client import IBKRFlexClient
 logger = logging.getLogger("ib-journal.scheduler")
 
 
-def clean_ibkr_error(err: Any) -> str:
-    """Simplifies technical IBKR or network exceptions into short, concise phrases."""
+def classify_ibkr_error(err: Any) -> Dict[str, Any]:
+    """Categorizes technical IBKR or network exceptions into structured error codes, parameters, and concise messages."""
     s = str(err)
     if any(k in s for k in ["nodename nor servname", "gaierror", "Failed to resolve", "getaddrinfo"]):
-        return "Connection failed (Check internet/DNS)"
+        return {
+            "error_code": "ERR_CONNECTION_FAILED",
+            "error_params": {},
+            "message": "Connection failed (Check internet/DNS)",
+        }
     if "1018" in s or "IP address not allowed" in s:
-        return "IBKR Error 1018: IP not authorized"
+        return {
+            "error_code": "ERR_IBKR_IP_UNAUTHORIZED",
+            "error_params": {"code": 1018},
+            "message": "IBKR Error 1018: IP not authorized",
+        }
     if "1014" in s or "Token is invalid" in s:
-        return "IBKR Error 1014: Invalid/expired token"
+        return {
+            "error_code": "ERR_IBKR_INVALID_TOKEN",
+            "error_params": {"code": 1014},
+            "message": "IBKR Error 1014: Invalid/expired token",
+        }
     if "1019" in s or "Statement is being generated" in s:
-        return "Statement is generating (Try again shortly)"
+        return {
+            "error_code": "ERR_IBKR_STATEMENT_GENERATING",
+            "error_params": {"code": 1019},
+            "message": "Statement is generating (Try again shortly)",
+        }
     if "timed out" in s.lower() or "timeout" in s.lower():
-        return "IBKR request timed out"
+        return {
+            "error_code": "ERR_IBKR_TIMEOUT",
+            "error_params": {},
+            "message": "IBKR request timed out",
+        }
     if "HTTP error:" in s:
-        return s.split("HTTP error:")[-1].strip()
-    return s[:60] + "..." if len(s) > 60 else s
+        clean_msg = s.split("HTTP error:")[-1].strip()
+        return {
+            "error_code": "ERR_HTTP_ERROR",
+            "error_params": {"detail": clean_msg},
+            "message": clean_msg,
+        }
+    truncated = s[:60] + "..." if len(s) > 60 else s
+    return {
+        "error_code": "ERR_GENERIC_SYNC",
+        "error_params": {"detail": truncated},
+        "message": truncated,
+    }
+
+
+def clean_ibkr_error(err: Any) -> str:
+    """Simplifies technical IBKR or network exceptions into short, concise phrases."""
+    return classify_ibkr_error(err)["message"]
 
 
 class SyncScheduler:
@@ -48,6 +83,10 @@ class SyncScheduler:
         self.last_daily_sync_date: Optional[str] = None
         self.last_sync_status: str = "idle"
         self.last_sync_message: str = "No sync performed yet."
+        self.last_error_code: Optional[str] = None
+        self.last_error_params: Dict[str, Any] = {}
+        self.last_status_code: Optional[str] = None
+        self.last_status_params: Dict[str, Any] = {}
         self.last_trades_count: int = 0
         self.last_cash_count: int = 0
         self.is_syncing: bool = False
@@ -195,15 +234,28 @@ class SyncScheduler:
         if not is_ibkr_configured():
             self.last_sync_status = "unconfigured"
             self.last_sync_message = "IBKR credentials are not configured in .env."
-            return {"status": "unconfigured", "message": self.last_sync_message}
+            self.last_error_code = "ERR_UNCONFIGURED"
+            self.last_error_params = {}
+            return {
+                "status": "unconfigured",
+                "error_code": self.last_error_code,
+                "error_params": self.last_error_params,
+                "message": self.last_sync_message,
+            }
 
         if self.is_syncing:
-            return {"status": "in_progress", "message": "A synchronization is already currently in progress."}
+            return {
+                "status": "in_progress",
+                "error_code": "ERR_SYNC_IN_PROGRESS",
+                "error_params": {},
+                "message": "A synchronization is already currently in progress.",
+            }
 
         self.is_syncing = True
         self.last_sync_status = "in_progress"
 
         errors = []
+        raw_exceptions = []
         queries_run = []
         total_trades_count = 0
         total_cash_count = 0
@@ -230,6 +282,7 @@ class SyncScheduler:
                 except Exception as e_trade:
                     logger.error(f"Trade query ({trade_query}) failed: {e_trade}")
                     errors.append(f"Trade: {clean_ibkr_error(e_trade)}")
+                    raw_exceptions.append(e_trade)
 
             # 2. Activity / EOD consolidation sync (Activity Query)
             if (
@@ -251,6 +304,7 @@ class SyncScheduler:
                 except Exception as e_act:
                     logger.error(f"Activity query ({activity_query}) failed: {e_act}")
                     errors.append(f"Activity: {clean_ibkr_error(e_act)}")
+                    raw_exceptions.append(e_act)
 
             now = datetime.now(timezone.utc)
 
@@ -259,7 +313,20 @@ class SyncScheduler:
                 clean_msg = "; ".join(errors)
                 self.last_sync_status = "failed"
                 self.last_sync_message = clean_msg
-                return {"status": "failed", "message": clean_msg}
+                first_code = "ERR_GENERIC_SYNC"
+                first_params = {"detail": clean_msg}
+                if raw_exceptions:
+                    first_classified = classify_ibkr_error(raw_exceptions[0])
+                    first_code = first_classified["error_code"]
+                    first_params = first_classified["error_params"]
+                self.last_error_code = first_code
+                self.last_error_params = first_params
+                return {
+                    "status": "failed",
+                    "error_code": first_code,
+                    "error_params": first_params,
+                    "message": clean_msg,
+                }
 
             # At least one query succeeded -> record sync history and resolve sync gaps
             with db_session() as conn:
@@ -280,6 +347,15 @@ class SyncScheduler:
             self.last_sync_time = now
             self.last_api_sync_time = now
             self.last_sync_status = "success"
+            self.last_error_code = None
+            self.last_error_params = {}
+            self.last_status_code = "STATUS_SYNC_SUCCESS" if not errors else "STATUS_SYNC_PARTIAL"
+            self.last_status_params = {
+                "trades": total_trades_count,
+                "cash": total_cash_count,
+                "scope": queries_run,
+                "warning": "; ".join(errors) if errors else "",
+            }
             self.last_trades_count = total_trades_count
             self.last_cash_count = total_cash_count
 
@@ -303,6 +379,8 @@ class SyncScheduler:
             logger.info(self.last_sync_message)
             return {
                 "status": "success" if not errors else "partial_success",
+                "status_code": self.last_status_code,
+                "status_params": self.last_status_params,
                 "message": self.last_sync_message,
                 "trades_count": total_trades_count,
                 "cash_count": total_cash_count,
@@ -312,11 +390,18 @@ class SyncScheduler:
             }
 
         except Exception as e:
-            err_str = str(e)
+            classified = classify_ibkr_error(e)
             self.last_sync_status = "failed"
-            self.last_sync_message = err_str
+            self.last_sync_message = classified["message"]
+            self.last_error_code = classified["error_code"]
+            self.last_error_params = classified["error_params"]
             logger.error(f"Sync failed: {e}")
-            return {"status": "failed", "message": err_str}
+            return {
+                "status": "failed",
+                "error_code": self.last_error_code,
+                "error_params": self.last_error_params,
+                "message": classified["message"],
+            }
         finally:
             self.is_syncing = False
 
@@ -481,6 +566,10 @@ class SyncScheduler:
             else None,
             "next_daily_sync_time": self.calculate_next_daily_sync_time().isoformat() if configured else None,
             "status": status_val,
+            "error_code": self.last_error_code if configured else "ERR_UNCONFIGURED",
+            "error_params": self.last_error_params if configured else {},
+            "status_code": self.last_status_code,
+            "status_params": self.last_status_params,
             "message": msg_val,
             "trades_count": trades_count_val if configured else 0,
             "cash_count": self.last_cash_count if configured else 0,

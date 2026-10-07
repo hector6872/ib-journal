@@ -155,15 +155,15 @@ const StatsController = {
         // 1. Sync Button & Status Text State
         if (status.is_configured === false || status.status === 'unconfigured') {
             if (elLast) elLast.textContent = STRINGS.sync.notConfiguredTitle;
-            if (elNext) elNext.textContent = STRINGS.sync.notConfiguredSubtitle;
+            if (elNext) elNext.textContent = STRINGS.getSyncSubtitle(status);
             btnSync.disabled = true;
             btnSync.classList.add('disabled');
             btnSync.classList.remove('spinning');
-            btnSync.title = "Configure IBKR_TOKEN and IBKR_QUERY_ID in .env to enable automated sync";
+            btnSync.title = STRINGS.getSyncTooltip(status);
             btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncNow;
         } else if (status.status === 'failed') {
             btnSync.classList.remove('disabled');
-            btnSync.title = status.message || "Sync failed";
+            btnSync.title = STRINGS.getSyncTooltip(status);
             if (elLast) {
                 if (status.last_sync_time) {
                     const lastDate = new Date(status.last_sync_time);
@@ -173,20 +173,12 @@ const StatsController = {
                 }
             }
             if (elNext) {
-                const errMsg = status.message || STRINGS.sync.error;
-                elNext.textContent = errMsg.length > 25 ? errMsg.slice(0, 25) + '...' : errMsg;
+                elNext.textContent = STRINGS.getSyncSubtitle(status);
             }
         } else {
             // Normal / Success / Idle / Partial Success State
             btnSync.classList.remove('disabled');
-            const dailyHour = status.daily_activity_sync_hour_utc !== undefined ? status.daily_activity_sync_hour_utc : 6;
-            const hourFormatted = `${String(dailyHour).padStart(2, '0')}:00 UTC`;
-
-            let tooltipMsg = status.message || "Click to synchronize trades from IBKR";
-            if (status.has_trade_query === false && status.has_activity_query === true) {
-                tooltipMsg = `Activity sync active (Daily ${hourFormatted}). Set IBKR_TRADE_QUERY_ID for intraday fills.`;
-            }
-            btnSync.title = tooltipMsg;
+            btnSync.title = STRINGS.getSyncTooltip(status);
 
             if (elLast) {
                 if (status.last_sync_time) {
@@ -197,18 +189,7 @@ const StatsController = {
                 }
             }
             if (elNext) {
-                if (status.is_auto_sync_enabled === false) {
-                    elNext.textContent = status.has_trade_query === false ? `Dev Mode (${hourFormatted})` : STRINGS.sync.devMode;
-                } else if (status.has_trade_query === false) {
-                    elNext.textContent = `Daily ${hourFormatted}`;
-                } else if (status.next_sync_time) {
-                    const nextDate = new Date(status.next_sync_time);
-                    const diffMs = nextDate - new Date();
-                    const diffMins = Math.max(0, Math.round(diffMs / 60000));
-                    elNext.textContent = `${STRINGS.sync.nextSync} ${diffMins}m`;
-                } else {
-                    elNext.textContent = "";
-                }
+                elNext.textContent = STRINGS.getSyncSubtitle(status);
             }
         }
 
@@ -218,7 +199,7 @@ const StatsController = {
         if (btnGap) {
             if (status.has_sync_gap) {
                 btnGap.classList.remove('hidden');
-                if (gapLabel) gapLabel.textContent = `Desync (${status.gap_days}d)`;
+                if (gapLabel) gapLabel.textContent = STRINGS.format(STRINGS.sync.desyncBadge, { days: status.gap_days });
                 btnGap.onclick = () => {
                     if (typeof ImportModal !== 'undefined') {
                         ImportModal.show({ 

@@ -393,12 +393,33 @@ body {
     .brand-title {
         display: none;
     }
+    .brand-badge {
+        width: 26px;
+        height: 26px;
+        font-size: 10.5px;
+    }
     .main-tabs .tab-btn {
-        padding: 6px 10px;
+        padding: 6px 8px;
         font-size: 12px;
     }
     .app-header .header-inner {
         height: 50px;
+        padding: 0 8px;
+        gap: 6px;
+    }
+    .header-left {
+        gap: 6px;
+    }
+    .header-right {
+        gap: 6px;
+    }
+    .sync-section {
+        gap: 4px;
+    }
+    .theme-switch-group button {
+        padding: 3px;
+        width: 24px;
+        height: 24px;
     }
 }
 
@@ -593,6 +614,13 @@ body {
     flex-grow: 1;
 }
 
+@media (max-width: 768px) {
+    .main-content {
+        padding: 12px 10px;
+        gap: 14px;
+    }
+}
+
 /* ============================================================
    Global Executive KPI Summary Banner (IBKR Style - Sticky in Calendar)
    ============================================================ */
@@ -652,6 +680,23 @@ body {
     .kpi-summary-banner {
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         gap: 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .kpi-summary-banner {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .kpi-banner-item:first-child {
+        grid-column: span 2;
+    }
+    .kpi-banner-item {
+        padding: 10px 12px;
+        gap: 4px;
+    }
+    .kpi-banner-value {
+        font-size: 15px;
     }
 }
 

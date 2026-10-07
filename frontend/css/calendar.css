@@ -123,6 +123,24 @@
     }
 }
 
+@media (max-width: 600px) {
+    .week-cards-row {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .week-card.total-card {
+        grid-column: span 2;
+    }
+    .week-card {
+        min-height: 80px;
+        padding: 8px 10px;
+        gap: 4px;
+    }
+    .week-card-pnl {
+        font-size: 13px;
+    }
+}
+
 .week-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-default);
@@ -245,6 +263,19 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+    .month-weekdays-row,
+    .month-days-matrix,
+    .month-weekdays-header,
+    .month-days-grid {
+        min-width: 520px;
+    }
 }
 
 .month-weekdays-row {
@@ -441,6 +472,17 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 10px;
+}
+
+@media (max-width: 600px) {
+    .annual-months-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .annual-mini-month {
+        padding: 6px;
+        gap: 4px;
+    }
 }
 
 .annual-mini-month {
@@ -802,12 +844,35 @@
 @media (max-width: 768px) {
     .stats-kpi-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .stat-card {
+        padding: 10px 10px;
+        min-height: 74px;
+        gap: 4px;
+    }
+    .stat-card-value {
+        font-size: 16px;
+    }
+    .stat-card-subtitle {
+        font-size: 10px;
     }
 }
 
 @media (max-width: 480px) {
     .stats-kpi-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .stat-card {
+        padding: 8px 8px;
+        min-height: 68px;
+    }
+    .stat-card-value {
+        font-size: 14.5px;
+    }
+    .stat-card-label {
+        font-size: 9.5px;
     }
 }
 
@@ -1204,6 +1269,18 @@
     height: 240px;
 }
 
+@media (max-width: 768px) {
+    .chart-canvas-box {
+        height: 220px;
+    }
+    .chart-canvas-box.tall {
+        height: 250px;
+    }
+    .chart-canvas-box.compact {
+        height: 180px;
+    }
+}
+
 /* Risk & Drawdown Grid */
 .risk-drawdown-grid {
     display: grid;
@@ -1216,6 +1293,18 @@
     }
 }
 @media (max-width: 600px) {
+    .risk-drawdown-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .risk-stat-card {
+        padding: 10px 10px;
+    }
+    .risk-stat-value {
+        font-size: 15px;
+    }
+}
+@media (max-width: 380px) {
     .risk-drawdown-grid {
         grid-template-columns: 1fr;
     }
@@ -1939,3 +2028,63 @@
     from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+@media (max-width: 768px) {
+    .modal-container {
+        width: 96%;
+        max-height: 92vh;
+    }
+    .modal-header {
+        padding: 10px 14px;
+    }
+    .modal-body {
+        padding: 12px 10px;
+        gap: 10px;
+    }
+    .modal-summary-banner {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .modal-kpi-card:first-child {
+        grid-column: span 2;
+    }
+    .modal-kpi-card {
+        padding: 8px 10px;
+    }
+    .modal-kpi-val {
+        font-size: 14px;
+    }
+    .trade-card-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+    .trade-card-left {
+        min-width: 0;
+        width: 100%;
+        justify-content: space-between;
+    }
+    .trade-card-center {
+        justify-content: flex-start;
+    }
+    .trade-card-right {
+        width: 100%;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .day-modal-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .day-modal-toolbar .segmented-control {
+        width: 100%;
+        display: flex;
+    }
+    .day-modal-toolbar .segmented-btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
+

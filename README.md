@@ -220,6 +220,15 @@ journalctl -u ib-journal -f
 
 ---
 
+## 🔄 Updating the Journal
+
+To update to the latest version, install any new dependencies, and safely restart the service:
+```bash
+./update.sh
+```
+
+---
+
 ## 🎨 Centralized Text & Copy System (`strings.js`)
 
 All UI text, labels, tab titles, days of the week, months, badges, tooltips, and modal messages are centralized in:

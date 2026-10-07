@@ -202,7 +202,7 @@ const STRINGS = {
         tipNetPnl: "Total realized P&L after deducting all commissions. Subtitle shows gross trading returns and total IBKR fees paid.",
         tipWinRate: "Net Win Rate (% of trades profitable after fees). Subtitle shows gross win rate before fees and price-based W/L counts.",
         tipProfitFactor: "Ratio of total gains to total losses (Gross Profit / Gross Loss). Values > 1.0 indicate profitability.",
-        tipRealizedRr: "Risk/Reward Ratio (R:R): Ratio of Average Win to Average Loss (1 : X). Values > 1.0 indicate average profits are larger than average losses.",
+        tipRealizedRr: "Risk/Reward Ratio (R:R): Ratio of Average Win to Average Loss (1:X). Values > 1.0 indicate average profits are larger than average losses.",
         tipExpectancy: "Expected average return per trade: (Win % × Avg Win) - (Loss % × Avg Loss).",
         tipTotalTrades: "Total number of closed round-trip trades (Winning, Losing, and Breakeven after fees).",
         tipAvgWin: "Average net profit per winning trade after deducting commissions.",

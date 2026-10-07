@@ -443,7 +443,7 @@ const StatsPage = {
                             ${this.renderInfoIcon(sp.tipRealizedRr)}
                         </div>
                         <span class="stat-card-value mono ${this.getRatioClass(ov.realized_rr, ov.total_trades)}">
-                            ${ov.total_trades > 0 && ov.realized_rr !== undefined && ov.realized_rr !== null ? `1 : ${(ov.realized_rr || 0).toFixed(2)}` : '--'}
+                            ${ov.total_trades > 0 && ov.realized_rr !== undefined && ov.realized_rr !== null ? `1:${(ov.realized_rr || 0).toFixed(2)}` : '--'}
                         </span>
                         <span class="stat-card-subtitle mono">
                             ${sp.avgWin} / ${sp.avgLoss}

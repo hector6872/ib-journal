@@ -887,19 +887,9 @@ const StatsPage = {
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByTagTitle}</span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div class="segmented-control" id="stats-tag-tz-control">
-                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
-                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
-                                    </button>
-                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
-                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
-                                    </button>
-                                </div>
-                                <div class="segmented-control">
-                                    <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
-                                    <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
-                                </div>
+                            <div class="segmented-control">
+                                <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
+                                <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
                             </div>
                         </div>
                         <div id="wrap-tag-chart" class="chart-canvas-box ${this.viewModes.tag === 'chart' ? '' : 'hidden'}">
@@ -1922,6 +1912,7 @@ const StatsPage = {
         const values = displayedSymbols.map(s => s.net_pnl);
         const colors = values.map(v => v >= 0 ? theme.profitBar : theme.lossBar);
         const borders = values.map(v => v >= 0 ? theme.profit : theme.loss);
+        const isMobile = window.innerWidth <= 600;
 
         this.charts.symbol = new Chart(canvas, {
             type: 'bar',
@@ -1944,6 +1935,11 @@ const StatsPage = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (context) => {
+                                const idx = context[0]?.dataIndex;
+                                const s = displayedSymbols[idx];
+                                return s ? s.symbol : (labels[idx] || '');
+                            },
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const s = displayedSymbols[idx];
@@ -1959,7 +1955,7 @@ const StatsPage = {
                         grid: { color: theme.grid },
                         ticks: {
                             color: theme.text,
-                            font: { family: 'SF Mono, monospace', size: 10 },
+                            font: { family: 'SF Mono, monospace', size: isMobile ? 9 : 10 },
                             callback: (val) => `${State.currency}${val}`
                         }
                     },
@@ -1968,7 +1964,15 @@ const StatsPage = {
                         ticks: {
                             autoSkip: false,
                             color: theme.textMain,
-                            font: { weight: '700', size: 11 }
+                            font: { weight: '700', size: isMobile ? 9.5 : 11 },
+                            callback: function(val, index) {
+                                const rawLabel = this.getLabelForValue(val);
+                                const isNarrow = window.innerWidth <= 600;
+                                if (isNarrow && rawLabel && rawLabel.length > 12) {
+                                    return rawLabel.slice(0, 10) + '…';
+                                }
+                                return rawLabel;
+                            }
                         }
                     }
                 }
@@ -1996,6 +2000,7 @@ const StatsPage = {
         const values = tags.map(t => t.net_pnl);
         const colors = values.map(v => v >= 0 ? theme.profitBar : theme.lossBar);
         const borders = values.map(v => v >= 0 ? theme.profit : theme.loss);
+        const isMobile = window.innerWidth <= 600;
 
         this.charts.tag = new Chart(canvas, {
             type: 'bar',
@@ -2018,6 +2023,11 @@ const StatsPage = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (context) => {
+                                const idx = context[0]?.dataIndex;
+                                const t = tags[idx];
+                                return t ? t.tag : (labels[idx] || '');
+                            },
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const t = tags[idx];
@@ -2034,7 +2044,7 @@ const StatsPage = {
                         grid: { color: theme.grid },
                         ticks: {
                             color: theme.text,
-                            font: { family: 'SF Mono, monospace', size: 10 },
+                            font: { family: 'SF Mono, monospace', size: isMobile ? 9 : 10 },
                             callback: (val) => `${State.currency}${val}`
                         }
                     },
@@ -2043,7 +2053,15 @@ const StatsPage = {
                         ticks: {
                             autoSkip: false,
                             color: theme.textMain,
-                            font: { weight: '600', size: 11 }
+                            font: { weight: '600', size: isMobile ? 9.5 : 11 },
+                            callback: function(val, index) {
+                                const rawLabel = this.getLabelForValue(val);
+                                const isNarrow = window.innerWidth <= 600;
+                                if (isNarrow && rawLabel && rawLabel.length > 14) {
+                                    return rawLabel.slice(0, 12) + '…';
+                                }
+                                return rawLabel;
+                            }
                         }
                     }
                 }

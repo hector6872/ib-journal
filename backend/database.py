@@ -235,6 +235,9 @@ def init_db():
         # Deduplicate and normalize symbols on initialization
         cleanup_duplicate_trades(conn)
 
+        # Reconcile FIFO PnL on any unassigned executions
+        reconcile_fifo_pnl(cursor)
+
         logger.info("Database initialized successfully with WAL mode.")
 
 
@@ -264,9 +267,18 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
     ON CONFLICT(ib_exec_id) DO UPDATE SET
         symbol = excluded.symbol,
         description = excluded.description,
-        realized_pnl = excluded.realized_pnl,
-        ib_commission = excluded.ib_commission,
+        asset_category = excluded.asset_category,
+        currency = excluded.currency,
+        buy_sell = excluded.buy_sell,
+        quantity = excluded.quantity,
+        trade_price = excluded.trade_price,
+        trade_money = excluded.trade_money,
         proceeds = excluded.proceeds,
+        ib_commission = excluded.ib_commission,
+        realized_pnl = excluded.realized_pnl,
+        trade_date = excluded.trade_date,
+        trade_time = excluded.trade_time,
+        trade_date_time = excluded.trade_date_time,
         open_close_indicator = excluded.open_close_indicator,
         order_type = excluded.order_type,
         exchange = excluded.exchange,
@@ -385,7 +397,98 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
 
         if trades_to_insert:
             cursor.executemany(sql, trades_to_insert)
+
+        # Step 3: Automatically reconcile FIFO P&L for intraday Trade Confirmation fills
+        reconcile_fifo_pnl(cursor)
+
         return len(sanitized_trades)
+
+
+def reconcile_fifo_pnl(conn_or_cursor=None):
+    """
+    Runs FIFO lot-matching on trades across all symbols to compute realized P&L
+    for intraday Trade Confirmation fills that lack official EOD settled P&L.
+    """
+    from collections import defaultdict
+
+    def _run_reconciliation(cursor):
+        rows = cursor.execute(
+            """
+            SELECT id, symbol, asset_category, buy_sell, quantity, trade_price, 
+                   proceeds, fx_rate_to_base, realized_pnl, raw_realized_pnl, open_close_indicator
+            FROM trades
+            ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
+            """
+        ).fetchall()
+
+        by_sym = defaultdict(list)
+        for r in rows:
+            by_sym[r["symbol"]].append(dict(r))
+
+        for sym, fills in by_sym.items():
+            open_lots = []
+            for fill in fills:
+                qty = float(fill["quantity"])
+                price = float(fill["trade_price"])
+                cat = fill.get("asset_category", "STK")
+                mult = 100.0 if (cat == "OPT" or "OPT" in sym or " " in sym) and cat != "CASH" else 1.0
+                fx_rate = float(fill.get("fx_rate_to_base") or 1.0)
+                existing_pnl = float(fill.get("realized_pnl") or 0.0)
+
+                current_open_qty = sum(l["qty"] for l in open_lots)
+
+                if len(open_lots) == 0 or (current_open_qty > 0 and qty > 0) or (current_open_qty < 0 and qty < 0):
+                    # Opening lot
+                    open_lots.append({"qty": qty, "price": price, "fx_rate": fx_rate, "id": fill["id"]})
+                    if (fill.get("open_close_indicator") or "") not in ("O", "C;P"):
+                        cursor.execute("UPDATE trades SET open_close_indicator = 'O' WHERE id = ?", (fill["id"],))
+                else:
+                    # Closing lot
+                    rem_close_qty = abs(qty)
+                    is_closing_long = current_open_qty > 0
+                    calc_raw_pnl = 0.0
+
+                    while rem_close_qty > 1e-6 and len(open_lots) > 0:
+                        lot = open_lots[0]
+                        match_qty = min(rem_close_qty, abs(lot["qty"]))
+
+                        if is_closing_long:
+                            lot_pnl = (price - lot["price"]) * match_qty * mult
+                        else:
+                            lot_pnl = (lot["price"] - price) * match_qty * mult
+
+                        calc_raw_pnl += lot_pnl
+                        rem_close_qty -= match_qty
+
+                        if abs(lot["qty"]) <= match_qty + 1e-6:
+                            open_lots.pop(0)
+                        else:
+                            if lot["qty"] > 0:
+                                lot["qty"] -= match_qty
+                            else:
+                                lot["qty"] += match_qty
+
+                    if rem_close_qty > 1e-6:
+                        new_open_qty = rem_close_qty if qty > 0 else -rem_close_qty
+                        open_lots.append({"qty": new_open_qty, "price": price, "fx_rate": fx_rate, "id": fill["id"]})
+
+                    # If existing_pnl is 0 (or not set) and we calculated a non-zero PnL, update database record
+                    if abs(existing_pnl) < 1e-6 and abs(calc_raw_pnl) > 1e-6:
+                        calc_base_pnl = round(calc_raw_pnl * fx_rate, 4)
+                        cursor.execute(
+                            """
+                            UPDATE trades 
+                            SET realized_pnl = ?, raw_realized_pnl = ?, open_close_indicator = 'C' 
+                            WHERE id = ?
+                            """,
+                            (calc_base_pnl, round(calc_raw_pnl, 4), fill["id"]),
+                        )
+
+    if conn_or_cursor is not None:
+        _run_reconciliation(conn_or_cursor)
+    else:
+        with db_session() as conn:
+            _run_reconciliation(conn.cursor())
 
 
 def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:

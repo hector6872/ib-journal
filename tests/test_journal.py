@@ -1039,6 +1039,43 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         self.assertEqual(cash_txs[0]["transaction_type"], "TRANSFER")
         self.assertEqual(cash_txs[0]["amount"], 5000.0)
 
+        # Test Trade Confirmation XML parsing (intraday fills format)
+        trade_confirm_xml = """<FlexQueryResponse>
+            <FlexStatements>
+                <FlexStatement>
+                    <TradeConfirms>
+                        <TradeConfirm accountId="U6920617" symbol="QQQ 07OCT26 758 C" description="QQQ 07OCT26 758 C"
+                                      assetCategory="OPT" currency="USD" fxRateToBase="0.92"
+                                      buySell="BUY" quantity="3" price="0.39" proceeds="-117.0"
+                                      commission="1.65" dateTime="20261007;102507"
+                                      transactionID="CONFIRM_1" orderType="LMT" exchange="SAPPHIRE" />
+                        <TradeConfirm accountId="U6920617" symbol="QQQ 07OCT26 758 C" description="QQQ 07OCT26 758 C"
+                                      assetCategory="OPT" currency="USD" fxRateToBase="0.92"
+                                      buySell="SELL" quantity="-3" price="0.34" proceeds="102.0"
+                                      commission="1.65" dateTime="20261007;104246"
+                                      transactionID="CONFIRM_2" orderType="LMT" exchange="AMEX" />
+                    </TradeConfirms>
+                </FlexStatement>
+            </FlexStatements>
+        </FlexQueryResponse>"""
+
+        tc_trades = client.parse_trades_xml(trade_confirm_xml)
+        self.assertEqual(len(tc_trades), 2)
+        self.assertEqual(tc_trades[0]["symbol"], "QQQ 07OCT26 758 C")
+        self.assertEqual(tc_trades[0]["trade_price"], 0.39)
+        self.assertEqual(tc_trades[0]["proceeds"], -117.0)
+        self.assertAlmostEqual(tc_trades[0]["ib_commission"], 1.65 * 0.92, places=2)
+
+        # Test group_executions_to_trades calculates round-trip gross PnL correctly
+        from backend.analytics import group_executions_to_trades
+        grouped = group_executions_to_trades(tc_trades)
+        self.assertEqual(len(grouped), 1)
+        self.assertEqual(grouped[0]["status"], "CLOSED")
+        self.assertEqual(grouped[0]["direction"], "BUY CALL")
+        # Entry: 3 * 0.39 * 100 = $117; Exit: 3 * 0.34 * 100 = $102; Raw PnL = -$15
+        self.assertEqual(grouped[0]["raw_gross_pnl"], -15.0)
+        self.assertAlmostEqual(grouped[0]["gross_pnl"], -15.0 * 0.92, places=2)
+
         # Test daily consolidation time calculation
         ref_morning = datetime(2026, 10, 7, 4, 0, tzinfo=timezone.utc)
         next_daily = scheduler.calculate_next_daily_sync_time(ref_morning)

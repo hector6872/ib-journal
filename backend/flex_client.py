@@ -219,38 +219,109 @@ class IBKRFlexClient:
                     trade_date = date.today().isoformat()
 
                 # PnL & Money calculations
-                fx_rate = float(attrs.get("fxRateToBase") or 1.0)
-                raw_currency = (attrs.get("currency") or "EUR").upper()
-                base_currency = (attrs.get("baseCurrency") or "EUR").upper()
+                fx_rate = float(attrs.get("fxRateToBase") or attrs.get("fxRate") or 1.0)
+                raw_currency = (attrs.get("currency") or attrs.get("tradeCurrency") or "EUR").upper()
+                base_currency = (attrs.get("baseCurrency") or attrs.get("accountBaseCurrency") or "EUR").upper()
 
-                raw_pnl = float(attrs.get("fifoPnlRealized") or attrs.get("realizedPNL") or attrs.get("fxPnl") or 0.0)
-                raw_comm = abs(float(attrs.get("ibCommission") or attrs.get("taxes") or 0.0))
+                raw_pnl = float(
+                    attrs.get("fifoPnlRealized")
+                    or attrs.get("realizedPNL")
+                    or attrs.get("realizedPnl")
+                    or attrs.get("fxPnl")
+                    or attrs.get("pnl")
+                    or attrs.get("fifoPnl")
+                    or attrs.get("mtmPnl")
+                    or 0.0
+                )
+                raw_comm = abs(
+                    float(
+                        attrs.get("ibCommission")
+                        or attrs.get("commission")
+                        or attrs.get("totalCommission")
+                        or attrs.get("taxes")
+                        or attrs.get("fee")
+                        or attrs.get("commissionAmount")
+                        or attrs.get("totalFee")
+                        or 0.0
+                    )
+                )
 
                 # Convert to base currency using fxRateToBase
                 realized_pnl = round(raw_pnl * fx_rate, 4) if fx_rate > 0 else raw_pnl
                 commission = round(raw_comm * fx_rate, 4) if fx_rate > 0 else raw_comm
 
-                quantity = float(attrs.get("quantity") or 0.0)
-                trade_price = float(attrs.get("tradePrice") or 0.0)
-                trade_money = float(attrs.get("tradeMoney") or (abs(quantity) * trade_price))
-                proceeds = float(attrs.get("proceeds") or 0.0)
-
-                raw_sym = attrs.get("symbol") or "UNKNOWN"
-                desc = attrs.get("description") or ""
-                asset_category = attrs.get("assetCategory") or "STK"
+                raw_sym = attrs.get("symbol") or attrs.get("underlyingSymbol") or attrs.get("contractDescription") or "UNKNOWN"
+                desc = attrs.get("description") or attrs.get("contractDescription") or ""
+                asset_category = (attrs.get("assetCategory") or attrs.get("secType") or "STK").upper()
                 norm_symbol = normalize_symbol(raw_sym, desc, asset_category)
+                if asset_category == "STK" and ("OPT" in norm_symbol or " " in raw_sym):
+                    asset_category = "OPT"
+
+                multiplier = float(attrs.get("multiplier") or attrs.get("contractMultiplier") or (100.0 if asset_category == "OPT" else 1.0))
+                if multiplier <= 0:
+                    multiplier = 100.0 if asset_category == "OPT" else 1.0
+
+                quantity = float(
+                    attrs.get("quantity")
+                    or attrs.get("shares")
+                    or attrs.get("size")
+                    or attrs.get("filledQuantity")
+                    or attrs.get("filledShares")
+                    or attrs.get("volume")
+                    or attrs.get("execQty")
+                    or 0.0
+                )
+                
+                trade_price = float(
+                    attrs.get("tradePrice")
+                    or attrs.get("price")
+                    or attrs.get("orderPrice")
+                    or attrs.get("avgPrice")
+                    or attrs.get("tradePriceUSD")
+                    or attrs.get("priceUSD")
+                    or attrs.get("executionPrice")
+                    or attrs.get("execPrice")
+                    or 0.0
+                )
+
+                proceeds = float(
+                    attrs.get("proceeds")
+                    or attrs.get("netCash")
+                    or attrs.get("netAmount")
+                    or attrs.get("grossProceeds")
+                    or 0.0
+                )
+
+                # Mathematical fallbacks if direct attributes are omitted in Trade Confirmation queries
+                if trade_price == 0.0 and proceeds != 0.0 and quantity != 0.0:
+                    trade_price = round(abs(proceeds) / (abs(quantity) * multiplier), 4)
+
+                side_raw = (attrs.get("buySell") or attrs.get("side") or attrs.get("action") or ("BUY" if quantity > 0 else "SELL")).upper()
+                buy_sell = "BUY" if ("BUY" in side_raw or "BOT" in side_raw) else ("SELL" if ("SELL" in side_raw or "SLD" in side_raw) else side_raw)
+
+                if proceeds == 0.0 and quantity != 0.0 and trade_price > 0.0:
+                    sign = -1.0 if buy_sell == "BUY" else 1.0
+                    proceeds = round(sign * abs(quantity) * trade_price * multiplier, 4)
+
+                trade_money = float(
+                    attrs.get("tradeMoney")
+                    or attrs.get("grossAmount")
+                    or attrs.get("amount")
+                    or attrs.get("value")
+                    or (abs(quantity) * trade_price * multiplier)
+                )
 
                 trade_record = {
                     "ib_exec_id": exec_id,
                     "trade_id": attrs.get("tradeID") or exec_id,
-                    "account_id": attrs.get("accountId") or "",
+                    "account_id": attrs.get("accountId") or attrs.get("clientAccountId") or "",
                     "symbol": norm_symbol,
                     "description": desc or norm_symbol,
                     "asset_category": asset_category,
                     "currency": raw_currency,
                     "raw_currency": raw_currency,
                     "base_currency": base_currency,
-                    "buy_sell": (attrs.get("buySell") or "BUY").upper(),
+                    "buy_sell": buy_sell,
                     "quantity": quantity,
                     "trade_price": trade_price,
                     "trade_money": trade_money,
@@ -263,9 +334,9 @@ class IBKRFlexClient:
                     "trade_date": trade_date,
                     "trade_time": trade_time,
                     "trade_date_time": trade_datetime_iso,
-                    "open_close_indicator": attrs.get("openCloseIndicator") or "C",
-                    "order_type": (attrs.get("orderType") or "MKT").upper(),
-                    "exchange": (attrs.get("exchange") or "SMART").upper(),
+                    "open_close_indicator": (attrs.get("openCloseIndicator") or attrs.get("code") or attrs.get("openClose") or "C").upper(),
+                    "order_type": (attrs.get("orderType") or attrs.get("order_type") or "MKT").upper(),
+                    "exchange": (attrs.get("exchange") or attrs.get("listingExchange") or attrs.get("execExchange") or "SMART").upper(),
                 }
                 trades.append(trade_record)
 

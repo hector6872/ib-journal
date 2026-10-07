@@ -310,6 +310,14 @@ const DayModal = {
 
                 if (Math.abs(pos) < 1e-6) {
                     current.status = 'CLOSED';
+                    const multiplier = current.asset_category === 'OPT' ? 100 : 1;
+                    if (Math.abs(current.gross_pnl) < 1e-6 && (current.entry_val > 0 || current.exit_val > 0)) {
+                        const rawPnl = current.is_initial_buy
+                            ? (current.exit_val - current.entry_val) * multiplier
+                            : (current.entry_val - current.exit_val) * multiplier;
+                        current.raw_gross_pnl = rawPnl;
+                        current.gross_pnl = rawPnl * (current.fx_rate_to_base || 1);
+                    }
                     current.net_pnl = current.gross_pnl - current.commission;
                     current.avg_entry_price = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : 0;
                     current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
@@ -361,12 +369,16 @@ const DayModal = {
 
         // Totals calculation
         const closedRawTrades = rawTrades.filter(t => (t.open_close_indicator || '').toUpperCase() === 'C' || (t.realized_pnl !== 0 && t.realized_pnl !== null && t.realized_pnl !== undefined));
-        const grossPnl = closedRawTrades.reduce((acc, t) => acc + (t.realized_pnl || 0), 0);
+        const closedGrouped = groupedTrades.filter(g => g.status === 'CLOSED');
+
+        let grossPnl = closedRawTrades.reduce((acc, t) => acc + (t.realized_pnl || 0), 0);
+        if (Math.abs(grossPnl) < 1e-6 && closedGrouped.length > 0) {
+            grossPnl = closedGrouped.reduce((acc, g) => acc + (g.gross_pnl || 0), 0);
+        }
         const totalComm = rawTrades.reduce((acc, t) => acc + (t.ib_commission || 0), 0);
         const netPnl = grossPnl - totalComm;
 
         // Grouped metrics
-        const closedGrouped = groupedTrades.filter(g => g.status === 'CLOSED');
         const winCount = closedGrouped.filter(g => (g.net_pnl || 0) > 0).length;
         const lossCount = closedGrouped.filter(g => (g.net_pnl || 0) < 0).length;
         const winRate = closedGrouped.length > 0 ? ((winCount / closedGrouped.length) * 100).toFixed(0) : '--';

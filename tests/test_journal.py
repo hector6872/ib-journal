@@ -158,6 +158,7 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertEqual(ov["losing_trades"], 1)
         self.assertEqual(ov["win_rate"], 50.0)
         self.assertEqual(ov["net_pnl"], 58.0)
+        self.assertEqual(ov["realized_rr"], 2.41)
 
         detailed = get_detailed_stats()
         self.assertIn("holding_durations", detailed)
@@ -762,8 +763,66 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         self.assertEqual(len(day_trades_rerun), 1)
         self.assertEqual(day_trades_rerun[0]["ib_exec_id"], "6778374621")
 
+    def test_scheduler_sync_modes(self):
+        """Tests is_market_hours and calculate_next_sync_time across different SYNC_MODEs."""
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from backend.scheduler import scheduler
+
+        # 1. 'western' mode (07:00 - 21:15 UTC Mon-Fri)
+        with patch("backend.scheduler.SYNC_MODE", "western"):
+            # Monday at 10:00 UTC (open)
+            mon_open = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+            self.assertTrue(scheduler.is_market_hours(mon_open))
+            next_sync = scheduler.calculate_next_sync_time(mon_open)
+            self.assertEqual(next_sync, datetime(2026, 10, 5, 11, 0, tzinfo=timezone.utc))
+
+            # Monday at 22:00 UTC (closed)
+            mon_closed = datetime(2026, 10, 5, 22, 0, tzinfo=timezone.utc)
+            self.assertFalse(scheduler.is_market_hours(mon_closed))
+            next_open = scheduler.calculate_next_sync_time(mon_closed)
+            self.assertEqual(next_open, datetime(2026, 10, 6, 7, 0, tzinfo=timezone.utc))
+
+            # Saturday at 12:00 UTC (weekend closed)
+            sat = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
+            self.assertFalse(scheduler.is_market_hours(sat))
+            next_open = scheduler.calculate_next_sync_time(sat)
+            self.assertEqual(next_open, datetime(2026, 10, 12, 7, 0, tzinfo=timezone.utc))
+
+        # 2. 'global' mode (24/5 Sun 22:00 UTC to Fri 22:00 UTC)
+        with patch("backend.scheduler.SYNC_MODE", "global"):
+            # Tuesday at 02:00 UTC (open during Asian session)
+            tue_asian = datetime(2026, 10, 6, 2, 0, tzinfo=timezone.utc)
+            self.assertTrue(scheduler.is_market_hours(tue_asian))
+            next_sync = scheduler.calculate_next_sync_time(tue_asian)
+            self.assertEqual(next_sync, datetime(2026, 10, 6, 3, 0, tzinfo=timezone.utc))
+
+            # Sunday at 15:00 UTC (weekend closed)
+            sun_closed = datetime(2026, 10, 4, 15, 0, tzinfo=timezone.utc)
+            self.assertFalse(scheduler.is_market_hours(sun_closed))
+            next_open = scheduler.calculate_next_sync_time(sun_closed)
+            self.assertEqual(next_open, datetime(2026, 10, 4, 22, 0, tzinfo=timezone.utc))
+
+            # Sunday at 22:30 UTC (opened for week)
+            sun_open = datetime(2026, 10, 4, 22, 30, tzinfo=timezone.utc)
+            self.assertTrue(scheduler.is_market_hours(sun_open))
+
+            # Friday at 21:30 UTC (near close, next sync candidate 22:30 is past close -> Sunday 22:00)
+            fri_night = datetime(2026, 10, 9, 21, 30, tzinfo=timezone.utc)
+            self.assertTrue(scheduler.is_market_hours(fri_night))
+            next_sync = scheduler.calculate_next_sync_time(fri_night)
+            self.assertEqual(next_sync, datetime(2026, 10, 11, 22, 0, tzinfo=timezone.utc))
+
+        # 3. 'always' mode (24/7 continuous)
+        with patch("backend.scheduler.SYNC_MODE", "always"):
+            sat = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
+            self.assertTrue(scheduler.is_market_hours(sat))
+            next_sync = scheduler.calculate_next_sync_time(sat)
+            self.assertEqual(next_sync, datetime(2026, 10, 10, 13, 0, tzinfo=timezone.utc))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

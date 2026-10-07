@@ -27,7 +27,7 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
   - **Month Calendar**: Traditional monthly grid with daily P&L badges and trade counters.
   - **Week Breakdown**: 7-day cards view (Monday–Sunday) with volume and executions.
 - **📊 In-Depth Trading Analytics**:
-  - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Expectancy, Net Realized P&L, Total Trades, Commissions).
+  - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Risk/Reward `R:R`, Expectancy, Net Realized P&L, Total Trades, Commissions).
   - Portfolio Capital & Equity Overview strip in Statistics.
   - Risk & Drawdown analysis (Max Drawdown, Current Drawdown, Winning/Losing Streaks).
   - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL) and momentum tracking.
@@ -103,6 +103,7 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 | `PORT` | `8000` | HTTP port the server listens on. |
 | `HOST` | `0.0.0.0` | Bind host address (`0.0.0.0` allows LAN access). |
 | `CURRENCY_SYMBOL` | `$` | Display currency symbol (`$`, `€`, `£`, `¥`, etc.). |
+| `SYNC_MODE` | `global` | Schedule mode: `global` (24/5 Sun-Fri), `western` (07:00-21:15 UTC Mon-Fri), `always` (24/7). |
 | `SYNC_INTERVAL_MINUTES` | `60` | Background automatic sync frequency in minutes. |
 | `SYNC_COOLDOWN_SECONDS` | `600` | Cooldown period between manual sync requests (seconds). |
 | `DB_PATH` | `data/journal.db` | Relative or absolute path to the SQLite database file. |

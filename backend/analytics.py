@@ -70,6 +70,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         avg_win = (gross_profit / winning_trades) if winning_trades > 0 else 0.0
         avg_loss = (gross_loss / losing_trades) if losing_trades > 0 else 0.0
+        realized_rr = round(avg_win / avg_loss, 2) if avg_loss > 0 else (round(avg_win, 2) if avg_win > 0 else 0.0)
         loss_rate_dec = (losing_trades / total_trades) if total_trades > 0 else 0.0
         win_rate_dec = (winning_trades / total_trades) if total_trades > 0 else 0.0
 
@@ -218,6 +219,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "win_rate": win_rate,
             "gross_win_rate": gross_win_rate,
             "profit_factor": profit_factor,
+            "realized_rr": realized_rr,
             "adj_win_loss_ratio": adj_win_loss_ratio,
             "sharpe_per_trade": sharpe_per_trade,
             "expectancy": expectancy,
@@ -462,6 +464,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 pf = round((g_profit / g_loss), 2) if g_loss > 0 else (round(g_profit, 2) if g_profit > 0 else 0.0)
                 a_win = round((g_profit / wins), 2) if wins > 0 else 0.0
                 a_loss = round((g_loss / losses), 2) if losses > 0 else 0.0
+                rr = round(a_win / a_loss, 2) if a_loss > 0 else (round(a_win, 2) if a_win > 0 else 0.0)
                 exp = round(((wins / tot) * a_win) - ((losses / tot) * a_loss), 2) if tot > 0 else 0.0
                 avg_pnl_trade = round((pnl / tot), 2) if tot > 0 else 0.0
 
@@ -472,6 +475,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     "cumulative_pnl": round(cum_pnl, 2),
                     "win_rate": wr,
                     "profit_factor": pf,
+                    "realized_rr": rr,
                     "avg_win": a_win,
                     "avg_loss": a_loss,
                     "expectancy": exp,

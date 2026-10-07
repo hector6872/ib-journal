@@ -62,10 +62,12 @@ PORT = int(os.getenv("PORT", "8000"))
 CURRENCY_SYMBOL = os.getenv("CURRENCY_SYMBOL", "$")
 
 # Sync Settings
+SYNC_MODE = os.getenv("SYNC_MODE", "global").strip().lower()
 SYNC_INTERVAL_MINUTES = int(os.getenv("SYNC_INTERVAL_MINUTES", "60"))
 SYNC_COOLDOWN_SECONDS = int(os.getenv("SYNC_COOLDOWN_SECONDS", "600"))
 
 # Database Path
 DB_PATH = BASE_DIR / os.getenv("DB_PATH", "data/journal.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 

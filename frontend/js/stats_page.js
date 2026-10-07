@@ -12,6 +12,7 @@ const StatsPage = {
     activeMetrics: {
         win_rate: true,
         profit_factor: true,
+        realized_rr: true,
         avg_win: true,
         avg_loss: true,
         expectancy: true,
@@ -138,6 +139,7 @@ const StatsPage = {
             metricColors: {
                 win_rate: '#10b981',
                 profit_factor: '#8b5cf6',
+                realized_rr: '#a855f7',
                 avg_win: '#3b82f6',
                 avg_loss: '#ef4444',
                 expectancy: '#f59e0b',
@@ -293,6 +295,7 @@ const StatsPage = {
         const metricIdMap = {
             'win_rate': 'm-win-rate',
             'profit_factor': 'm-pf',
+            'realized_rr': 'm-rr',
             'avg_win': 'm-avg-win',
             'avg_loss': 'm-avg-loss',
             'expectancy': 'm-exp',
@@ -433,7 +436,21 @@ const StatsPage = {
                         </span>
                     </div>
 
-                    <!-- 4. Expectancy -->
+                    <!-- 4. R:R -->
+                    <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="rr">
+                        <div class="stat-card-header">
+                            <span class="stat-card-label">${STRINGS.kpi.realizedRr}</span>
+                            ${this.renderInfoIcon(sp.tipRealizedRr)}
+                        </div>
+                        <span class="stat-card-value mono ${this.getRatioClass(ov.realized_rr, ov.total_trades)}">
+                            ${ov.total_trades > 0 && ov.realized_rr !== undefined && ov.realized_rr !== null ? `1:${(ov.realized_rr || 0).toFixed(2)}` : '--'}
+                        </span>
+                        <span class="stat-card-subtitle mono">
+                            ${sp.avgWin} / ${sp.avgLoss}
+                        </span>
+                    </div>
+
+                    <!-- 5. Expectancy -->
                     <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="exp">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
@@ -521,7 +538,7 @@ const StatsPage = {
                             ${(ov.adj_win_loss_ratio || 0).toFixed(2)}
                         </span>
                         <span class="stat-card-subtitle mono">
-                            Payoff ${(ov.avg_loss > 0 ? (ov.avg_win / ov.avg_loss).toFixed(2) : '--')}
+                            (Win% × Avg Win) / (Loss% × Avg Loss)
                         </span>
                     </div>
 
@@ -695,6 +712,11 @@ const StatsPage = {
                             <span>${sp.profitFactorMetric}</span>
                         </label>
 
+                        <label class="metric-toggle-label" style="--metric-color: #a855f7;">
+                            <input type="checkbox" id="m-rr" ${this.activeMetrics.realized_rr ? 'checked' : ''}>
+                            <span>${sp.realizedRrMetric}</span>
+                        </label>
+
                         <label class="metric-toggle-label" style="--metric-color: #3b82f6;">
                             <input type="checkbox" id="m-avg-win" ${this.activeMetrics.avg_win ? 'checked' : ''}>
                             <span>${sp.avgWinMetric}</span>
@@ -865,19 +887,9 @@ const StatsPage = {
                             <div class="stats-section-title-wrap">
                                 <span>${sp.pnlByTagTitle}</span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div class="segmented-control" id="stats-tag-tz-control">
-                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
-                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
-                                    </button>
-                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
-                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
-                                    </button>
-                                </div>
-                                <div class="segmented-control">
-                                    <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
-                                    <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
-                                </div>
+                            <div class="segmented-control">
+                                <button class="segmented-btn ${this.viewModes.tag === 'chart' ? 'active' : ''}" data-view-target="tag" data-view-val="chart">${sp.chartView}</button>
+                                <button class="segmented-btn ${this.viewModes.tag === 'table' ? 'active' : ''}" data-view-target="tag" data-view-val="table">${sp.tableView}</button>
                             </div>
                         </div>
                         <div id="wrap-tag-chart" class="chart-canvas-box ${this.viewModes.tag === 'chart' ? '' : 'hidden'}">
@@ -1122,8 +1134,8 @@ const StatsPage = {
                                     <strong>${optionsSummary.expired_count} of ${optionsSummary.total_trades}</strong> ${sp.expiredSubNotice || 'held to expiration ($0.00 auto-settlement)'} (${optionsSummary.expired_pct}%), and <strong>${optionsSummary.manual_count}</strong> ${sp.manualSubNotice || 'actively closed in the market before expiry'} (${optionsSummary.manual_pct}%).
                                 </div>
 
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11.5px;">
-                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                <div class="options-summary-subgrid">
+                                    <div class="options-summary-subcard">
                                         <div style="display: flex; align-items: center; justify-content: space-between;">
                                             <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.expiredLabel || 'Expired at $0.00'}</span>
                                             <span style="font-size: 10px; color: var(--color-loss); font-weight: 700;">${optionsSummary.expired_pct}%</span>
@@ -1135,7 +1147,7 @@ const StatsPage = {
                                         </div>
                                     </div>
 
-                                    <div style="display: flex; flex-direction: column; gap: 3px; background: var(--bg-card); padding: 9px 11px; border-radius: var(--radius-xs); border: 1px solid var(--border-default);">
+                                    <div class="options-summary-subcard">
                                         <div style="display: flex; align-items: center; justify-content: space-between;">
                                             <span style="color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${sp.manualLabel || 'Closed in Market'}</span>
                                             <span style="font-size: 10px; color: var(--color-profit); font-weight: 700;">${optionsSummary.manual_pct}%</span>
@@ -1169,6 +1181,7 @@ const StatsPage = {
             const metricKeyMap = {
                 'win-rate': 'win_rate',
                 'pf': 'profit_factor',
+                'rr': 'realized_rr',
                 'avg-win': 'avg_win',
                 'avg-loss': 'avg_loss',
                 'exp': 'expectancy',
@@ -1281,6 +1294,7 @@ const StatsPage = {
         const metricMap = {
             'm-win-rate': 'win_rate',
             'm-pf': 'profit_factor',
+            'm-rr': 'realized_rr',
             'm-avg-win': 'avg_win',
             'm-avg-loss': 'avg_loss',
             'm-exp': 'expectancy',
@@ -1599,6 +1613,19 @@ const StatsPage = {
             });
         }
 
+        if (this.activeMetrics.realized_rr) {
+            datasets.push({
+                label: STRINGS.statsPage.realizedRrMetric,
+                data: series.map(s => s.realized_rr),
+                borderColor: theme.metricColors.realized_rr,
+                backgroundColor: theme.metricColors.realized_rr,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: labels.length > 35 ? 0 : 3,
+                yAxisID: 'yRatio'
+            });
+        }
+
         if (this.activeMetrics.avg_win) {
             datasets.push({
                 label: STRINGS.statsPage.avgWinMetric,
@@ -1672,7 +1699,7 @@ const StatsPage = {
         };
 
         const needsPercent = this.activeMetrics.win_rate;
-        const needsRatio = this.activeMetrics.profit_factor;
+        const needsRatio = this.activeMetrics.profit_factor || this.activeMetrics.realized_rr;
         const needsCurrency = this.activeMetrics.avg_win || this.activeMetrics.avg_loss ||
             this.activeMetrics.expectancy || this.activeMetrics.avg_trade_pnl || this.activeMetrics.cumulative_pnl;
 
@@ -1885,6 +1912,7 @@ const StatsPage = {
         const values = displayedSymbols.map(s => s.net_pnl);
         const colors = values.map(v => v >= 0 ? theme.profitBar : theme.lossBar);
         const borders = values.map(v => v >= 0 ? theme.profit : theme.loss);
+        const isMobile = window.innerWidth <= 600;
 
         this.charts.symbol = new Chart(canvas, {
             type: 'bar',
@@ -1907,6 +1935,11 @@ const StatsPage = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (context) => {
+                                const idx = context[0]?.dataIndex;
+                                const s = displayedSymbols[idx];
+                                return s ? s.symbol : (labels[idx] || '');
+                            },
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const s = displayedSymbols[idx];
@@ -1922,7 +1955,7 @@ const StatsPage = {
                         grid: { color: theme.grid },
                         ticks: {
                             color: theme.text,
-                            font: { family: 'SF Mono, monospace', size: 10 },
+                            font: { family: 'SF Mono, monospace', size: isMobile ? 9 : 10 },
                             callback: (val) => `${State.currency}${val}`
                         }
                     },
@@ -1931,7 +1964,15 @@ const StatsPage = {
                         ticks: {
                             autoSkip: false,
                             color: theme.textMain,
-                            font: { weight: '700', size: 11 }
+                            font: { weight: '700', size: isMobile ? 9.5 : 11 },
+                            callback: function(val, index) {
+                                const rawLabel = this.getLabelForValue(val);
+                                const isNarrow = window.innerWidth <= 600;
+                                if (isNarrow && rawLabel && rawLabel.length > 12) {
+                                    return rawLabel.slice(0, 10) + '…';
+                                }
+                                return rawLabel;
+                            }
                         }
                     }
                 }
@@ -1959,6 +2000,7 @@ const StatsPage = {
         const values = tags.map(t => t.net_pnl);
         const colors = values.map(v => v >= 0 ? theme.profitBar : theme.lossBar);
         const borders = values.map(v => v >= 0 ? theme.profit : theme.loss);
+        const isMobile = window.innerWidth <= 600;
 
         this.charts.tag = new Chart(canvas, {
             type: 'bar',
@@ -1981,6 +2023,11 @@ const StatsPage = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (context) => {
+                                const idx = context[0]?.dataIndex;
+                                const t = tags[idx];
+                                return t ? t.tag : (labels[idx] || '');
+                            },
                             label: (context) => {
                                 const idx = context.dataIndex;
                                 const t = tags[idx];
@@ -1997,7 +2044,7 @@ const StatsPage = {
                         grid: { color: theme.grid },
                         ticks: {
                             color: theme.text,
-                            font: { family: 'SF Mono, monospace', size: 10 },
+                            font: { family: 'SF Mono, monospace', size: isMobile ? 9 : 10 },
                             callback: (val) => `${State.currency}${val}`
                         }
                     },
@@ -2006,7 +2053,15 @@ const StatsPage = {
                         ticks: {
                             autoSkip: false,
                             color: theme.textMain,
-                            font: { weight: '600', size: 11 }
+                            font: { weight: '600', size: isMobile ? 9.5 : 11 },
+                            callback: function(val, index) {
+                                const rawLabel = this.getLabelForValue(val);
+                                const isNarrow = window.innerWidth <= 600;
+                                if (isNarrow && rawLabel && rawLabel.length > 14) {
+                                    return rawLabel.slice(0, 12) + '…';
+                                }
+                                return rawLabel;
+                            }
                         }
                     }
                 }

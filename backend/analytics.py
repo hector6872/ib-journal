@@ -1122,8 +1122,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     opt_stats[strat_key]["losses"] += 1
                 opt_stats[strat_key]["net_pnl"] += net
 
-            exit_price = float(t.get("exit_price") or 0.0)
-            is_expired = exit_price == 0.0 or t.get("is_expired", False)
+            exit_price = float(t.get("avg_exit_price") or t.get("exit_price") or 0.0)
+            is_expired = exit_price <= 1e-5 or bool(t.get("is_expired", False))
 
             if is_expired:
                 expired_count += 1

@@ -25,8 +25,10 @@ const STRINGS = {
 
     // Header & KPIs
     kpi: {
+        nav: "NAV",
         winRate: "Win Rate",
         trades: "Total Trades",
+        totalTrades: "Total Trades",
         operations: "Total Trades",
         profitFactor: "Profit Factor",
         realizedRr: "R:R",
@@ -39,6 +41,7 @@ const STRINGS = {
 
     // Docked Mini KPIs in Sticky Header (Abbreviated)
     miniKpi: {
+        nav: "NAV",
         pnl: "P&L",
         wr: "WR",
         pf: "PF",

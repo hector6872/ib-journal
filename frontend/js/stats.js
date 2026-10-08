@@ -22,12 +22,16 @@ const StatsController = {
         if (!data) return;
 
         // 1. Full Body Banner (Calendar view)
+        const elNav = document.getElementById('banner-nav');
         const elNetPnl = document.getElementById('banner-net-pnl');
         const elWr = document.getElementById('banner-wr');
-        const elOps = document.getElementById('banner-trades');
         const elPf = document.getElementById('banner-pf');
         const elExp = document.getElementById('banner-expectancy');
 
+        if (elNav) {
+            elNav.textContent = State.formatCurrency(data.account_balance || 0, true, false);
+            elNav.className = `kpi-banner-value mono ${State.getPnlClass(data.account_balance || 0)}`;
+        }
         if (elNetPnl) {
             elNetPnl.textContent = State.formatCurrency(data.net_pnl);
             elNetPnl.className = `kpi-banner-value mono ${State.getPnlClass(data.net_pnl)}`;
@@ -36,7 +40,6 @@ const StatsController = {
             elWr.textContent = `${data.win_rate.toFixed(1)}%`;
             elWr.className = `kpi-banner-value mono ${State.getWinRateClass(data.win_rate, data.total_trades)}`;
         }
-        if (elOps) elOps.textContent = State.formatNumber(data.total_trades);
         if (elPf) {
             elPf.textContent = data.profit_factor.toFixed(2);
             elPf.className = `kpi-banner-value mono ${State.getRatioClass(data.profit_factor, data.total_trades)}`;
@@ -47,12 +50,16 @@ const StatsController = {
         }
 
         // 2. Compact Header Mini KPI (Tucked into header on scroll)
+        const miniNav = document.getElementById('mini-nav');
         const miniNetPnl = document.getElementById('mini-net-pnl');
         const miniWr = document.getElementById('mini-wr');
-        const miniOps = document.getElementById('mini-trades');
         const miniPf = document.getElementById('mini-pf');
         const miniExp = document.getElementById('mini-expectancy');
 
+        if (miniNav) {
+            miniNav.textContent = State.formatCurrency(data.account_balance || 0, true, false);
+            miniNav.className = `mini-kpi-value mono ${State.getPnlClass(data.account_balance || 0)}`;
+        }
         if (miniNetPnl) {
             miniNetPnl.textContent = State.formatCurrency(data.net_pnl);
             miniNetPnl.className = `mini-kpi-value mono ${State.getPnlClass(data.net_pnl)}`;
@@ -61,7 +68,6 @@ const StatsController = {
             miniWr.textContent = `${data.win_rate.toFixed(1)}%`;
             miniWr.className = `mini-kpi-value mono ${State.getWinRateClass(data.win_rate, data.total_trades)}`;
         }
-        if (miniOps) miniOps.textContent = State.formatNumber(data.total_trades);
         if (miniPf) {
             miniPf.textContent = data.profit_factor.toFixed(2);
             miniPf.className = `mini-kpi-value mono ${State.getRatioClass(data.profit_factor, data.total_trades)}`;

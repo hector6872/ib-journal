@@ -1410,30 +1410,53 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
     start_date = f"{year_str}-01-01"
     end_date = f"{year_str}-12-31"
 
-    # Daily aggregation query
-    query = """
-    SELECT
-        trade_date,
-        COUNT(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 END) as trades_count,
-        COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as net_pnl,
-        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as wins,
-        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as losses
-    FROM trades
-    WHERE trade_date BETWEEN ? AND ?
-    GROUP BY trade_date
-    """
-
-    daily_map = {}
     with db_session() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, (start_date, end_date))
-        for row in cursor.fetchall():
-            daily_map[row["trade_date"]] = {
-                "pnl": round(row["net_pnl"], 2),
-                "count": row["trades_count"],
-                "wins": row["wins"],
-                "losses": row["losses"],
-            }
+        cursor.execute(
+            """
+            SELECT
+                id, ib_exec_id, trade_id, symbol, description,
+                COALESCE(asset_category, 'STK') as asset_category,
+                COALESCE(buy_sell, 'BUY') as buy_sell,
+                quantity, trade_price, ib_commission, realized_pnl,
+                currency, raw_currency, base_currency, fx_rate_to_base,
+                raw_commission, raw_realized_pnl,
+                trade_date, trade_time, trade_date_time,
+                COALESCE(open_close_indicator, 'C') as open_close_indicator
+            FROM trades
+            WHERE trade_date BETWEEN ? AND ?
+            ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
+            """,
+            (start_date, end_date),
+        )
+        all_trades = [dict(r) for r in cursor.fetchall()]
+
+    from collections import defaultdict
+    trades_by_date = defaultdict(list)
+    for t in all_trades:
+        trades_by_date[t["trade_date"]].append(t)
+
+    daily_map = {}
+    for d_str, day_trades in trades_by_date.items():
+        day_gross = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
+        day_comm = sum(float(t.get("ib_commission") or 0.0) for t in day_trades)
+        day_net = round(day_gross - day_comm, 2)
+
+        grouped = group_executions_to_trades(day_trades)
+        trading_grouped = [
+            g for g in grouped
+            if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
+        ]
+        closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
+        day_wins = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) > 0)
+        day_losses = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) < 0)
+
+        daily_map[d_str] = {
+            "pnl": day_net,
+            "count": len(trading_grouped),
+            "wins": day_wins,
+            "losses": day_losses,
+        }
 
     # Compute 12 monthly sums
     monthly_totals = []
@@ -1473,54 +1496,71 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
     start_date = f"{year}-{m_str}-01"
     end_date = f"{year}-{m_str}-{last_day:02d}"
 
-    query = """
-    SELECT
-        trade_date,
-        COUNT(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 END) as trades_count,
-        COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as net_pnl,
-        COALESCE(SUM(ib_commission), 0.0) as commissions,
-        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as wins,
-        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as losses
-    FROM trades
-    WHERE trade_date BETWEEN ? AND ?
-    GROUP BY trade_date
-    """
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                id, ib_exec_id, trade_id, symbol, description,
+                COALESCE(asset_category, 'STK') as asset_category,
+                COALESCE(buy_sell, 'BUY') as buy_sell,
+                quantity, trade_price, ib_commission, realized_pnl,
+                currency, raw_currency, base_currency, fx_rate_to_base,
+                raw_commission, raw_realized_pnl,
+                trade_date, trade_time, trade_date_time,
+                COALESCE(open_close_indicator, 'C') as open_close_indicator
+            FROM trades
+            WHERE trade_date BETWEEN ? AND ?
+            ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
+            """,
+            (start_date, end_date),
+        )
+        all_trades = [dict(r) for r in cursor.fetchall()]
+
+    from collections import defaultdict
+    trades_by_date = defaultdict(list)
+    for t in all_trades:
+        trades_by_date[t["trade_date"]].append(t)
 
     daily_map = {}
     month_net_pnl = 0.0
     month_trades_count = 0
     month_wins = 0
+    largest_win = 0.0
+    largest_loss = 0.0
 
-    with db_session() as conn:
-        cursor = conn.cursor()
-        cursor.execute(query, (start_date, end_date))
-        for row in cursor.fetchall():
-            pnl = round(row["net_pnl"], 2)
-            daily_map[row["trade_date"]] = {
-                "date": row["trade_date"],
-                "pnl": pnl,
-                "commissions": round(row["commissions"], 2),
-                "count": row["trades_count"],
-                "wins": row["wins"],
-                "losses": row["losses"],
-            }
-            month_net_pnl += pnl
-            month_trades_count += row["trades_count"]
-            month_wins += row["wins"]
+    for d_str, day_trades in trades_by_date.items():
+        day_gross = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
+        day_comm = sum(float(t.get("ib_commission") or 0.0) for t in day_trades)
+        day_net = round(day_gross - day_comm, 2)
 
-        cursor.execute(
-            """
-            SELECT
-                COALESCE(MAX(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_win,
-                COALESCE(MIN(CASE WHEN (realized_pnl - ib_commission) < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_loss
-            FROM trades
-            WHERE trade_date BETWEEN ? AND ?
-        """,
-            (start_date, end_date),
-        )
-        m_ext = cursor.fetchone()
-        largest_win = m_ext["largest_win"] if m_ext else 0.0
-        largest_loss = m_ext["largest_loss"] if m_ext else 0.0
+        grouped = group_executions_to_trades(day_trades)
+        trading_grouped = [
+            g for g in grouped
+            if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
+        ]
+        closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
+        day_wins = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) > 0)
+        day_losses = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) < 0)
+
+        for g in closed_grouped:
+            pnl_val = float(g.get("net_pnl") or 0.0)
+            if pnl_val > largest_win:
+                largest_win = pnl_val
+            if pnl_val < largest_loss:
+                largest_loss = pnl_val
+
+        daily_map[d_str] = {
+            "date": d_str,
+            "pnl": day_net,
+            "commissions": round(day_comm, 2),
+            "count": len(trading_grouped),
+            "wins": day_wins,
+            "losses": day_losses,
+        }
+        month_net_pnl += day_net
+        month_trades_count += len(trading_grouped)
+        month_wins += day_wins
 
     # Fill empty days for complete calendar mapping
     days_list = []

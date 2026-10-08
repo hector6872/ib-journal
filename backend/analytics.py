@@ -328,6 +328,17 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             params,
         )
         all_trades = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute(
+            """
+            SELECT DISTINCT SUBSTR(trade_date, 1, 4) as yr
+            FROM trades
+            WHERE asset_category NOT IN ('CASH', 'FX') AND ABS(quantity) > 1e-5
+            ORDER BY yr DESC
+        """
+        )
+        available_years = [int(r["yr"]) for r in cursor.fetchall() if r["yr"] and str(r["yr"]).isdigit()]
+
         all_grouped = [
             g
             for g in group_executions_to_trades(all_trades)
@@ -1681,6 +1692,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         "option_sizing_contracts": option_sizing_contracts,
         "option_sizing_premium": option_sizing_premium,
         "sizing_summary": sizing_summary,
+        "available_years": available_years,
     }
 
 

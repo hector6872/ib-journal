@@ -112,7 +112,13 @@ const StatsPage = {
         const endDate = now.toISOString().split('T')[0];
         let start = new Date();
 
-        if (range === '1W') {
+        if (/^\d{4}$/.test(range)) {
+            const yr = parseInt(range, 10);
+            return {
+                startDate: `${yr}-01-01`,
+                endDate: `${yr}-12-31`
+            };
+        } else if (range === '1W') {
             start.setDate(now.getDate() - 7);
         } else if (range === '1M') {
             start.setMonth(now.getMonth() - 1);
@@ -441,9 +447,12 @@ const StatsPage = {
             ? (currentRolling.win_rate > 50 ? 'pnl-positive' : (currentRolling.win_rate < 50 ? 'pnl-negative' : 'pnl-neutral'))
             : 'pnl-neutral';
 
+        const currentYear = new Date().getFullYear();
+        const pastYears = (data.available_years || []).filter(y => Number(y) < currentYear);
+
         container.innerHTML = `
             <div class="stats-main-container">
-                <!-- Top Statistics Bar with Date Range Filters & Timezone -->
+                <!-- Top Statistics Bar with Date Range Filters, Past Years & Timezone -->
                 <div class="stats-header-bar">
                     <div class="segmented-control" id="stats-date-range-filter">
                         <button class="segmented-btn ${this.dateRange === '1W' ? 'active' : ''}" data-range="1W">${sp.filter1W}</button>
@@ -452,6 +461,14 @@ const StatsPage = {
                         <button class="segmented-btn ${this.dateRange === 'YTD' ? 'active' : ''}" data-range="YTD">${sp.filterYTD}</button>
                         <button class="segmented-btn ${this.dateRange === 'ALL' ? 'active' : ''}" data-range="ALL">${sp.filterAll}</button>
                     </div>
+
+                    ${pastYears.length > 0 ? `
+                    <div class="segmented-control" id="stats-year-filter">
+                        ${pastYears.map(y => `
+                            <button class="segmented-btn ${this.dateRange === String(y) ? 'active' : ''}" data-year="${y}">${y}</button>
+                        `).join('')}
+                    </div>
+                    ` : ''}
 
                     <div class="segmented-control" id="stats-global-tz-control">
                         <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
@@ -1504,16 +1521,35 @@ const StatsPage = {
             });
         }
 
-        // Date range filter buttons
+        // Date range & Year filter buttons
         const rangeBtns = document.querySelectorAll('#stats-date-range-filter .segmented-btn');
+        const yearBtns = document.querySelectorAll('#stats-year-filter .segmented-btn');
+
         rangeBtns.forEach(btn => {
             btn.addEventListener('click', async () => {
                 const targetRange = btn.getAttribute('data-range') || 'ALL';
                 if (targetRange === this.dateRange && this.data) return;
 
                 rangeBtns.forEach(b => b.classList.remove('active'));
+                yearBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.dateRange = targetRange;
+                if (typeof SettingsManager !== 'undefined') {
+                    SettingsManager.set('stats_date_range', this.dateRange);
+                }
+                await this.load(false);
+            });
+        });
+
+        yearBtns.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const targetYear = btn.getAttribute('data-year');
+                if (!targetYear || (targetYear === this.dateRange && this.data)) return;
+
+                rangeBtns.forEach(b => b.classList.remove('active'));
+                yearBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.dateRange = targetYear;
                 if (typeof SettingsManager !== 'undefined') {
                     SettingsManager.set('stats_date_range', this.dateRange);
                 }

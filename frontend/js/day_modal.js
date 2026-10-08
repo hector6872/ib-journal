@@ -496,6 +496,8 @@ const DayModal = {
         return `
             <div class="grouped-trades-container">
                 ${groupedTrades.map((t, idx) => {
+                    const isExpanded = this.expandedTradeIds.has(idx);
+                    const dirInfo = this.getDirectionBadgeInfo(t.direction);
                     const isCash = (t.asset_category || '').toUpperCase() === 'CASH' || (t.asset_category || '').toUpperCase() === 'FX' || t.direction === 'EXCHANGE';
                     const isWin = !isCash && t.result === 'WIN';
                     const isLoss = !isCash && t.result === 'LOSS';
@@ -512,8 +514,10 @@ const DayModal = {
                     const curr = t.raw_currency || t.currency || '';
                     const currSym = curr === 'USD' ? '$' : (curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : (curr ? `${curr} ` : '')));
 
-                    const entryPriceStr = t.avg_entry_price ? `${currSym}${t.avg_entry_price.toFixed(2)}` : '--';
-                    const exitPriceStr = t.avg_exit_price ? `${currSym}${t.avg_exit_price.toFixed(2)}` : (isOpen ? 'Active' : '--');
+                    const entryPrice = typeof t.avg_entry_price === 'number' ? t.avg_entry_price : parseFloat(t.avg_entry_price || 0);
+                    const entryPriceStr = entryPrice > 0 ? `${currSym}${entryPrice.toFixed(2)}` : '--';
+                    const exitPrice = typeof t.avg_exit_price === 'number' ? t.avg_exit_price : parseFloat(t.avg_exit_price || 0);
+                    const exitPriceStr = exitPrice > 0 ? `${currSym}${exitPrice.toFixed(2)}` : (isOpen ? 'Active' : '--');
 
                     const openTime = this.formatTime(t.open_time, this.currentDate);
                     const closeTime = t.close_time ? this.formatTime(t.close_time, this.currentDate) : null;

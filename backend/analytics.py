@@ -180,7 +180,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0)
         )
         total_fees = sum(abs(r["amount"]) for r in c_rows if r["type"] == "FEE")
-        total_account_expenses = total_subscriptions + total_fees + total_withholding_tax
+        total_account_expenses = round(total_subscriptions + total_fees, 2)
         net_transfers = total_deposits - total_withdrawals
         net_cash_flow = sum(r["amount"] for r in c_rows)
 

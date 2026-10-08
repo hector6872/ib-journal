@@ -660,7 +660,7 @@ const StatsPage = {
                             <span class="cash-card-value mono ${(ov.total_account_expenses || 0) > 0 ? 'pnl-negative' : 'pnl-neutral'}">
                                 -${State.currency}${(ov.total_account_expenses || 0).toFixed(2)}
                             </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.accountExpensesSub || 'OPRA, data fees, taxes & charges'}</span>
+                            <span class="cash-card-sub">${STRINGS.cash?.accountExpensesSub || 'Market subscriptions & fees'}</span>
                         </div>
                         <div class="cash-card is-clickable" data-scroll-sec="sec-equity-curve">
                             <span class="cash-card-label">${STRINGS.cash?.roi || 'RETURN ON CAPITAL (% ROI)'}</span>

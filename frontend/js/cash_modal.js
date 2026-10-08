@@ -83,7 +83,7 @@ const CashModal = {
         const totalWithholdingTax = Number(cashSummary?.total_withholding_tax || 0.0);
         const totalSubscriptions = Number(cashSummary?.total_subscriptions || 0.0);
         const totalFees = Number(cashSummary?.total_fees || 0.0);
-        const totalAccountExpenses = totalSubscriptions + totalWithholdingTax + totalFees;
+        const totalAccountExpenses = totalSubscriptions + totalFees;
         const netTransfers = totalDeposits - totalWithdrawals;
         const netCashFlow = Number(cashSummary?.net_cash_flow || 0.0);
         const netPnl = Number(overview?.net_pnl || 0.0);
@@ -127,7 +127,7 @@ const CashModal = {
                         <span class="cash-card-value mono ${totalAccountExpenses > 0 ? 'pnl-negative' : 'pnl-neutral'}">
                             -${State.currency}${totalAccountExpenses.toFixed(2)}
                         </span>
-                        <span class="cash-card-sub">${sc.accountExpensesSub || 'OPRA, data fees, taxes & charges'}</span>
+                        <span class="cash-card-sub">${sc.accountExpensesSub || 'Market subscriptions & fees'}</span>
                     </div>
 
                     <div class="cash-card">

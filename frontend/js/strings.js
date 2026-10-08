@@ -383,7 +383,7 @@ const STRINGS = {
         netTransfersStats: "NET CASH TRANSFERS",
         netTransfersStatsSub: "User deposits vs withdrawals",
         accountExpenses: "SUBSCRIPTIONS & ACCOUNT FEES",
-        accountExpensesSub: "OPRA, data fees, taxes & charges",
+        accountExpensesSub: "Market subscriptions & fees",
         roi: "RETURN ON CAPITAL (% ROI)",
         roiSub: "Realized P&L / Capital Base",
         configSectionTitle: "Starting Capital Configuration",

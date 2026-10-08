@@ -616,7 +616,13 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
                 or "QUOTE" in desc_upper
             ):
                 tx_type = "SUBSCRIPTION"
-            elif "TAX" in raw_type or "WITHHOLDING" in raw_type or "TAX" in desc_upper or "RETENCI" in desc_upper or "IMPUESTO" in desc_upper:
+            elif (
+                "TAX" in raw_type
+                or "WITHHOLDING" in raw_type
+                or "TAX" in desc_upper
+                or "RETENCI" in desc_upper
+                or "IMPUESTO" in desc_upper
+            ):
                 tx_type = "WITHHOLDING TAX"
             elif "FEE" in raw_type or "FEE" in desc_upper or "COMISI" in desc_upper:
                 tx_type = "FEE"
@@ -669,10 +675,20 @@ def get_cash_summary() -> Dict[str, Any]:
         rows = [dict(r) for r in cursor.fetchall()]
 
         total_deposits = sum(r["amount"] for r in rows if r["amount"] > 0 and r["type"] == "DEPOSIT")
-        total_withdrawals = sum(abs(r["amount"]) for r in rows if r["amount"] < 0 and r["type"] in ("WITHDRAWAL", "TRANSFER"))
+        total_withdrawals = sum(
+            abs(r["amount"]) for r in rows if r["amount"] < 0 and r["type"] in ("WITHDRAWAL", "TRANSFER")
+        )
         total_dividends = sum(r["amount"] for r in rows if r["type"] == "DIVIDEND" and r["amount"] > 0)
-        total_withholding_tax = sum(abs(r["amount"]) for r in rows if r["type"] == "WITHHOLDING TAX" or ("TAX" in (r["type"] or "") and r["amount"] < 0))
-        total_subscriptions = sum(abs(r["amount"]) for r in rows if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0))
+        total_withholding_tax = sum(
+            abs(r["amount"])
+            for r in rows
+            if r["type"] == "WITHHOLDING TAX" or ("TAX" in (r["type"] or "") and r["amount"] < 0)
+        )
+        total_subscriptions = sum(
+            abs(r["amount"])
+            for r in rows
+            if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0)
+        )
         total_fees = sum(abs(r["amount"]) for r in rows if r["type"] == "FEE")
 
         all_inflows = sum(r["amount"] for r in rows if r["amount"] > 0)

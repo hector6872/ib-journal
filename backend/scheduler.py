@@ -370,9 +370,7 @@ class SyncScheduler:
 
             scope_str = " + ".join(queries_run) if queries_run else "None"
             if errors:
-                self.last_sync_message = (
-                    f"Synchronized {recs_str} ({scope_str}). Warning: {'; '.join(errors)}"
-                )
+                self.last_sync_message = f"Synchronized {recs_str} ({scope_str}). Warning: {'; '.join(errors)}"
             else:
                 self.last_sync_message = f"Synchronized {recs_str} successfully ({scope_str})."
 
@@ -539,7 +537,9 @@ class SyncScheduler:
             try:
                 with db_session() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT trades_count FROM sync_history WHERE status = 'success' ORDER BY id DESC LIMIT 1;")
+                    cursor.execute(
+                        "SELECT trades_count FROM sync_history WHERE status = 'success' ORDER BY id DESC LIMIT 1;"
+                    )
                     last_hist = cursor.fetchone()
                     if last_hist:
                         trades_count_val = last_hist["trades_count"]

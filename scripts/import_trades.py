@@ -518,7 +518,13 @@ def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
                 or "QUOTE" in desc_upper
             ):
                 tx_type = "SUBSCRIPTION"
-            elif "TAX" in tx_type_raw or "WITHHOLDING" in tx_type_raw or "TAX" in desc_upper or "RETENCI" in desc_upper or "IMPUESTO" in desc_upper:
+            elif (
+                "TAX" in tx_type_raw
+                or "WITHHOLDING" in tx_type_raw
+                or "TAX" in desc_upper
+                or "RETENCI" in desc_upper
+                or "IMPUESTO" in desc_upper
+            ):
                 tx_type = "WITHHOLDING TAX"
             elif "FEE" in tx_type_raw or "FEE" in desc_upper or "COMISI" in desc_upper:
                 tx_type = "FEE"
@@ -767,7 +773,12 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
                     or "QUOTE" in desc_upper
                 ):
                     tx_type = "SUBSCRIPTION"
-                elif "TAX" in desc_upper or "RETENCI" in desc_upper or "WITHHOLDING" in desc_upper or "IMPUESTO" in desc_upper:
+                elif (
+                    "TAX" in desc_upper
+                    or "RETENCI" in desc_upper
+                    or "WITHHOLDING" in desc_upper
+                    or "IMPUESTO" in desc_upper
+                ):
                     tx_type = "WITHHOLDING TAX"
                 elif "FEE" in desc_upper or "COMISIÓN" in desc_upper or "COMISION" in desc_upper:
                     tx_type = "FEE"

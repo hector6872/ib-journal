@@ -302,6 +302,10 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertEqual(day_30["commissions"], 6.02)
         self.assertEqual(day_30["pnl"], -12.94)
 
+        year_cal = get_year_calendar(2026)
+        self.assertEqual(year_cal["total_trades"], 2)
+        self.assertEqual(year_cal["total_net_pnl"], -12.94)
+
     def test_import_script_parsers(self):
         """Tests parsing logic for IBKR Activity Statement and Generic Flex CSVs."""
         sample_activity = """Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Realized P/L,MTM P/L,Code
@@ -1219,6 +1223,7 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
 
         # Test group_executions_to_trades calculates round-trip gross PnL correctly
         from backend.analytics import group_executions_to_trades
+
         grouped = group_executions_to_trades(tc_trades)
         self.assertEqual(len(grouped), 1)
         self.assertEqual(grouped[0]["status"], "CLOSED")

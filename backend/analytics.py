@@ -59,6 +59,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         # Reconstruct round-trip trades by grouping executions per day
         from collections import defaultdict
+
         trades_by_date = defaultdict(list)
         for t in trade_rows:
             trades_by_date[t["trade_date"]].append(t)
@@ -67,7 +68,8 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         for d_str in sorted(trades_by_date.keys()):
             d_grouped = group_executions_to_trades(trades_by_date[d_str])
             trading_d_grouped = [
-                g for g in d_grouped
+                g
+                for g in d_grouped
                 if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
             ]
             all_grouped.extend(trading_d_grouped)
@@ -85,8 +87,12 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         gross_profit = sum(float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) > 0)
         gross_loss = abs(sum(float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) < 0))
 
-        largest_win = max([float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) > 0] or [0.0])
-        largest_loss = min([float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) < 0] or [0.0])
+        largest_win = max(
+            [float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) > 0] or [0.0]
+        )
+        largest_loss = min(
+            [float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) < 0] or [0.0]
+        )
 
         largest_win_sym = ""
         largest_loss_sym = ""
@@ -170,9 +176,19 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         c_rows = [dict(r) for r in cursor.fetchall()]
 
         total_deposits = sum(r["amount"] for r in c_rows if r["amount"] > 0 and r["type"] == "DEPOSIT")
-        total_withdrawals = sum(abs(r["amount"]) for r in c_rows if r["amount"] < 0 and r["type"] in ("WITHDRAWAL", "TRANSFER"))
-        total_withholding_tax = sum(abs(r["amount"]) for r in c_rows if r["type"] == "WITHHOLDING TAX" or ("TAX" in (r["type"] or "") and r["amount"] < 0))
-        total_subscriptions = sum(abs(r["amount"]) for r in c_rows if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0))
+        total_withdrawals = sum(
+            abs(r["amount"]) for r in c_rows if r["amount"] < 0 and r["type"] in ("WITHDRAWAL", "TRANSFER")
+        )
+        total_withholding_tax = sum(
+            abs(r["amount"])
+            for r in c_rows
+            if r["type"] == "WITHHOLDING TAX" or ("TAX" in (r["type"] or "") and r["amount"] < 0)
+        )
+        total_subscriptions = sum(
+            abs(r["amount"])
+            for r in c_rows
+            if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0)
+        )
         total_fees = sum(abs(r["amount"]) for r in c_rows if r["type"] == "FEE")
         total_account_expenses = total_subscriptions + total_fees + total_withholding_tax
         net_transfers = total_deposits - total_withdrawals
@@ -1178,7 +1194,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         curr_sym = get_currency_symbol()
         sizing_where = "WHERE (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
         if where_clause:
-            sizing_where = f"{where_clause} AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+            sizing_where = (
+                f"{where_clause} AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+            )
 
         cursor.execute(
             f"""
@@ -1196,41 +1214,316 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         )
         sizing_rows = cursor.fetchall()
 
-        stock_notional_brackets = [
-            {"key": "stk_cap_under_250", "label": f"< {curr_sym}250", "min": 0, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_250_500", "label": f"{curr_sym}250 – {curr_sym}500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_500_1k", "label": f"{curr_sym}500 – {curr_sym}1,000", "min": 500, "max": 1000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_1k_2.5k", "label": f"{curr_sym}1,000 – {curr_sym}2,500", "min": 1000, "max": 2500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_2.5k_5k", "label": f"{curr_sym}2,500 – {curr_sym}5,000", "min": 2500, "max": 5000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_5k_10k", "label": f"{curr_sym}5,000 – {curr_sym}10,000", "min": 5000, "max": 10000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_over_10k", "label": f"> {curr_sym}10,000", "min": 10000, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        stock_notional_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "stk_cap_under_250",
+                "label": f"< {curr_sym}250",
+                "min": 0.0,
+                "max": 250.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_250_500",
+                "label": f"{curr_sym}250 – {curr_sym}500",
+                "min": 250.0,
+                "max": 500.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_500_1k",
+                "label": f"{curr_sym}500 – {curr_sym}1,000",
+                "min": 500.0,
+                "max": 1000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_1k_2.5k",
+                "label": f"{curr_sym}1,000 – {curr_sym}2,500",
+                "min": 1000.0,
+                "max": 2500.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_2.5k_5k",
+                "label": f"{curr_sym}2,500 – {curr_sym}5,000",
+                "min": 2500.0,
+                "max": 5000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_5k_10k",
+                "label": f"{curr_sym}5,000 – {curr_sym}10,000",
+                "min": 5000.0,
+                "max": 10000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_over_10k",
+                "label": f"> {curr_sym}10,000",
+                "min": 10000.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
         ]
 
-        stock_shares_brackets = [
-            {"key": "stk_sh_1_10", "label": "1 – 10 shares", "min": 1, "max": 10, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_sh_11_25", "label": "11 – 25 shares", "min": 11, "max": 25, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_sh_26_50", "label": "26 – 50 shares", "min": 26, "max": 50, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_sh_51_100", "label": "51 – 100 shares", "min": 51, "max": 100, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_sh_101_250", "label": "101 – 250 shares", "min": 101, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_sh_over_250", "label": "> 250 shares", "min": 251, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        stock_shares_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "stk_sh_1_10",
+                "label": "1 – 10 shares",
+                "min": 1.0,
+                "max": 10.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_11_25",
+                "label": "11 – 25 shares",
+                "min": 11.0,
+                "max": 25.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_26_50",
+                "label": "26 – 50 shares",
+                "min": 26.0,
+                "max": 50.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_51_100",
+                "label": "51 – 100 shares",
+                "min": 51.0,
+                "max": 100.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_101_250",
+                "label": "101 – 250 shares",
+                "min": 101.0,
+                "max": 250.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_over_250",
+                "label": "> 250 shares",
+                "min": 251.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
         ]
 
-        option_contracts_brackets = [
-            {"key": "opt_cnt_1", "label": "1 contract", "min": 1, "max": 1, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_cnt_2_3", "label": "2 – 3 contracts", "min": 2, "max": 3, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_cnt_4_5", "label": "4 – 5 contracts", "min": 4, "max": 5, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_cnt_6_10", "label": "6 – 10 contracts", "min": 6, "max": 10, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_cnt_over_10", "label": "> 10 contracts", "min": 11, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        option_contracts_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "opt_cnt_1",
+                "label": "1 contract",
+                "min": 1.0,
+                "max": 1.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_2_3",
+                "label": "2 – 3 contracts",
+                "min": 2.0,
+                "max": 3.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_4_5",
+                "label": "4 – 5 contracts",
+                "min": 4.0,
+                "max": 5.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_6_10",
+                "label": "6 – 10 contracts",
+                "min": 6.0,
+                "max": 10.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_over_10",
+                "label": "> 10 contracts",
+                "min": 11.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
         ]
 
-        option_premium_brackets = [
-            {"key": "opt_prem_under_20", "label": f"< {curr_sym}20", "min": 0, "max": 20, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_20_50", "label": f"{curr_sym}20 – {curr_sym}50", "min": 20, "max": 50, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_50_100", "label": f"{curr_sym}50 – {curr_sym}100", "min": 50, "max": 100, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_100_250", "label": f"{curr_sym}100 – {curr_sym}250", "min": 100, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_250_500", "label": f"{curr_sym}250 – {curr_sym}500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_500_1k", "label": f"{curr_sym}500 – {curr_sym}1,000", "min": 500, "max": 1000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_over_1k", "label": f"> {curr_sym}1,000", "min": 1000, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+        option_premium_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "opt_prem_under_20",
+                "label": f"< {curr_sym}20",
+                "min": 0.0,
+                "max": 20.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_20_50",
+                "label": f"{curr_sym}20 – {curr_sym}50",
+                "min": 20.0,
+                "max": 50.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_50_100",
+                "label": f"{curr_sym}50 – {curr_sym}100",
+                "min": 50.0,
+                "max": 100.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_100_250",
+                "label": f"{curr_sym}100 – {curr_sym}250",
+                "min": 100.0,
+                "max": 250.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_250_500",
+                "label": f"{curr_sym}250 – {curr_sym}500",
+                "min": 250.0,
+                "max": 500.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_500_1k",
+                "label": f"{curr_sym}500 – {curr_sym}1,000",
+                "min": 500.0,
+                "max": 1000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_over_1k",
+                "label": f"> {curr_sym}1,000",
+                "min": 1000.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
         ]
 
         stk_win_shares, stk_loss_shares = [], []
@@ -1264,27 +1557,31 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     stk_loss_cap.append(tm)
 
                 for b in stock_notional_brackets:
-                    if b["min"] <= tm < b["max"] or (b["max"] == float("inf") and tm >= b["min"]):
-                        b["trades_count"] += 1
-                        b["net_pnl"] += net
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= tm < b_max or (b_max == float("inf") and tm >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
                         if is_win:
-                            b["wins"] += 1
-                            b["gross_profit"] += pnl
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
                         elif is_loss:
-                            b["losses"] += 1
-                            b["gross_loss"] += abs(pnl)
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
                         break
 
                 for b in stock_shares_brackets:
-                    if b["min"] <= qty <= b["max"] or (b["max"] == float("inf") and qty >= b["min"]):
-                        b["trades_count"] += 1
-                        b["net_pnl"] += net
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= qty <= b_max or (b_max == float("inf") and qty >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
                         if is_win:
-                            b["wins"] += 1
-                            b["gross_profit"] += pnl
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
                         elif is_loss:
-                            b["losses"] += 1
-                            b["gross_loss"] += abs(pnl)
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
                         break
 
             elif cat == "OPT":
@@ -1296,27 +1593,31 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     opt_loss_prem.append(tm)
 
                 for b in option_contracts_brackets:
-                    if b["min"] <= qty <= b["max"] or (b["max"] == float("inf") and qty >= b["min"]):
-                        b["trades_count"] += 1
-                        b["net_pnl"] += net
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= qty <= b_max or (b_max == float("inf") and qty >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
                         if is_win:
-                            b["wins"] += 1
-                            b["gross_profit"] += pnl
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
                         elif is_loss:
-                            b["losses"] += 1
-                            b["gross_loss"] += abs(pnl)
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
                         break
 
                 for b in option_premium_brackets:
-                    if b["min"] <= tm < b["max"] or (b["max"] == float("inf") and tm >= b["min"]):
-                        b["trades_count"] += 1
-                        b["net_pnl"] += net
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= tm < b_max or (b_max == float("inf") and tm >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
                         if is_win:
-                            b["wins"] += 1
-                            b["gross_profit"] += pnl
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
                         elif is_loss:
-                            b["losses"] += 1
-                            b["gross_loss"] += abs(pnl)
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
                         break
 
         def _finalize_brackets(b_list):
@@ -1330,17 +1631,19 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 gl = abs(b["gross_loss"])
                 pf = round(gp / gl, 2) if gl > 0 else (round(gp, 2) if gp > 0 else 0.0)
                 avg_pnl = round(net / cnt, 2) if cnt > 0 else 0.0
-                res.append({
-                    "key": b["key"],
-                    "bracket": b["label"],
-                    "trades_count": cnt,
-                    "wins": wins,
-                    "losses": b["losses"],
-                    "win_rate": wr,
-                    "net_pnl": net,
-                    "profit_factor": pf,
-                    "avg_trade_pnl": avg_pnl
-                })
+                res.append(
+                    {
+                        "key": b["key"],
+                        "bracket": b["label"],
+                        "trades_count": cnt,
+                        "wins": wins,
+                        "losses": b["losses"],
+                        "win_rate": wr,
+                        "net_pnl": net,
+                        "profit_factor": pf,
+                        "avg_trade_pnl": avg_pnl,
+                    }
+                )
             return res
 
         stock_sizing_notional = _finalize_brackets(stock_notional_brackets)
@@ -1353,8 +1656,12 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "stk_loss_avg_shares": round(sum(stk_loss_shares) / len(stk_loss_shares), 1) if stk_loss_shares else 0.0,
             "stk_win_avg_capital": round(sum(stk_win_cap) / len(stk_win_cap), 2) if stk_win_cap else 0.0,
             "stk_loss_avg_capital": round(sum(stk_loss_cap) / len(stk_loss_cap), 2) if stk_loss_cap else 0.0,
-            "opt_win_avg_contracts": round(sum(opt_win_contracts) / len(opt_win_contracts), 1) if opt_win_contracts else 0.0,
-            "opt_loss_avg_contracts": round(sum(opt_loss_contracts) / len(opt_loss_contracts), 1) if opt_loss_contracts else 0.0,
+            "opt_win_avg_contracts": round(sum(opt_win_contracts) / len(opt_win_contracts), 1)
+            if opt_win_contracts
+            else 0.0,
+            "opt_loss_avg_contracts": round(sum(opt_loss_contracts) / len(opt_loss_contracts), 1)
+            if opt_loss_contracts
+            else 0.0,
             "opt_win_avg_premium": round(sum(opt_win_prem) / len(opt_win_prem), 2) if opt_win_prem else 0.0,
             "opt_loss_avg_premium": round(sum(opt_loss_prem) / len(opt_loss_prem), 2) if opt_loss_prem else 0.0,
         }
@@ -1420,6 +1727,7 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
         all_trades = [dict(r) for r in cursor.fetchall()]
 
     from collections import defaultdict
+
     trades_by_date = defaultdict(list)
     for t in all_trades:
         trades_by_date[t["trade_date"]].append(t)
@@ -1432,7 +1740,8 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
 
         grouped = group_executions_to_trades(day_trades)
         trading_grouped = [
-            g for g in grouped
+            g
+            for g in grouped
             if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
         ]
         closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
@@ -1458,7 +1767,7 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
         m_end = f"{year_str}-{m_str}-{last_day:02d}"
 
         m_pnl = sum(daily_map[d]["pnl"] for d in daily_map if m_start <= d <= m_end)
-        m_count = sum(daily_map[d]["count"] for d in daily_map if m_start <= d <= m_end)
+        m_count = int(sum(daily_map[d]["count"] for d in daily_map if m_start <= d <= m_end))
 
         monthly_totals.append({"month": m, "net_pnl": round(m_pnl, 2), "trades_count": m_count})
         year_net_pnl += m_pnl
@@ -1506,6 +1815,7 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
         all_trades = [dict(r) for r in cursor.fetchall()]
 
     from collections import defaultdict
+
     trades_by_date = defaultdict(list)
     for t in all_trades:
         trades_by_date[t["trade_date"]].append(t)
@@ -1524,7 +1834,8 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
 
         grouped = group_executions_to_trades(day_trades)
         trading_grouped = [
-            g for g in grouped
+            g
+            for g in grouped
             if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
         ]
         closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
@@ -1788,7 +2099,9 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             if current_trade is None:
                 # Standalone close of a prior position (only if marked close with non-zero realized PnL)
                 if ind == "C" and has_pnl:
-                    is_initial_buy = not is_buy  # SELL with realized PnL closes an initial BUY; BUY with realized PnL closes a SHORT
+                    is_initial_buy = (
+                        not is_buy
+                    )  # SELL with realized PnL closes an initial BUY; BUY with realized PnL closes a SHORT
                     is_entry = False
                 else:
                     is_initial_buy = is_buy
@@ -1854,7 +2167,9 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                     current_trade["open_time"], current_trade["close_time"]
                 )
                 multiplier = 100.0 if current_trade["asset_category"] == "OPT" else 1.0
-                if abs(current_trade["gross_pnl"]) < 1e-6 and (current_trade["entry_val"] > 0 or current_trade["exit_val"] > 0):
+                if abs(current_trade["gross_pnl"]) < 1e-6 and (
+                    current_trade["entry_val"] > 0 or current_trade["exit_val"] > 0
+                ):
                     if current_trade["is_initial_buy"]:
                         raw_calc_pnl = (current_trade["exit_val"] - current_trade["entry_val"]) * multiplier
                     else:
@@ -1896,7 +2211,9 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
         if current_trade is not None:
             # Check if this trade is a closed trade from indicator/pnl
             has_realized_pnl = abs(current_trade["gross_pnl"]) > 1e-6
-            is_close_indicator = any((f.get("open_close_indicator") or "").upper() == "C" for f in current_trade["fills"])
+            is_close_indicator = any(
+                (f.get("open_close_indicator") or "").upper() == "C" for f in current_trade["fills"]
+            )
 
             if is_close_indicator or has_realized_pnl:
                 current_trade["status"] = "CLOSED"
@@ -1944,7 +2261,9 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                 current_trade["commission"] = round(current_trade["commission"], 2)
                 current_trade["raw_gross_pnl"] = round(current_trade["raw_gross_pnl"], 2)
                 current_trade["raw_commission"] = round(current_trade["raw_commission"], 2)
-                current_trade["raw_net_pnl"] = round(current_trade["raw_gross_pnl"] - current_trade["raw_commission"], 2)
+                current_trade["raw_net_pnl"] = round(
+                    current_trade["raw_gross_pnl"] - current_trade["raw_commission"], 2
+                )
                 current_trade["avg_entry_price"] = (
                     round(current_trade["entry_val"] / current_trade["entry_qty"], 4)
                     if current_trade["entry_qty"] > 0

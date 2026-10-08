@@ -1023,58 +1023,33 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 {"category": r["category"], "trades_count": cnt, "win_rate": wr, "net_pnl": round(r["net_pnl"], 2)}
             )
 
-        # 8. Buy vs Sell / Long vs Short Position Direction
-        side_where = "WHERE asset_category != 'CASH' AND ABS(quantity) > 0.0001"
-        if where_clause:
-            side_where = f"{where_clause} AND asset_category != 'CASH' AND ABS(quantity) > 0.0001"
+        # 8. Buy vs Sell / Long vs Short Position Direction (derived from closed round-trip trades)
+        side_data = {
+            "LONG": {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+            "SHORT": {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0},
+        }
+        for t in closed_trades:
+            dir_str = t.get("direction", "LONG").upper()
+            cat = (t.get("asset_category") or "STK").upper()
+            # Equities / Stocks in cash accounts are long-only
+            is_short = ("SHORT" in dir_str or "SELL CALL" in dir_str or "SELL PUT" in dir_str) if cat != "STK" else False
+            s_key = "SHORT" if is_short else "LONG"
+            net = float(t.get("net_pnl") or 0.0)
+            side_data[s_key]["trades_count"] += 1
+            side_data[s_key]["net_pnl"] += net
+            if net > 0.005:
+                side_data[s_key]["wins"] += 1
+            elif net < -0.005:
+                side_data[s_key]["losses"] += 1
 
-        cursor.execute(
-            f"""
-            SELECT
-                CASE 
-                    WHEN (open_close_indicator = 'C' AND buy_sell = 'SELL') OR (open_close_indicator = 'O' AND buy_sell = 'BUY') THEN 'LONG'
-                    WHEN (open_close_indicator = 'C' AND buy_sell = 'BUY') OR (open_close_indicator = 'O' AND buy_sell = 'SELL') THEN 'SHORT'
-                    ELSE buy_sell
-                END as side,
-                COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-                COALESCE(SUM(realized_pnl), 0.0) as net_pnl
-            FROM trades
-            {side_where}
-            GROUP BY side
-        """,
-            params,
-        )
         sides = []
-        for r in cursor.fetchall():
-            cnt = r["trades_count"]
-            wins = r["wins"]
-            wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
-            sides.append({"side": r["side"], "trades_count": cnt, "win_rate": wr, "net_pnl": round(r["net_pnl"], 2)})
+        for s_key in ["LONG", "SHORT"]:
+            val = side_data[s_key]
+            cnt = val["trades_count"]
+            wr = round((val["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
+            sides.append({"side": s_key, "trades_count": cnt, "win_rate": wr, "net_pnl": round(val["net_pnl"], 2)})
 
         # 9. Options Strategy Breakdown (Long Call, Long Put, Short Call, Short Put)
-        opt_where = "WHERE asset_category = 'OPT' AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
-        if where_clause:
-            opt_where = f"{where_clause} AND asset_category = 'OPT' AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
-
-        cursor.execute(
-            f"""
-            SELECT
-                symbol,
-                buy_sell,
-                open_close_indicator,
-                realized_pnl,
-                ib_commission,
-                trade_price,
-                trade_time,
-                notes
-            FROM trades
-            {opt_where}
-        """,
-            params,
-        )
-        opt_rows = cursor.fetchall()
-
         opt_stats: Dict[str, Dict[str, Any]] = {
             "long_call": {
                 "strategy": "Long Call (Buy Call)",
@@ -1124,54 +1099,48 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         manual_losses = 0
         manual_net_pnl = 0.0
 
-        for t in opt_rows:
-            sym = (t["symbol"] or "").upper()
-            is_call = sym.endswith(" C") or "CALL" in sym or re.search(r"\d[C]\d", sym)
-            is_put = sym.endswith(" P") or "PUT" in sym or re.search(r"\d[P]\d", sym)
-
-            op_cl = (t["open_close_indicator"] or "C").upper()
-            bs = (t["buy_sell"] or "SELL").upper()
-
-            # Closed with SELL -> was LONG; Closed with BUY -> was SHORT
-            # Opened with BUY -> is LONG; Opened with SELL -> is SHORT
-            is_long = (op_cl == "C" and bs == "SELL") or (op_cl == "O" and bs == "BUY")
+        opt_closed_trades = [t for t in closed_trades if (t.get("asset_category") or "").upper() == "OPT"]
+        for t in opt_closed_trades:
+            sym = (t.get("symbol") or "").upper()
+            dir_str = (t.get("direction") or "").upper()
+            is_call = "CALL" in dir_str or sym.endswith(" C") or re.search(r"\d[C]\d", sym)
+            is_put = "PUT" in dir_str or sym.endswith(" P") or re.search(r"\d[P]\d", sym)
+            is_buy = "BUY" in dir_str or t.get("is_initial_buy", True)
 
             strat_key = None
             if is_call:
-                strat_key = "long_call" if is_long else "short_call"
+                strat_key = "long_call" if is_buy else "short_call"
             elif is_put:
-                strat_key = "long_put" if is_long else "short_put"
+                strat_key = "long_put" if is_buy else "short_put"
 
-            net = float(t["realized_pnl"] or 0.0)
+            net = float(t.get("net_pnl") or 0.0)
             if strat_key:
                 opt_stats[strat_key]["trades_count"] += 1
-                if net > 0:
+                if net > 0.005:
                     opt_stats[strat_key]["wins"] += 1
-                elif net < 0:
+                elif net < -0.005:
                     opt_stats[strat_key]["losses"] += 1
                 opt_stats[strat_key]["net_pnl"] += net
 
-            price = float(t["trade_price"] or 0.0)
-            time_str = str(t["trade_time"] or "")
-            notes_str = str(t["notes"] or "").lower()
-            is_expired = price == 0.0 or "16:20" in time_str or "expire" in notes_str or "assign" in notes_str
+            exit_price = float(t.get("exit_price") or 0.0)
+            is_expired = exit_price == 0.0 or t.get("is_expired", False)
 
             if is_expired:
                 expired_count += 1
                 expired_net_pnl += net
-                if net > 0:
+                if net > 0.005:
                     expired_wins += 1
-                elif net < 0:
+                elif net < -0.005:
                     expired_losses += 1
             else:
                 manual_count += 1
                 manual_net_pnl += net
-                if net > 0:
+                if net > 0.005:
                     manual_wins += 1
-                elif net < 0:
+                elif net < -0.005:
                     manual_losses += 1
 
-        total_opt_count = len(opt_rows)
+        total_opt_count = len(opt_closed_trades)
         options_summary = {
             "total_trades": total_opt_count,
             "expired_count": expired_count,

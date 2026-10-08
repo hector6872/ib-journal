@@ -1188,6 +1188,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 quantity,
                 trade_price,
                 trade_money,
+                proceeds,
                 realized_pnl,
                 ib_commission
             FROM trades
@@ -1520,10 +1521,14 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if qty < 0.0001:
                 continue
             price = float(sr["trade_price"] or 0.0)
-            tm = abs(float(sr["trade_money"] or 0.0))
-            if tm == 0.0:
-                mult = 100.0 if cat == "OPT" else 1.0
-                tm = qty * price * mult
+
+            if cat == "OPT":
+                proc = abs(float(sr["proceeds"] or 0.0))
+                tm = proc if proc > 0 else (qty * price * 100.0)
+            else:
+                tm = abs(float(sr["trade_money"] or 0.0))
+                if tm == 0.0:
+                    tm = qty * price
 
             pnl = float(sr["realized_pnl"] or 0.0)
             net = pnl

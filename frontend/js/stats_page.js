@@ -218,12 +218,58 @@ const StatsPage = {
             : '<span class="sort-indicator active">▼</span>';
     },
 
+    getBracketNumericVal(bracketStr) {
+        if (!bracketStr) return 0;
+        const s = String(bracketStr).trim();
+        if (s.startsWith('<')) {
+            return -1;
+        }
+        if (s.startsWith('>')) {
+            const num = parseFloat(s.replace(/[^0-9.]/g, ''));
+            return isNaN(num) ? 999999999 : num + 0.001;
+        }
+        const cleaned = s.replace(/,/g, '');
+        const match = cleaned.match(/\d+(\.\d+)?/);
+        if (match) {
+            return parseFloat(match[0]) || 0;
+        }
+        return 0;
+    },
+
     sortData(tableTarget, dataList) {
         if (!dataList || !dataList.length) return [];
         const config = this.tableSort[tableTarget] || { col: 'net_pnl', dir: 'desc' };
         const { col, dir } = config;
         const sorted = [...dataList];
         sorted.sort((a, b) => {
+            // 1. Natural Sizing Bracket Sorting (Numeric range comparison)
+            if (col === 'bracket') {
+                const valA = a.min !== undefined && a.min !== null ? Number(a.min) : this.getBracketNumericVal(a.bracket);
+                const valB = b.min !== undefined && b.min !== null ? Number(b.min) : this.getBracketNumericVal(b.bracket);
+                if (valA !== valB) {
+                    return dir === 'asc' ? valA - valB : valB - valA;
+                }
+                const maxA = a.max !== undefined && a.max !== null ? Number(a.max) : valA;
+                const maxB = b.max !== undefined && b.max !== null ? Number(b.max) : valB;
+                return dir === 'asc' ? maxA - maxB : maxB - maxA;
+            }
+
+            // 2. Day of Week sorting (by calendar order Monday -> Sunday)
+            if (tableTarget === 'dow' && col === 'day') {
+                const dayOrder = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7, 'lunes': 1, 'martes': 2, 'miércoles': 3, 'jueves': 4, 'viernes': 5, 'sábado': 6, 'domingo': 7 };
+                const valA = dayOrder[String(a.day || '').toLowerCase()] || 0;
+                const valB = dayOrder[String(b.day || '').toLowerCase()] || 0;
+                return dir === 'asc' ? valA - valB : valB - valA;
+            }
+
+            // 3. Duration sorting (Scalp -> Day Trade -> Swing Trade)
+            if (tableTarget === 'duration' && col === 'duration') {
+                const durOrder = { 'scalp (<1h)': 1, 'day trade (<1d)': 2, 'swing trade (>1d)': 3 };
+                const valA = durOrder[String(a.duration || '').toLowerCase()] || 0;
+                const valB = durOrder[String(b.duration || '').toLowerCase()] || 0;
+                return dir === 'asc' ? valA - valB : valB - valA;
+            }
+
             let valA = a[col];
             let valB = b[col];
             if (typeof valA === 'string' || typeof valB === 'string') {

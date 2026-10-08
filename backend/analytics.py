@@ -1618,10 +1618,13 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 gl = abs(b["gross_loss"])
                 pf = round(gp / gl, 2) if gl > 0 else (round(gp, 2) if gp > 0 else 0.0)
                 avg_pnl = round(net / cnt, 2) if cnt > 0 else 0.0
+                b_max = b["max"] if b["max"] != float("inf") else 999999999.0
                 res.append(
                     {
                         "key": b["key"],
                         "bracket": b["label"],
+                        "min": b["min"],
+                        "max": b_max,
                         "trades_count": cnt,
                         "wins": wins,
                         "losses": b["losses"],

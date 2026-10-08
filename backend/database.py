@@ -727,13 +727,13 @@ def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def delete_cash_transaction(tx_id_or_id: Any) -> bool:
-    """Deletes a cash transaction by id or transaction_id."""
+    """Deletes a manual cash transaction by id or transaction_id (only manual records can be deleted)."""
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
             DELETE FROM cash_transactions
-            WHERE id = ? OR transaction_id = ?
+            WHERE (id = ? OR transaction_id = ?) AND is_manual = 1
         """,
             (str(tx_id_or_id), str(tx_id_or_id)),
         )

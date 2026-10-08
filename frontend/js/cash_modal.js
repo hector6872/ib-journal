@@ -254,9 +254,11 @@ const CashModal = {
                                                     ${State.formatCurrency(tx.amount)}
                                                 </td>
                                                 <td style="text-align: center;">
-                                                    <button type="button" class="btn-delete-tx" data-id="${tx.id || tx.transaction_id}" title="${sc.deleteTooltip || 'Delete this transfer'}">
-                                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                                    </button>
+                                                    ${tx.is_manual ? `
+                                                        <button type="button" class="btn-delete-tx" data-id="${tx.id || tx.transaction_id}" title="${sc.deleteTooltip || 'Delete this transfer'}">
+                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                                        </button>
+                                                    ` : `<span style="color: var(--text-muted); font-size: 11px; opacity: 0.5; user-select: none;">—</span>`}
                                                 </td>
                                             </tr>
                                         `;

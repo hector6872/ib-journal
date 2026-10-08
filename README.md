@@ -18,17 +18,21 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
   - **Account Equity (NAV)** tracking: `Starting Capital + Net Cash Flow + Realized P&L`.
   - **Starting Capital**: Set your baseline portfolio capital with cross-device SQLite synchronization.
   - **Automatic & Manual Cash Transfers**: Auto-imports deposits and withdrawals from IBKR activity statements and allows manual cash entries.
+  - **Account Expenses & Broker Costs**: Automatic parsing and classification of market data subscriptions (e.g. OPRA), broker fees, and withholding taxes.
+  - **Protected Records**: Manual cash entries can be edited/deleted directly, while broker-synchronized transactions are protected from accidental deletion.
   - **Return on Capital (% ROI)**: Accurate performance returns based on active capital (`Realized P&L / Capital Base`).
 - **🛡️ MicroSD Safe & Flash Protected**: Configured with SQLite Write-Ahead Logging (`WAL`), in-memory temporary tables (`temp_store=MEMORY`), and minimal disk I/O to protect your Raspberry Pi storage.
 - **🔄 Smart Market-Hours Synchronization**: Automatically ingests trade executions and realized P&L via IBKR Flex Query Web Service during market sessions, skipping redundant queries at night and on weekends.
 - **⏱️ Rate-Limit Guard**: Enforced cooldown protection on the manual *"Sync Now"* button with live UI countdown timers to protect your IBKR API rate limits.
 - **📅 Multi-Calendar Views**: 
   - **Year Matrix**: 12-month calendar heatmap with monthly totals and year-end summary ribbon.
-  - **Month Calendar**: Traditional monthly grid with daily P&L badges and trade counters.
+  - **Month Calendar**: Traditional monthly grid with daily Net P&L badges and round-trip trade counters.
   - **Week Breakdown**: 7-day cards view (Monday–Sunday) with volume and executions.
 - **📊 In-Depth Trading Analytics**:
+  - **Round-Trip Trade Aggregation**: Unified trade counting across Overview KPIs and Calendars reflecting complete round-trip positions (grouping partial entries/exits) with true Net P&L (opening + closing commissions deducted).
   - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Risk/Reward `R:R`, Expectancy, Net Realized P&L, Total Trades, Commissions).
-  - Portfolio Capital & Equity Overview strip in Statistics.
+  - Portfolio Capital & Account Expenses overview strip in Statistics.
+  - **Position Sizing & Risk Exposure**: Detailed analysis of stock share sizing, notional capital brackets, option contract sizing, and premium brackets with win/loss asymmetry detection.
   - Risk & Drawdown analysis (Max Drawdown, Current Drawdown, Winning/Losing Streaks).
   - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL) and momentum tracking.
   - Equity Curve & Metric Evolution charts (Daily, Weekly, Monthly aggregations).
@@ -248,9 +252,9 @@ To change any wording, customize labels, or translate the entire interface into 
 | `/api/config` | `GET` | Frontend runtime configuration (currency symbol, IBKR setup status). |
 | `/api/settings` | `GET` / `POST` | User settings (e.g. Starting Capital) persisted in SQLite for cross-device synchronization. |
 | `/api/cash/transactions` | `GET` / `POST` | Retrieve cash summary / records, or record manual deposit/withdrawal. |
-| `/api/cash/transactions/{id}` | `DELETE` | Remove a manual or imported cash transaction. |
-| `/api/stats/overview` | `GET` | Global KPIs: Win Rate %, Profit Factor, Expectancy, Total Trades, Net Realized P&L, NAV Equity, ROI %. |
-| `/api/stats/detailed` | `GET` | Comprehensive trading analytics (drawdowns, rolling win rates, metric evolution, breakdowns). |
+| `/api/cash/transactions/{id}` | `DELETE` | Remove a manual cash transaction (broker-imported records are protected). |
+| `/api/stats/overview` | `GET` | Global KPIs: Win Rate %, Profit Factor, Expectancy, Total Round-Trip Trades, Net Realized P&L, NAV Equity, ROI %. |
+| `/api/stats/detailed` | `GET` | Comprehensive trading analytics (drawdowns, rolling win rates, position sizing, metric evolution, breakdowns). |
 | `/api/calendar/year?year=2026` | `GET` | 12-month calendar matrix and monthly summary array. |
 | `/api/calendar/month?year=2026&month=10` | `GET` | Monthly calendar grid data with daily P&L and trade counts. |
 | `/api/calendar/week?date=2026-10-01` | `GET` | 7-day card data with individual execution breakdown. |

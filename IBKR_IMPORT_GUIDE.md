@@ -125,7 +125,9 @@ To download previous years' activity statements:
 ## 💰 Capital & Cash Management Integration
 
 When you import an IBKR Activity Statement or Flex Query:
-* **Deposits and Withdrawals** in the statement (`Deposits & Withdrawals` section) are automatically parsed and saved to your SQLite database.
+* **Deposits, Withdrawals & Dividends** in the statement (`Deposits & Withdrawals` section) are automatically parsed and saved to your SQLite database.
+* **Account Expenses & Broker Fees**: Market data subscriptions (e.g. OPRA), broker fees, and withholding taxes are automatically classified and summarized in the dedicated Account Expenses panel.
+* **Protected Records**: Manually entered cash records can be deleted or edited at any time, while broker-synchronized cash records are safeguarded against accidental deletion.
 * **Account Equity (NAV)** is dynamically calculated as:
   `Account Equity = Starting Capital + Net Cash Flow + Realized P&L`
 * **Return on Capital (% ROI)** is calculated against your cumulative capital base:

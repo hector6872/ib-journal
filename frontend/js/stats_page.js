@@ -255,10 +255,13 @@ const StatsPage = {
             }
 
             // 2. Day of Week sorting (by calendar order Monday -> Sunday)
-            if (tableTarget === 'dow' && col === 'day') {
-                const dayOrder = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7, 'lunes': 1, 'martes': 2, 'miércoles': 3, 'jueves': 4, 'viernes': 5, 'sábado': 6, 'domingo': 7 };
-                const valA = dayOrder[String(a.day || '').toLowerCase()] || 0;
-                const valB = dayOrder[String(b.day || '').toLowerCase()] || 0;
+            if (tableTarget === 'dow' && (col === 'day' || col === 'day_name' || col === 'day_index')) {
+                if (a.day_index !== undefined && b.day_index !== undefined) {
+                    return dir === 'asc' ? a.day_index - b.day_index : b.day_index - a.day_index;
+                }
+                const dayOrder = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7, 'lunes': 1, 'martes': 2, 'miércoles': 3, 'jueves': 4, 'viernes': 5, 'sábado': 6, 'domingo': 7, 'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7 };
+                const valA = dayOrder[String(a.day_name || a.day || a.short_name || '').toLowerCase()] || 0;
+                const valB = dayOrder[String(b.day_name || b.day || b.short_name || '').toLowerCase()] || 0;
                 return dir === 'asc' ? valA - valB : valB - valA;
             }
 

@@ -1197,7 +1197,7 @@ const StatsPage = {
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         <!-- Dimension Toggle: Capital vs Shares -->
                                         <div class="segmented-control" id="control-stk-sizing-dim">
-                                            <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'capital' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="capital">${sp.stockMetricCapital || 'Capital ($/€)'}</button>
+                                            <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'capital' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="capital">${sp.stockMetricCapital || 'Capital'} (${State.currency})</button>
                                             <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'shares' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="shares">${sp.stockMetricShares || 'Shares'}</button>
                                         </div>
                                         <!-- View Toggle: Chart vs Table -->
@@ -1282,7 +1282,7 @@ const StatsPage = {
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         <!-- Dimension Toggle: Premium vs Contracts -->
                                         <div class="segmented-control" id="control-opt-sizing-dim">
-                                            <button type="button" class="segmented-btn ${this.sizingDimension.option === 'premium' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="premium">${sp.optionMetricPremium || 'Total Premium ($/€)'}</button>
+                                            <button type="button" class="segmented-btn ${this.sizingDimension.option === 'premium' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="premium">${sp.optionMetricPremium || 'Total Premium'} (${State.currency})</button>
                                             <button type="button" class="segmented-btn ${this.sizingDimension.option === 'contracts' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="contracts">${sp.optionMetricContracts || 'Contracts'}</button>
                                         </div>
                                         <!-- View Toggle: Chart vs Table -->

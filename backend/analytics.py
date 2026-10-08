@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from backend.database import db_session
+from backend.database import db_session, get_currency_symbol
 from backend.settings import get_all_settings
 
 
@@ -1178,6 +1178,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             )
 
         # 10. Position Sizing Breakdowns (Stocks & Options)
+        curr_sym = get_currency_symbol()
         sizing_where = "WHERE (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
         if where_clause:
             sizing_where = f"{where_clause} AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
@@ -1199,13 +1200,13 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         sizing_rows = cursor.fetchall()
 
         stock_notional_brackets = [
-            {"key": "stk_cap_under_250", "label": "< $250", "min": 0, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_250_500", "label": "$250 – $500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_500_1k", "label": "$500 – $1,000", "min": 500, "max": 1000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_1k_2.5k", "label": "$1,000 – $2,500", "min": 1000, "max": 2500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_2.5k_5k", "label": "$2,500 – $5,000", "min": 2500, "max": 5000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_5k_10k", "label": "$5,000 – $10,000", "min": 5000, "max": 10000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "stk_cap_over_10k", "label": "> $10,000", "min": 10000, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_under_250", "label": f"< {curr_sym}250", "min": 0, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_250_500", "label": f"{curr_sym}250 – {curr_sym}500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_500_1k", "label": f"{curr_sym}500 – {curr_sym}1,000", "min": 500, "max": 1000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_1k_2.5k", "label": f"{curr_sym}1,000 – {curr_sym}2,500", "min": 1000, "max": 2500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_2.5k_5k", "label": f"{curr_sym}2,500 – {curr_sym}5,000", "min": 2500, "max": 5000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_5k_10k", "label": f"{curr_sym}5,000 – {curr_sym}10,000", "min": 5000, "max": 10000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "stk_cap_over_10k", "label": f"> {curr_sym}10,000", "min": 10000, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
         ]
 
         stock_shares_brackets = [
@@ -1226,12 +1227,13 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         ]
 
         option_premium_brackets = [
-            {"key": "opt_prem_under_20", "label": "< $20", "min": 0, "max": 20, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_20_50", "label": "$20 – $50", "min": 20, "max": 50, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_50_100", "label": "$50 – $100", "min": 50, "max": 100, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_100_250", "label": "$100 – $250", "min": 100, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_250_500", "label": "$250 – $500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
-            {"key": "opt_prem_over_500", "label": "> $500", "min": 500, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_under_20", "label": f"< {curr_sym}20", "min": 0, "max": 20, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_20_50", "label": f"{curr_sym}20 – {curr_sym}50", "min": 20, "max": 50, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_50_100", "label": f"{curr_sym}50 – {curr_sym}100", "min": 50, "max": 100, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_100_250", "label": f"{curr_sym}100 – {curr_sym}250", "min": 100, "max": 250, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_250_500", "label": f"{curr_sym}250 – {curr_sym}500", "min": 250, "max": 500, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_500_1k", "label": f"{curr_sym}500 – {curr_sym}1,000", "min": 500, "max": 1000, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
+            {"key": "opt_prem_over_1k", "label": f"> {curr_sym}1,000", "min": 1000, "max": float("inf"), "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0, "gross_profit": 0.0, "gross_loss": 0.0},
         ]
 
         stk_win_shares, stk_loss_shares = [], []
@@ -1253,8 +1255,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             pnl = float(sr["realized_pnl"] or 0.0)
             comm = float(sr["ib_commission"] or 0.0)
             net = pnl - comm
-            is_win = pnl > 0
-            is_loss = pnl < 0
+            is_win = net > 0
+            is_loss = net < 0
 
             if cat in ("STK", "ETF"):
                 if is_win:

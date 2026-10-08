@@ -265,8 +265,18 @@ const DayModal = {
                 const timeStr = fill.trade_time || '--:--';
                 const fillCat = fill.asset_category || 'STK';
 
+                const ind = (fill.open_close_indicator || '').toUpperCase();
+                const isBuy = bs === 'BUY' || qty > 0;
+                const hasPnl = Math.abs(pnl) > 1e-6;
+
                 if (!current) {
-                    const isInitialBuy = (qty > 0 || bs === 'BUY');
+                    let isInitialBuy = isBuy;
+                    let isEntry = true;
+                    if (ind === 'C' && hasPnl) {
+                        isInitialBuy = !isBuy;
+                        isEntry = false;
+                    }
+
                     current = {
                         trade_id: `tr_${fill.trade_date || ''}_${symbol}_${tradeIdx++}`,
                         symbol: symbol,
@@ -290,7 +300,7 @@ const DayModal = {
                     };
                 }
 
-                const isEntry = (current.is_initial_buy && qty > 0) || (!current.is_initial_buy && qty < 0);
+                const isEntry = current.is_initial_buy ? isBuy : !isBuy;
                 const absQty = Math.abs(qty);
 
                 current.fills.push(fill);
@@ -300,13 +310,17 @@ const DayModal = {
                 if (isEntry) {
                     current.entry_qty += absQty;
                     current.entry_val += absQty * price;
+                    pos += absQty;
                 } else {
                     current.exit_qty += absQty;
                     current.exit_val += absQty * price;
                     current.close_time = timeStr;
+                    if (pos <= 0) {
+                        pos = 0.0;
+                    } else {
+                        pos -= absQty;
+                    }
                 }
-
-                pos += qty;
 
                 if (Math.abs(pos) < 1e-6) {
                     current.status = 'CLOSED';
@@ -330,13 +344,25 @@ const DayModal = {
             });
 
             if (current) {
-                current.status = 'OPEN';
-                current.net_pnl = current.gross_pnl - current.commission;
-                current.avg_entry_price = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : 0;
-                current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
-                current.quantity = Math.max(current.entry_qty, current.exit_qty);
-                current.result = 'OPEN';
-                allGrouped.push(current);
+                const hasRealizedPnl = Math.abs(current.gross_pnl) > 1e-6;
+                const isCloseIndicator = (current.fills || []).some(f => (f.open_close_indicator || '').toUpperCase() === 'C');
+                if (isCloseIndicator || hasRealizedPnl) {
+                    current.status = 'CLOSED';
+                    current.net_pnl = current.gross_pnl - current.commission;
+                    current.avg_entry_price = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : 0;
+                    current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
+                    current.quantity = Math.max(current.entry_qty, current.exit_qty);
+                    current.result = current.net_pnl > 0.005 ? 'WIN' : (current.net_pnl < -0.005 ? 'LOSS' : 'BREAKEVEN');
+                    allGrouped.push(current);
+                } else {
+                    current.status = 'OPEN';
+                    current.net_pnl = current.gross_pnl - current.commission;
+                    current.avg_entry_price = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : 0;
+                    current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
+                    current.quantity = Math.max(current.entry_qty, current.exit_qty);
+                    current.result = 'OPEN';
+                    allGrouped.push(current);
+                }
             }
         });
 

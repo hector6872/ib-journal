@@ -270,6 +270,13 @@ const StatsPage = {
                 return dir === 'asc' ? valA - valB : valB - valA;
             }
 
+            // 4. Time of Day sorting (00:00 -> 23:00)
+            if (tableTarget === 'tod' && (col === 'label' || col === 'hour')) {
+                const hourA = a.hour !== undefined ? Number(a.hour) : parseInt(a.label || '0', 10);
+                const hourB = b.hour !== undefined ? Number(b.hour) : parseInt(b.label || '0', 10);
+                return dir === 'asc' ? hourA - hourB : hourB - hourA;
+            }
+
             let valA = a[col];
             let valB = b[col];
             if (typeof valA === 'string' || typeof valB === 'string') {

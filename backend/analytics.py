@@ -810,8 +810,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         ny_tz = ZoneInfo("America/New_York")
         madrid_tz = ZoneInfo("Europe/Madrid")
 
-        hourly_market = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(6, 22)}
-        hourly_local = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(8, 24)}
+        hourly_market = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(0, 24)}
+        hourly_local = {h: {"trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0} for h in range(0, 24)}
 
         for t in all_trades:
             is_closed = (t.get("open_close_indicator") or "").upper() == "C" or (
@@ -854,7 +854,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 hourly_local[h_local]["net_pnl"] += t["net_pnl"]
 
         time_of_day_market = []
-        for h in range(6, 22):
+        for h in range(0, 24):
             h_info = hourly_market[h]
             cnt = h_info["trades_count"]
             wr = round((h_info["wins"] / cnt * 100), 1) if cnt > 0 else 0.0
@@ -873,7 +873,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             )
 
         time_of_day_local = []
-        for h in range(8, 24):
+        for h in range(0, 24):
             h_info = hourly_local[h]
             cnt = h_info["trades_count"]
             wr = round((h_info["wins"] / cnt * 100), 1) if cnt > 0 else 0.0

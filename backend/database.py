@@ -240,9 +240,6 @@ def init_db():
         # Deduplicate and normalize symbols on initialization
         cleanup_duplicate_trades(conn)
 
-        # Reconcile FIFO PnL on any unassigned executions
-        reconcile_fifo_pnl(cursor)
-
         # Reconcile any existing cash transactions with incorrect positive signs or types for fees/taxes/subscriptions
         cursor.execute("""
             UPDATE cash_transactions
@@ -280,7 +277,10 @@ def init_db():
                 OR UPPER(description) LIKE '%WITHHOLDING%'
                 OR UPPER(description) LIKE '%RETENCI%'
                 OR UPPER(description) LIKE '%IMPUESTO%'
-            );
+            )
+            AND UPPER(description) NOT LIKE '%REFUND%'
+            AND UPPER(description) NOT LIKE '%REEMBOLSO%'
+            AND UPPER(description) NOT LIKE '%REBATE%';
         """)
 
         cursor.execute("""
@@ -590,7 +590,14 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         desc = str(tx.get("description") or "")
         desc_upper = desc.upper()
 
-        is_negative = (
+        is_refund = raw_val > 0 and (
+            "REFUND" in desc_upper
+            or "REEMBOLSO" in desc_upper
+            or "REBATE" in desc_upper
+            or "ADJUSTMENT" in desc_upper
+        )
+
+        is_negative = not is_refund and (
             raw_val < 0
             or (raw_amt_val is not None and float(raw_amt_val) < 0)
             or "WITHDRAW" in raw_type

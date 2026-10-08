@@ -98,10 +98,15 @@ def clean_num(val: Any, default: float = 0.0) -> float:
             # European format: 1.234.567,89 -> remove dot, replace comma with dot
             s = s.replace(".", "").replace(",", ".")
     elif "," in s:
-        # Check if comma is decimal separator (e.g. 180,50 or -12,3456)
         parts = s.split(",")
-        if len(parts) == 2 and len(parts[1]) <= 6:
-            s = s.replace(",", ".")
+        if len(parts) == 2:
+            # If exactly 3 digits after comma and integer-like (e.g. '1,000', '6,250', '10,005'), it's a thousands separator
+            if len(parts[1]) == 3 and parts[0].isdigit() and parts[1].isdigit():
+                s = s.replace(",", "")
+            elif len(parts[1]) != 3 and len(parts[1]) <= 6:
+                s = s.replace(",", ".")
+            else:
+                s = s.replace(",", "")
         else:
             s = s.replace(",", "")
     elif s.count(".") > 1:
@@ -133,7 +138,7 @@ def generate_deterministic_cash_id(account_id: str, dt_str: str, tx_type: str, a
     return f"CASH_{h}"
 
 
-def parse_datetime_str(raw: str) -> Tuple[str, str, str]:
+def parse_datetime_str(raw: str, require_time: bool = False) -> Tuple[str, str, str]:
     """
     Parses various date/time formats from IBKR statements:
     - 2023-05-12, 14:32:00 / 2023-05-12 14:32:00
@@ -207,10 +212,13 @@ def parse_datetime_str(raw: str) -> Tuple[str, str, str]:
                 s = tp[2].zfill(2) if len(tp) > 2 else "00"
                 trade_time = f"{h}:{m}:{s}"
 
-        if not trade_date or not trade_time:
+        if not trade_date:
             return "", "", ""
 
-        iso_str = f"{trade_date}T{trade_time}"
+        if require_time and not trade_time:
+            return "", "", ""
+
+        iso_str = f"{trade_date}T{trade_time}" if trade_time else trade_date
         return trade_date, trade_time, iso_str
     except Exception:
         return "", "", ""
@@ -326,6 +334,7 @@ ACCOUNT_SECTIONS = {
 }
 
 CASH_SECTIONS = {
+    # Deposits & Withdrawals
     "deposits & withdrawals",
     "deposits and withdrawals",
     "depósitos y retiradas",
@@ -348,6 +357,57 @@ CASH_SECTIONS = {
     "存款和取款",
     "入出金",
     "депозиты и снятия средств",
+    # Dividends
+    "dividends",
+    "dividendos",
+    "dividendes",
+    "dividenden",
+    "dividendi",
+    "dividendos (efectivo)",
+    "dividends (cash)",
+    "股息",
+    "配当金",
+    "дивиденды",
+    # Withholding Tax
+    "withholding tax",
+    "retención fiscal",
+    "retenciones fiscales",
+    "retención",
+    "retenciones",
+    "impôt retenu",
+    "quellensteuer",
+    "ritenuta alla fonte",
+    "imposto retido na fonte",
+    "bronbelasting",
+    "预扣税",
+    "源泉徴収税",
+    "налог у источника",
+    # Fees & Subscriptions
+    "fees",
+    "tarifas",
+    "comisiones y tarifas",
+    "frais",
+    "gebühren",
+    "commissioni e spese",
+    "taxas",
+    "kosten",
+    "费用",
+    "手数料・費用",
+    "сборы",
+    # Interest
+    "interest",
+    "intereses",
+    "intérêts",
+    "zinsen",
+    "interessi",
+    "juros",
+    "rente",
+    "利息",
+    "проценты",
+    "broker interest paid",
+    "broker interest received",
+    "intereses pagados por el intermediario",
+    "intereses recibidos del intermediario",
 }
 
 FOREX_SECTIONS = {
@@ -430,7 +490,9 @@ def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
         symbol = normalize_symbol(raw_symbol, desc, asset_cat)
 
         date_raw = attrs.get("dateTime") or attrs.get("tradeDate") or attrs.get("reportDate") or ""
-        t_date, t_time, t_dt_iso = parse_datetime_str(date_raw)
+        t_date, t_time, t_dt_iso = parse_datetime_str(date_raw, require_time=True)
+        if not t_date or not t_time:
+            continue
 
         qty = clean_num(attrs.get("quantity") or attrs.get("shares") or attrs.get("size"))
         if abs(qty) < 1e-5:
@@ -679,7 +741,7 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
                 if curr and close_price > 0:
                     fx_rates_to_base[curr] = close_price
 
-    dw_headers: List[str] = []
+    section_headers: Dict[str, List[str]] = {}
     for line in lines:
         row = parse_csv_line_tokens(line, delimiter)
         if not row or len(row) < 3:
@@ -688,8 +750,9 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
         record_type = row[1].strip().lower().strip('"')
 
         if section in CASH_SECTIONS and record_type in HEADER_RECORD_TYPES:
-            dw_headers = [h.strip().lower() for h in row[2:]]
-        elif section in CASH_SECTIONS and record_type in DATA_RECORD_TYPES and dw_headers:
+            section_headers[section] = [h.strip().lower() for h in row[2:]]
+        elif section in CASH_SECTIONS and record_type in DATA_RECORD_TYPES and section in section_headers:
+            dw_headers = section_headers[section]
             data = [d.strip() for d in row[2:]]
             if len(data) < len(dw_headers):
                 data += [""] * (len(dw_headers) - len(data))
@@ -738,57 +801,54 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
                 continue
 
             fx_rate = 1.0 if raw_curr == base_currency else fx_rates_to_base.get(raw_curr, 1.0)
-            amt_in_base = round(amt * fx_rate, 2)
+            amt_in_base = round(amt * fx_rate, 4)
 
-            t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw)
+            t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw, require_time=False)
+            if not t_date:
+                continue
+
             desc = desc_str or ("Electronic Funds Transfer" if amt > 0 else "Cash Withdrawal")
-
             desc_upper = desc.upper()
-            if (
-                amt < 0
-                or "WITHDRAW" in desc_upper
-                or "RETIRADA" in desc_upper
-                or "FEE" in desc_upper
-                or "COMISIÓN" in desc_upper
-                or "COMISION" in desc_upper
-                or "TAX" in desc_upper
-                or "RETENCI" in desc_upper
-                or "IMPUESTO" in desc_upper
-                or "OPRA" in desc_upper
-                or "SUBSCRIPTION" in desc_upper
-                or "SUSCRIPCI" in desc_upper
-                or "MARKET DATA" in desc_upper
-            ):
-                if (
-                    "SUBSCRIPTION" in desc_upper
-                    or "SUSCRIPCI" in desc_upper
-                    or "OPRA" in desc_upper
-                    or "MARKET DATA" in desc_upper
-                    or "NP L1" in desc_upper
-                    or "L1 FOR" in desc_upper
-                    or "L2 FOR" in desc_upper
-                    or "LEVEL 1" in desc_upper
-                    or "LEVEL 2" in desc_upper
-                    or "QUOTE" in desc_upper
-                ):
-                    tx_type = "SUBSCRIPTION"
-                elif (
-                    "TAX" in desc_upper
-                    or "RETENCI" in desc_upper
-                    or "WITHHOLDING" in desc_upper
-                    or "IMPUESTO" in desc_upper
-                ):
-                    tx_type = "WITHHOLDING TAX"
-                elif "FEE" in desc_upper or "COMISIÓN" in desc_upper or "COMISION" in desc_upper:
-                    tx_type = "FEE"
-                else:
-                    tx_type = "WITHDRAWAL"
-            elif "DIVIDEND" in desc_upper or "DIVIDENDO" in desc_upper:
+            sec_lower = section.lower()
+
+            # Classification
+            if "tax" in sec_lower or "retenci" in sec_lower or "quellensteuer" in sec_lower or "withholding tax" in sec_lower or "WITHHOLDING" in desc_upper or " TAX" in desc_upper or desc_upper.endswith(" TAX"):
+                tx_type = "WITHHOLDING TAX"
+                is_negative = True
+            elif "dividend" in sec_lower or "DIVIDEND" in desc_upper:
                 tx_type = "DIVIDEND"
+                is_negative = amt < 0
+            elif "interest" in sec_lower or "interes" in sec_lower:
+                tx_type = "INTEREST"
+                is_negative = amt < 0
+            elif (
+                "SUBSCRIPTION" in desc_upper
+                or "SUSCRIPCI" in desc_upper
+                or "OPRA" in desc_upper
+                or "MARKET DATA" in desc_upper
+                or "NP L1" in desc_upper
+                or "L1 FOR" in desc_upper
+                or "L2 FOR" in desc_upper
+                or "LEVEL 1" in desc_upper
+                or "LEVEL 2" in desc_upper
+                or "QUOTE" in desc_upper
+            ):
+                tx_type = "SUBSCRIPTION"
+                is_negative = amt < 0
+            elif "REFUND" in desc_upper or "REEMBOLSO" in desc_upper or "REBATE" in desc_upper:
+                tx_type = "FEE" if amt < 0 else "DEPOSIT"
+                is_negative = amt < 0
+            elif "FEE" in desc_upper or "COMISIÓN" in desc_upper or "COMISION" in desc_upper or "fees" in sec_lower:
+                tx_type = "FEE"
+                is_negative = amt < 0
             elif amt > 0:
                 tx_type = "DEPOSIT"
+                is_negative = False
             else:
                 tx_type = "WITHDRAWAL"
+                is_negative = True
+
+            signed_amount = -abs(round(amt_in_base, 2)) if is_negative else abs(round(amt_in_base, 2))
 
             tx_id = (
                 row_dict.get("transaction id")
@@ -797,9 +857,6 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
                 or row_dict.get("ref #")
                 or generate_deterministic_cash_id(account_id, t_dt_iso, tx_type, amt, desc)
             )
-
-            is_negative = tx_type in ("WITHDRAWAL", "FEE", "WITHHOLDING TAX", "SUBSCRIPTION") or amt < 0
-            signed_amount = -abs(amt_in_base) if is_negative else abs(amt_in_base)
 
             cash_txs.append(
                 {
@@ -862,11 +919,14 @@ COLUMN_ALIASES = {
         "data/ora",
         "data/hora",
         "datum/tijd",
+        "日期/时间",
+        "日期/時間",
         "日期",
         "时间",
         "時間",
         "日時",
         "日付",
+        "дата/время",
         "дата",
         "время",
         "date/time (iso)",
@@ -1361,7 +1421,9 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
                 continue
 
             dt_raw = get_field_val(row_dict, "datetime")
-            t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw)
+            t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw, require_time=True)
+            if not t_date or not t_time:
+                continue
 
             qty = clean_num(get_field_val(row_dict, "quantity"))
             if abs(qty) < 1e-5:
@@ -1574,7 +1636,9 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
             or row.get("fecha")
             or ""
         )
-        t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw)
+        t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw, require_time=True)
+        if not t_date or not t_time:
+            continue
 
         qty = clean_num(
             row.get("quantity") or row.get("qty") or row.get("shares") or row.get("cantidad") or row.get("posiciones")

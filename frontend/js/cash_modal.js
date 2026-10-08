@@ -79,9 +79,13 @@ const CashModal = {
         const startingCapital = Number(settings?.starting_capital || 0.0);
         const totalDeposits = Number(cashSummary?.total_deposits || 0.0);
         const totalWithdrawals = Number(cashSummary?.total_withdrawals || 0.0);
+        const totalDividends = Number(cashSummary?.total_dividends || 0.0);
+        const totalWithholdingTax = Number(cashSummary?.total_withholding_tax || 0.0);
+        const totalSubscriptions = Number(cashSummary?.total_subscriptions || 0.0);
+        const totalFees = Number(cashSummary?.total_fees || 0.0);
         const netCashFlow = Number(cashSummary?.net_cash_flow || 0.0);
         const netPnl = Number(overview?.net_pnl || 0.0);
-        const capitalBase = startingCapital + totalDeposits;
+        const capitalBase = startingCapital + totalDeposits + totalDividends;
         const accountBalance = startingCapital + netCashFlow + netPnl;
         const roiPct = capitalBase > 0 ? ((netPnl / capitalBase) * 100).toFixed(2) : '0.00';
 
@@ -113,7 +117,7 @@ const CashModal = {
                         <span class="cash-card-value mono ${State.getPnlClass(netCashFlow)}">
                             ${State.formatCurrency(netCashFlow)}
                         </span>
-                        <span class="cash-card-sub">In: ${State.currency}${totalDeposits.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${totalWithdrawals.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
+                        <span class="cash-card-sub">In: ${State.currency}${(cashSummary?.all_inflows || totalDeposits + totalDividends).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${(cashSummary?.all_outflows || totalWithdrawals + totalSubscriptions + totalWithholdingTax + totalFees).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
                     </div>
 
                     <div class="cash-card">
@@ -122,6 +126,34 @@ const CashModal = {
                             ${Number(roiPct) > 0 ? '+' : ''}${roiPct}%
                         </span>
                         <span class="cash-card-sub">${sc.roiSub || 'Realized P&L / Capital Base'}</span>
+                    </div>
+                </div>
+
+                <!-- 1b. Itemized Category Breakdown Strip -->
+                <div class="cash-breakdown-bar">
+                    <div class="cash-breakdown-item">
+                        <span class="cash-breakdown-label">📥 ${sc.statDeposits || 'Deposits'}</span>
+                        <span class="cash-breakdown-val mono pnl-positive">+${State.currency}${totalDeposits.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="cash-breakdown-item">
+                        <span class="cash-breakdown-label">📤 ${sc.statWithdrawals || 'Withdrawals'}</span>
+                        <span class="cash-breakdown-val mono ${totalWithdrawals > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalWithdrawals.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="cash-breakdown-item">
+                        <span class="cash-breakdown-label">💵 ${sc.statDividends || 'Dividends'}</span>
+                        <span class="cash-breakdown-val mono ${totalDividends > 0 ? 'pnl-positive' : 'pnl-neutral'}">+${State.currency}${totalDividends.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="cash-breakdown-item">
+                        <span class="cash-breakdown-label">🏛️ ${sc.statWithholdingTax || 'Withholding Tax'}</span>
+                        <span class="cash-breakdown-val mono ${totalWithholdingTax > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalWithholdingTax.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="cash-breakdown-item">
+                        <span class="cash-breakdown-label">📡 ${sc.statSubscriptions || 'Subscriptions'}</span>
+                        <span class="cash-breakdown-val mono ${totalSubscriptions > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalSubscriptions.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="cash-breakdown-item">
+                        <span class="cash-breakdown-label">🏷️ ${sc.statFees || 'Broker Fees'}</span>
+                        <span class="cash-breakdown-val mono ${totalFees > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalFees.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                 </div>
 
@@ -147,11 +179,15 @@ const CashModal = {
                         <span style="font-size: 11px; color: var(--text-muted);">${sc.addTransferSubtitle || 'Transfers in IBKR statements are automatically imported. Use this for manual adjustments.'}</span>
                     </div>
                     <form id="add-cash-tx-form" class="cash-form-row">
-                        <div class="form-group" style="width: 130px;">
+                        <div class="form-group" style="width: 170px;">
                             <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">${sc.typeLabel || 'TYPE'}</label>
                             <select id="cash-tx-type" class="cash-input">
                                 <option value="DEPOSIT">${sc.deposit || 'Deposit (+)'}</option>
                                 <option value="WITHDRAWAL">${sc.withdrawal || 'Withdrawal (-)'}</option>
+                                <option value="DIVIDEND">${sc.dividend || 'Dividend (+)'}</option>
+                                <option value="SUBSCRIPTION">${sc.subscription || 'Market Data Subscription (-)'}</option>
+                                <option value="WITHHOLDING TAX">${sc.withholdingTax || 'Withholding Tax (-)'}</option>
+                                <option value="FEE">${sc.brokerFee || 'Broker Fee (-)'}</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex: 1;">
@@ -186,17 +222,24 @@ const CashModal = {
                                 <thead>
                                     <tr>
                                         <th>${sc.colDate || 'Date'}</th>
-                                        <th>${sc.colType || 'Type'}</th>
+                                        <th style="white-space: nowrap;">${sc.colType || 'Type'}</th>
                                         <th>${sc.colDesc || 'Description'}</th>
-                                        <th>${sc.colSource || 'Source'}</th>
-                                        <th style="text-align: right;">${sc.colAmount || 'Amount'}</th>
+                                        <th style="white-space: nowrap;">${sc.colSource || 'Source'}</th>
+                                        <th style="text-align: right; white-space: nowrap;">${sc.colAmount || 'Amount'}</th>
                                         <th style="text-align: center; width: 60px;">${sc.colAction || 'Action'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${txs.map(tx => {
                                         const isDeposit = Number(tx.amount) >= 0;
-                                        const badgeClass = isDeposit ? 'badge-deposit' : 'badge-withdrawal';
+                                        const upperType = (tx.type || '').toUpperCase();
+                                        let badgeClass = isDeposit ? 'badge-deposit' : 'badge-withdrawal';
+                                        if (upperType === 'SUBSCRIPTION') badgeClass = 'badge-subscription';
+                                        else if (upperType.includes('TAX')) badgeClass = 'badge-tax';
+                                        else if (upperType === 'FEE') badgeClass = 'badge-fee';
+                                        else if (upperType === 'DIVIDEND' && isDeposit) badgeClass = 'badge-dividend';
+                                        else if (upperType === 'TRANSFER') badgeClass = 'badge-transfer';
+
                                         const amountClass = isDeposit ? 'pnl-positive' : 'pnl-negative';
                                         const sourceLabel = tx.is_manual ? (sc.sourceManual || 'Manual') : (sc.sourceIbkr || 'IBKR Auto');
                                         const sourceClass = tx.is_manual ? 'source-manual' : 'source-ibkr';
@@ -204,10 +247,10 @@ const CashModal = {
                                         return `
                                             <tr>
                                                 <td class="mono" style="white-space: nowrap;">${tx.transaction_date}</td>
-                                                <td><span class="cash-badge ${badgeClass}">${tx.type || (isDeposit ? 'DEPOSIT' : 'WITHDRAWAL')}</span></td>
+                                                <td style="white-space: nowrap;"><span class="cash-badge ${badgeClass}">${tx.type || (isDeposit ? 'DEPOSIT' : 'WITHDRAWAL')}</span></td>
                                                 <td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${tx.description || ''}">${tx.description || '--'}</td>
-                                                <td><span class="source-tag ${sourceClass}">${sourceLabel}</span></td>
-                                                <td class="mono ${amountClass}" style="text-align: right; font-weight: 700;">
+                                                <td style="white-space: nowrap;"><span class="source-tag ${sourceClass}">${sourceLabel}</span></td>
+                                                <td class="mono ${amountClass}" style="text-align: right; font-weight: 700; white-space: nowrap;">
                                                     ${State.formatCurrency(tx.amount)}
                                                 </td>
                                                 <td style="text-align: center;">

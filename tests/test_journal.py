@@ -1022,6 +1022,12 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
                         <CashTransaction accountId="U123456" currency="EUR" fxRateToBase="1.0" amount="5000.0"
                                          type="Electronic Fund Transfer" dateTime="20261005;090000"
                                          description="Deposit via Wire" transactionID="CASH_XML_1" />
+                        <CashTransaction accountId="U123456" currency="EUR" fxRateToBase="1.0" amount="-1.33"
+                                         type="Other Fees" dateTime="20261005;120000"
+                                         description="H*******72:OPRA NP L1 FOR OCT 2026" transactionID="CASH_XML_OPRA" />
+                        <CashTransaction accountId="U123456" currency="EUR" fxRateToBase="1.0" amount="-0.19"
+                                         type="Withholding Tax" dateTime="20261001;120000"
+                                         description="NVDA CASH DIVIDEND - US TAX" transactionID="CASH_XML_TAX" />
                     </CashTransactions>
                 </FlexStatement>
             </FlexStatements>
@@ -1035,10 +1041,20 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         self.assertAlmostEqual(trades[0]["realized_pnl"], 45.0)  # 50 * 0.9
 
         cash_txs = client.parse_cash_transactions_xml(sample_xml)
-        self.assertEqual(len(cash_txs), 1)
+        self.assertEqual(len(cash_txs), 3)
         self.assertEqual(cash_txs[0]["transaction_id"], "CASH_XML_1")
         self.assertEqual(cash_txs[0]["transaction_type"], "TRANSFER")
         self.assertEqual(cash_txs[0]["amount"], 5000.0)
+
+        # Verify OPRA NP L1 subscription
+        self.assertEqual(cash_txs[1]["transaction_id"], "CASH_XML_OPRA")
+        self.assertEqual(cash_txs[1]["type"], "SUBSCRIPTION")
+        self.assertEqual(cash_txs[1]["amount"], -1.33)
+
+        # Verify Withholding Tax
+        self.assertEqual(cash_txs[2]["transaction_id"], "CASH_XML_TAX")
+        self.assertEqual(cash_txs[2]["type"], "WITHHOLDING TAX")
+        self.assertEqual(cash_txs[2]["amount"], -0.19)
 
         # Test Trade Confirmation XML parsing (intraday fills format)
         trade_confirm_xml = """<FlexQueryResponse>

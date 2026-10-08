@@ -366,10 +366,32 @@ class IBKRFlexClient:
                 continue
 
             tx_type_raw = (attrs.get("type") or "DEPOSIT").upper()
+            desc = attrs.get("description") or attrs.get("type") or ""
+            desc_upper = desc.upper()
+
             tx_type = "DEPOSIT"
-            if "WITHDRAW" in tx_type_raw or amount_raw < 0:
-                tx_type = "WITHDRAWAL"
-            elif "DIVIDEND" in tx_type_raw or "WITHHOLDING" in tx_type_raw:
+            if "WITHDRAW" in tx_type_raw or "FEE" in tx_type_raw or "TAX" in tx_type_raw or amount_raw < 0:
+                if (
+                    "SUBSCRIPTION" in tx_type_raw
+                    or "SUBSCRIPTION" in desc_upper
+                    or "SUSCRIPCI" in desc_upper
+                    or "OPRA" in desc_upper
+                    or "MARKET DATA" in desc_upper
+                    or "NP L1" in desc_upper
+                    or "L1 FOR" in desc_upper
+                    or "L2 FOR" in desc_upper
+                    or "LEVEL 1" in desc_upper
+                    or "LEVEL 2" in desc_upper
+                    or "QUOTE" in desc_upper
+                ):
+                    tx_type = "SUBSCRIPTION"
+                elif "TAX" in tx_type_raw or "WITHHOLDING" in tx_type_raw or "TAX" in desc_upper or "RETENCI" in desc_upper or "IMPUESTO" in desc_upper:
+                    tx_type = "WITHHOLDING TAX"
+                elif "FEE" in tx_type_raw or "FEE" in desc_upper or "COMISI" in desc_upper:
+                    tx_type = "FEE"
+                else:
+                    tx_type = "WITHDRAWAL"
+            elif "DIVIDEND" in tx_type_raw or "DIVIDEND" in desc_upper:
                 tx_type = "DIVIDEND"
             elif "TRANSFER" in tx_type_raw:
                 tx_type = "TRANSFER"
@@ -389,7 +411,6 @@ class IBKRFlexClient:
             fx_rate = float(attrs.get("fxRateToBase") or 1.0)
             amount_base = round(amount_raw * fx_rate, 2)
 
-            desc = attrs.get("description") or attrs.get("type") or ""
             account_id = attrs.get("accountId") or ""
             tx_id = (
                 attrs.get("transactionID")
@@ -406,13 +427,17 @@ class IBKRFlexClient:
                     "transaction_id": tx_id,
                     "account_id": account_id,
                     "transaction_date": t_date,
+                    "type": tx_type,
                     "transaction_type": tx_type,
-                    "amount": amount_raw,
+                    "amount": amount_base,
+                    "raw_amount": amount_raw,
                     "currency": curr,
+                    "raw_currency": curr,
                     "amount_in_base": amount_base,
                     "base_currency": base_currency,
                     "fx_rate_to_base": fx_rate,
                     "description": desc,
+                    "is_manual": False,
                 }
             )
 

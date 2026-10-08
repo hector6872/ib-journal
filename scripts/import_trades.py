@@ -499,10 +499,32 @@ def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
         if amount_raw == 0:
             continue
 
+        desc = attrs.get("description") or attrs.get("type") or ""
+        desc_upper = desc.upper()
+
         tx_type = "DEPOSIT"
-        if "WITHDRAW" in tx_type_raw or amount_raw < 0:
-            tx_type = "WITHDRAWAL"
-        elif "DIVIDEND" in tx_type_raw or "WITHHOLDING" in tx_type_raw:
+        if "WITHDRAW" in tx_type_raw or "FEE" in tx_type_raw or "TAX" in tx_type_raw or amount_raw < 0:
+            if (
+                "SUBSCRIPTION" in tx_type_raw
+                or "SUBSCRIPTION" in desc_upper
+                or "SUSCRIPCI" in desc_upper
+                or "OPRA" in desc_upper
+                or "MARKET DATA" in desc_upper
+                or "NP L1" in desc_upper
+                or "L1 FOR" in desc_upper
+                or "L2 FOR" in desc_upper
+                or "LEVEL 1" in desc_upper
+                or "LEVEL 2" in desc_upper
+                or "QUOTE" in desc_upper
+            ):
+                tx_type = "SUBSCRIPTION"
+            elif "TAX" in tx_type_raw or "WITHHOLDING" in tx_type_raw or "TAX" in desc_upper or "RETENCI" in desc_upper or "IMPUESTO" in desc_upper:
+                tx_type = "WITHHOLDING TAX"
+            elif "FEE" in tx_type_raw or "FEE" in desc_upper or "COMISI" in desc_upper:
+                tx_type = "FEE"
+            else:
+                tx_type = "WITHDRAWAL"
+        elif "DIVIDEND" in tx_type_raw or "DIVIDEND" in desc_upper:
             tx_type = "DIVIDEND"
         elif "TRANSFER" in tx_type_raw:
             tx_type = "TRANSFER"
@@ -513,7 +535,6 @@ def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
         fx_rate = clean_num(attrs.get("fxRateToBase"), 1.0)
         amount_base = round(amount_raw * fx_rate, 2)
 
-        desc = attrs.get("description") or attrs.get("type") or ""
         account_id = attrs.get("accountId") or ""
         tx_id = (
             attrs.get("transactionID")
@@ -526,6 +547,7 @@ def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
                 "transaction_id": tx_id,
                 "account_id": account_id,
                 "type": tx_type,
+                "transaction_type": tx_type,
                 "amount": amount_base,
                 "raw_amount": amount_raw,
                 "currency": curr,
@@ -717,7 +739,41 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
             desc = desc_str or ("Electronic Funds Transfer" if amt > 0 else "Cash Withdrawal")
 
             desc_upper = desc.upper()
-            if "DIVIDEND" in desc_upper or "DIVIDENDO" in desc_upper:
+            if (
+                amt < 0
+                or "WITHDRAW" in desc_upper
+                or "RETIRADA" in desc_upper
+                or "FEE" in desc_upper
+                or "COMISIÓN" in desc_upper
+                or "COMISION" in desc_upper
+                or "TAX" in desc_upper
+                or "RETENCI" in desc_upper
+                or "IMPUESTO" in desc_upper
+                or "OPRA" in desc_upper
+                or "SUBSCRIPTION" in desc_upper
+                or "SUSCRIPCI" in desc_upper
+                or "MARKET DATA" in desc_upper
+            ):
+                if (
+                    "SUBSCRIPTION" in desc_upper
+                    or "SUSCRIPCI" in desc_upper
+                    or "OPRA" in desc_upper
+                    or "MARKET DATA" in desc_upper
+                    or "NP L1" in desc_upper
+                    or "L1 FOR" in desc_upper
+                    or "L2 FOR" in desc_upper
+                    or "LEVEL 1" in desc_upper
+                    or "LEVEL 2" in desc_upper
+                    or "QUOTE" in desc_upper
+                ):
+                    tx_type = "SUBSCRIPTION"
+                elif "TAX" in desc_upper or "RETENCI" in desc_upper or "WITHHOLDING" in desc_upper or "IMPUESTO" in desc_upper:
+                    tx_type = "WITHHOLDING TAX"
+                elif "FEE" in desc_upper or "COMISIÓN" in desc_upper or "COMISION" in desc_upper:
+                    tx_type = "FEE"
+                else:
+                    tx_type = "WITHDRAWAL"
+            elif "DIVIDEND" in desc_upper or "DIVIDENDO" in desc_upper:
                 tx_type = "DIVIDEND"
             elif amt > 0:
                 tx_type = "DEPOSIT"
@@ -732,12 +788,16 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
                 or generate_deterministic_cash_id(account_id, t_dt_iso, tx_type, amt, desc)
             )
 
+            is_negative = tx_type in ("WITHDRAWAL", "FEE", "WITHHOLDING TAX", "SUBSCRIPTION") or amt < 0
+            signed_amount = -abs(amt_in_base) if is_negative else abs(amt_in_base)
+
             cash_txs.append(
                 {
                     "transaction_id": tx_id,
                     "account_id": row_dict.get("accountid", "") or row_dict.get("cuenta", "") or account_id,
                     "type": tx_type,
-                    "amount": abs(amt_in_base) if tx_type == "DEPOSIT" else -abs(amt_in_base),
+                    "transaction_type": tx_type,
+                    "amount": signed_amount,
                     "raw_amount": amt,
                     "currency": raw_curr,
                     "raw_currency": raw_curr,

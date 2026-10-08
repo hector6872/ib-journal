@@ -32,12 +32,13 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
   - **Round-Trip Trade Aggregation**: Unified trade counting across Overview KPIs and Calendars reflecting complete round-trip positions (grouping partial entries/exits) with true Net P&L (opening + closing commissions deducted).
   - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Risk/Reward `R:R`, Expectancy, Net Realized P&L, Total Trades, Commissions).
   - Portfolio Capital & Account Expenses overview strip in Statistics.
-  - **Position Sizing & Risk Exposure**: Detailed analysis of stock share sizing, notional capital brackets, option contract sizing, and premium brackets with win/loss asymmetry detection.
+  - **Position Sizing & Risk Exposure**: Detailed analysis of stock share sizing, notional capital brackets, option contract sizing, and premium brackets with natural numeric range sorting and win/loss asymmetry detection.
   - Risk & Drawdown analysis (Max Drawdown, Current Drawdown, Winning/Losing Streaks).
-  - Rolling Win Rate with time filters (1W, 1M, 3M, YTD, ALL) and momentum tracking.
+  - **Dynamic Multi-Year & Range Filters**: Filter by standard windows (`1W`, `1M`, `3M`, `YTD`, `ALL`) or select any historical year (`2021`–`2025`) directly from the header strip.
+  - Rolling Win Rate with configurable window sizes (10, 20, 50, 100) and momentum tracking.
   - Equity Curve & Metric Evolution charts (Daily, Weekly, Monthly aggregations).
-  - Options Strategy Breakdown & Expiration Discipline (Long/Short Calls and Puts, comparing auto-settled $0.00 expirations vs active market exits).
-  - Detailed breakdowns by Symbol, Tag/Setup, Day of Week, Time of Day, Holding Duration, and Order Type.
+  - **Options Strategy Breakdown & Expiration Discipline**: Long/Short Calls and Puts analysis, accurately distinguishing auto-settled $0.00 worthless expirations from positions closed actively in the market.
+  - **24-Hour Time of Day & Calendar Breakdowns**: Full 24h coverage (`00:00`–`23:00`) for overnight sessions and crypto, plus natural calendar sorting by Day of Week (Monday–Sunday), Holding Duration, Symbol, and Order Type.
 - **🕒 Unified Timezone Switching**: Instant toggle between **Local Time (`CET`)** and **Market Time (`EST`)** synchronized across all stats breakdowns, tables, charts, and Day Execution trade modals.
 - **📥 Historical Multi-Year Import**: Drag & drop IBKR Activity Statements (CSV / XML) directly in the browser or import bulk files via CLI with zero duplicate risk (`INSERT ON CONFLICT`).
 - **💬 Custom Institutional Dialogs**: Sleek modal dialogs for confirmations, notifications, and error feedback (no standard browser alerts).

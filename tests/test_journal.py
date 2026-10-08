@@ -160,8 +160,8 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertEqual(ov["winning_trades"], 1)
         self.assertEqual(ov["losing_trades"], 1)
         self.assertEqual(ov["win_rate"], 50.0)
-        self.assertEqual(ov["net_pnl"], 58.0)
-        self.assertEqual(ov["realized_rr"], 2.41)
+        self.assertEqual(ov["net_pnl"], 60.0)
+        self.assertEqual(ov["realized_rr"], 2.5)
 
         detailed = get_detailed_stats()
         self.assertIn("holding_durations", detailed)
@@ -296,15 +296,14 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertIsNotNone(day_30)
         # 2 round-trip trades (not 3 closing fills, and excluding CASH)
         self.assertEqual(day_30["count"], 2)
-        # Total gross pnl: 0.98 + 0.56 - 8.46 = -6.92
+        # Total net pnl: 0.98 + 0.56 - 8.46 = -6.92
         # Total commissions: 0.91 + 0.29 + 0.76 + 0.91 + 1.80 + 1.35 = 6.02
-        # Total net pnl: -6.92 - 6.02 = -12.94
         self.assertEqual(day_30["commissions"], 6.02)
-        self.assertEqual(day_30["pnl"], -12.94)
+        self.assertEqual(day_30["pnl"], -6.92)
 
         year_cal = get_year_calendar(2026)
         self.assertEqual(year_cal["total_trades"], 2)
-        self.assertEqual(year_cal["total_net_pnl"], -12.94)
+        self.assertEqual(year_cal["total_net_pnl"], -6.92)
 
     def test_import_script_parsers(self):
         """Tests parsing logic for IBKR Activity Statement and Generic Flex CSVs."""
@@ -755,12 +754,12 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
             self.assertEqual(stats["total_deposits"], 7000.0)
             self.assertEqual(stats["total_withdrawals"], 1000.0)
             self.assertEqual(stats["net_cash_flow"], 6000.0)
-            self.assertEqual(stats["net_pnl"], 498.0)  # 500 - 2
-            # Account Balance = 10000 + 6000 + 498 = 16498.0
-            self.assertEqual(stats["account_balance"], 16498.0)
+            self.assertEqual(stats["net_pnl"], 500.0)
+            # Account Balance = 10000 + 6000 + 500 = 16500.0
+            self.assertEqual(stats["account_balance"], 16500.0)
             # Capital Base = 10000 + 7000 = 17000.0
-            # ROI = 498 / 17000 * 100 = 2.93%
-            self.assertEqual(stats["roi_pct"], 2.93)
+            # ROI = 500 / 17000 * 100 = 2.94%
+            self.assertEqual(stats["roi_pct"], 2.94)
 
             # 4. Delete manual transaction
             del_success = delete_cash_transaction(manual_record["transaction_id"])
@@ -923,9 +922,9 @@ Trades,Data,Order,Stocks,EUR,SAN,"2021-01-20, 10:00:00",100,3.50,-350.00,-1.00,0
         self.assertEqual(trade["duration"], "7m 14s")
         self.assertAlmostEqual(trade["avg_entry_price"], 0.54, places=2)
         self.assertAlmostEqual(trade["avg_exit_price"], 0.455, places=3)
-        self.assertAlmostEqual(trade["gross_pnl"], -18.00, places=2)
+        self.assertAlmostEqual(trade["gross_pnl"], -15.11, places=2)
         self.assertAlmostEqual(trade["commission"], 2.89, places=2)
-        self.assertAlmostEqual(trade["net_pnl"], -20.89, places=2)
+        self.assertAlmostEqual(trade["net_pnl"], -18.00, places=2)
         self.assertEqual(len(trade["fills"]), 3)
 
         # Test Forex / Cash conversion (must be BUY/SELL, never SHORT)
@@ -1336,16 +1335,16 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         self.assertEqual(overview["losing_trades"], 1)
         self.assertEqual(overview["breakeven_trades"], 0)
         self.assertEqual(overview["win_rate"], 50.0)
-        # Net PnL: Gross PnL (100 - 50 = 50) - Comm (4.0) = 46.0
-        self.assertEqual(overview["net_pnl"], 46.0)
+        # Net PnL: Realized PnL (100 - 50 = 50.0)
+        self.assertEqual(overview["net_pnl"], 50.0)
 
         detailed = get_detailed_stats()
         self.assertEqual(detailed["overview"]["total_trades"], 2)
-        self.assertEqual(detailed["overview"]["net_pnl"], 46.0)
+        self.assertEqual(detailed["overview"]["net_pnl"], 50.0)
         # Verify equity curve cumulative PnL matches overview Net PnL
-        self.assertEqual(detailed["equity_curve"][-1]["cumulative_pnl"], 46.0)
+        self.assertEqual(detailed["equity_curve"][-1]["cumulative_pnl"], 50.0)
         # Verify evolution cumulative PnL matches overview Net PnL
-        self.assertEqual(detailed["metric_evolution"]["day"][-1]["cumulative_pnl"], 46.0)
+        self.assertEqual(detailed["metric_evolution"]["day"][-1]["cumulative_pnl"], 50.0)
 
 
 if __name__ == "__main__":

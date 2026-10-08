@@ -278,6 +278,13 @@ def init_db():
         cleanup_duplicate_trades(conn)
         cleanup_duplicate_cash_transactions(conn)
 
+        # Reset BUY orders that were corrupted by old FIFO reconcile logic (BUY entries never have realized PnL)
+        cursor.execute("""
+            UPDATE trades
+            SET realized_pnl = 0.0, raw_realized_pnl = 0.0
+            WHERE buy_sell = 'BUY' AND (open_close_indicator = 'O' OR open_close_indicator IS NULL);
+        """)
+
         # Reconcile any existing cash transactions with incorrect positive signs or types for fees/taxes/subscriptions
         cursor.execute("""
             UPDATE cash_transactions
@@ -494,9 +501,6 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
 
         if trades_to_insert:
             cursor.executemany(sql, trades_to_insert)
-
-        # Step 3: Automatically reconcile FIFO P&L for intraday Trade Confirmation fills
-        reconcile_fifo_pnl(cursor)
 
         return len(sanitized_trades)
 

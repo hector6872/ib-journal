@@ -379,7 +379,7 @@ const STRINGS = {
     // Cash & Capital Management
     cash: {
         title: "Capital & Cash Management",
-        accountEquity: "ACCOUNT EQUITY (NAV)",
+        accountEquity: "NAV",
         accountEquitySub: "Realized Balance + Unrealized P&L",
         realizedBalance: "REALIZED BALANCE",
         realizedBalanceSub: "Starting Capital + Net Flow + Realized P&L",

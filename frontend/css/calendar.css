@@ -804,6 +804,18 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    position: relative;
+}
+
+.dock-stat-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dock-stat-item:hover,
+.dock-stat-item:has(.stat-info-icon:hover) {
+    z-index: 60;
 }
 
 .dock-stat-label {

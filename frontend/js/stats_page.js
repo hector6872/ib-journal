@@ -412,7 +412,8 @@ const StatsPage = {
                     <!-- 1. Net Realized P&L -->
                     <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
-                            <span class="stat-card-label">${STRINGS.kpi.netPnl}</span>
+                            <span class="stat-card-label">${STRINGS.kpi.netRealizedPnl || STRINGS.kpi.netPnl}</span>
+                            ${this.renderInfoIcon(sp.tipNetPnl)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.net_pnl)}">
                             ${State.formatCurrency(ov.net_pnl || 0)}
@@ -468,6 +469,7 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="exp">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
+                            ${this.renderInfoIcon(sp.tipExpectancy)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.expectancy)}">
                             ${State.formatCurrency(ov.expectancy || 0)}

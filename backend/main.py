@@ -153,16 +153,34 @@ async def api_day_trades(date_str: str = Query(..., alias="date")):
     }
 
 
+is_importing = False
+
+
 @app.get("/api/sync/status")
 async def api_sync_status():
     """Returns current sync status, countdown, and cooldown info."""
-    return scheduler.get_status()
+    status = scheduler.get_status()
+    status["is_importing"] = is_importing
+    return status
 
 
 @app.post("/api/trades/import")
 @app.post("/api/import/statement")
 async def api_trades_import(request: Request):
     """Imports trades and cash transactions from uploaded CSV, XML, or JSON payload."""
+    global is_importing
+    if scheduler.is_syncing:
+        raise HTTPException(
+            status_code=409,
+            detail="A synchronization is currently in progress. Please wait until it finishes before importing files.",
+        )
+    if is_importing:
+        raise HTTPException(
+            status_code=409,
+            detail="Another statement file import is currently in progress. Please wait until it completes.",
+        )
+
+    is_importing = True
     try:
         content_bytes = await request.body()
         if not content_bytes:
@@ -302,6 +320,8 @@ async def api_trades_import(request: Request):
     except Exception as e:
         logger.exception(f"Error importing statement: {e}")
         raise HTTPException(status_code=400, detail=f"Error importing statement: {str(e)}")
+    finally:
+        is_importing = False
 
 
 import_historical_statement = api_trades_import
@@ -356,7 +376,13 @@ async def api_sync_gap_resolve():
 
 @app.post("/api/sync/trigger")
 async def api_sync_trigger():
-    """Triggers an on-demand manual sync if cooldown permits."""
+    """Triggers an on-demand manual sync if cooldown permits and no import is active."""
+    if is_importing:
+        raise HTTPException(
+            status_code=409,
+            detail="A statement file import is currently in progress. Please wait until it completes before syncing.",
+        )
+
     cooldown = scheduler.get_cooldown_remaining_seconds()
     if cooldown > 0:
         raise HTTPException(

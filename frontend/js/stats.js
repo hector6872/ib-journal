@@ -242,10 +242,17 @@ const StatsController = {
             };
         }
 
-        // 4. Cooldown handling for Sync Now button (only when configured)
+        // 4. Cooldown and Import locking for Sync Now button (only when configured)
         if (status.is_configured !== false && status.status !== 'unconfigured') {
             const cooldownSec = status.cooldown_remaining_seconds || 0;
-            if (status.is_syncing) {
+            const isImporting = (typeof State !== 'undefined' && State.isImporting) || status.is_importing;
+
+            if (isImporting) {
+                btnSync.disabled = true;
+                btnSync.classList.remove('spinning');
+                btnSync.title = "Statement import in progress. Sync is paused.";
+                btnSync.querySelector('.btn-sync-label').textContent = STRINGS.import?.importingFiles || "Importing...";
+            } else if (status.is_syncing) {
                 btnSync.disabled = true;
                 btnSync.classList.add('spinning');
                 btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncing;

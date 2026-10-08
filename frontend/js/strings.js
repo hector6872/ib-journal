@@ -364,9 +364,11 @@ const STRINGS = {
         dropzoneTitle: "Drag and drop your IBKR CSV or XML files here",
         dropzoneSubtitle: "Compatible with Activity Statements and Flex Queries (multi-year)",
         selectFilesBtn: "Select Files",
-        cliLabel: "Or import via Terminal CLI:",
         closeBtn: "Close",
+        cancelBtn: "Cancel",
         importingFiles: "Importing file(s)...",
+        importCancelled: "Import cancelled by user.",
+        importBlockedBySync: "A synchronization is in progress. Please wait until sync finishes.",
         errorsTitle: "Import finished with errors:",
         successMsg: "Successfully processed statement."
     },

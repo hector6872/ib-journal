@@ -85,6 +85,43 @@ def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
     return deleted_count
 
 
+def cleanup_duplicate_cash_transactions(conn: sqlite3.Connection) -> int:
+    """
+    Cleans up duplicate cash transactions (from differing casing, old hashes vs new hashes, or XML vs CSV imports).
+    Prefers official numeric transaction IDs over synthetic CASH_* hashes.
+    """
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, transaction_id, transaction_date, currency, UPPER(TRIM(description)) as norm_desc, ROUND(ABS(amount), 2) as norm_amt
+        FROM cash_transactions
+        ORDER BY transaction_date, norm_desc, id
+    """)
+    rows = cursor.fetchall()
+    seen: Dict[Any, Any] = {}
+    to_delete: List[int] = []
+    for r in rows:
+        key = (r["transaction_date"], r["currency"], r["norm_desc"], r["norm_amt"])
+        if key in seen:
+            prev = seen[key]
+            prev_is_hash = str(prev["transaction_id"]).startswith("CASH_")
+            curr_is_hash = str(r["transaction_id"]).startswith("CASH_")
+            if prev_is_hash and not curr_is_hash:
+                to_delete.append(prev["id"])
+                seen[key] = r
+            else:
+                to_delete.append(r["id"])
+        else:
+            seen[key] = r
+
+    if to_delete:
+        placeholders = ",".join("?" for _ in to_delete)
+        cursor.execute(f"DELETE FROM cash_transactions WHERE id IN ({placeholders})", to_delete)
+        deleted = len(to_delete)
+        logger.info(f"Cleaned up {deleted} duplicate cash transaction records.")
+        return deleted
+    return 0
+
+
 def get_connection() -> sqlite3.Connection:
     """
     Creates an SQLite connection configured with SD-card friendly PRAGMAs.
@@ -239,6 +276,7 @@ def init_db():
 
         # Deduplicate and normalize symbols on initialization
         cleanup_duplicate_trades(conn)
+        cleanup_duplicate_cash_transactions(conn)
 
         # Reconcile any existing cash transactions with incorrect positive signs or types for fees/taxes/subscriptions
         cursor.execute("""
@@ -672,6 +710,7 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.executemany(sql, sanitized)
+        cleanup_duplicate_cash_transactions(conn)
         return cursor.rowcount
 
 

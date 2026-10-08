@@ -355,7 +355,10 @@ class IBKRFlexClient:
                     "trade_time": trade_time,
                     "trade_date_time": trade_datetime_iso,
                     "open_close_indicator": (
-                        attrs.get("openCloseIndicator") or attrs.get("code") or attrs.get("openClose") or "C"
+                        attrs.get("openCloseIndicator")
+                        or attrs.get("code")
+                        or attrs.get("openClose")
+                        or ("C" if abs(raw_pnl) > 1e-6 else ("O" if buy_sell == "BUY" else "C"))
                     ).upper(),
                     "order_type": (attrs.get("orderType") or attrs.get("order_type") or "MKT").upper(),
                     "exchange": (

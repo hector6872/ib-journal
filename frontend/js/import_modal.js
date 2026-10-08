@@ -3,6 +3,8 @@
  * Handles manual CSV / XML file uploads, drag & drop, and desync warning resolution.
  */
 const ImportModal = {
+    isImporting: false,
+
     init() {
         const backdrop = document.getElementById('import-modal-backdrop');
         const closeBtn = document.getElementById('import-modal-close-btn');
@@ -17,6 +19,15 @@ const ImportModal = {
         // Open handler
         if (openBtn) {
             openBtn.addEventListener('click', () => {
+                if (State.syncStatus && State.syncStatus.is_syncing) {
+                    if (typeof App !== 'undefined' && App.showAlertModal) {
+                        App.showAlertModal({
+                            title: "Sync in Progress",
+                            message: STRINGS.import?.importBlockedBySync || "A synchronization is in progress. Please wait until sync finishes."
+                        });
+                    }
+                    return;
+                }
                 const gapInfo = (typeof State !== 'undefined' && State.syncStatus)
                     ? { has_gap: State.syncStatus.has_sync_gap, days: State.syncStatus.gap_days }
                     : null;
@@ -24,16 +35,22 @@ const ImportModal = {
             });
         }
 
-        // Close handlers
-        const closeModal = () => this.hide();
+        // Close handlers (strictly blocked during importing)
+        const closeModal = () => {
+            if (this.isImporting) return;
+            this.hide();
+        };
+
         if (closeBtn) closeBtn.addEventListener('click', closeModal);
         if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
         backdrop.addEventListener('click', (e) => {
+            if (this.isImporting) return;
             if (e.target === backdrop) closeModal();
         });
 
-        // Close on ESC
+        // Close on ESC (strictly blocked during importing)
         document.addEventListener('keydown', (e) => {
+            if (this.isImporting) return;
             if (e.key === 'Escape' && backdrop && (backdrop.classList.contains('open') || backdrop.classList.contains('active'))) {
                 closeModal();
             }
@@ -43,6 +60,7 @@ const ImportModal = {
         const dismissGapBtn = document.getElementById('btn-dismiss-gap');
         if (dismissGapBtn) {
             dismissGapBtn.addEventListener('click', async () => {
+                if (this.isImporting) return;
                 try {
                     dismissGapBtn.disabled = true;
                     dismissGapBtn.textContent = "Resolving...";
@@ -68,12 +86,16 @@ const ImportModal = {
 
         // Browse button
         if (browseBtn && fileInput) {
-            browseBtn.addEventListener('click', () => fileInput.click());
+            browseBtn.addEventListener('click', () => {
+                if (this.isImporting) return;
+                fileInput.click();
+            });
         }
 
         // File input change
         if (fileInput) {
             fileInput.addEventListener('change', (e) => {
+                if (this.isImporting) return;
                 const files = e.target.files;
                 if (files && files.length > 0) {
                     this.handleFiles(files);
@@ -87,7 +109,9 @@ const ImportModal = {
                 dropzone.addEventListener(eventName, (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    dropzone.classList.add('dragover');
+                    if (!this.isImporting) {
+                        dropzone.classList.add('dragover');
+                    }
                 });
             });
 
@@ -100,6 +124,7 @@ const ImportModal = {
             });
 
             dropzone.addEventListener('drop', (e) => {
+                if (this.isImporting) return;
                 const dt = e.dataTransfer;
                 const files = dt ? dt.files : null;
                 if (files && files.length > 0) {
@@ -117,7 +142,7 @@ const ImportModal = {
 
         if (!backdrop) return;
 
-        if (statusBox) {
+        if (statusBox && !this.isImporting) {
             statusBox.style.display = 'none';
             statusBox.innerHTML = '';
         }
@@ -144,6 +169,7 @@ const ImportModal = {
     },
 
     hide() {
+        if (this.isImporting) return; // Disallow closing during active import
         const backdrop = document.getElementById('import-modal-backdrop');
         if (backdrop) {
             backdrop.classList.remove('open');
@@ -151,35 +177,101 @@ const ImportModal = {
         }
     },
 
+    setLockState(locked) {
+        this.isImporting = locked;
+        if (typeof State !== 'undefined') State.isImporting = locked;
+
+        const closeBtn = document.getElementById('import-modal-close-btn');
+        const cancelBtn = document.getElementById('import-modal-cancel-btn');
+        const dropzone = document.getElementById('import-dropzone');
+        const fileInput = document.getElementById('import-file-input');
+        const browseBtn = document.getElementById('btn-browse-file');
+        const dismissGapBtn = document.getElementById('btn-dismiss-gap');
+
+        if (closeBtn) {
+            closeBtn.disabled = locked;
+            closeBtn.style.opacity = locked ? '0.3' : '1';
+            closeBtn.style.cursor = locked ? 'not-allowed' : 'pointer';
+            closeBtn.style.pointerEvents = locked ? 'none' : 'auto';
+        }
+
+        if (cancelBtn) {
+            cancelBtn.disabled = locked;
+            cancelBtn.style.opacity = locked ? '0.3' : '1';
+            cancelBtn.style.cursor = locked ? 'not-allowed' : 'pointer';
+            cancelBtn.style.pointerEvents = locked ? 'none' : 'auto';
+            cancelBtn.textContent = locked ? (STRINGS.import?.importingFiles || "Importing...") : (STRINGS.import?.closeBtn || "Close");
+        }
+
+        if (dropzone) {
+            dropzone.style.opacity = locked ? '0.4' : '1';
+            dropzone.style.pointerEvents = locked ? 'none' : 'auto';
+        }
+
+        if (browseBtn) {
+            browseBtn.disabled = locked;
+            browseBtn.style.opacity = locked ? '0.4' : '1';
+            browseBtn.style.cursor = locked ? 'not-allowed' : 'pointer';
+            browseBtn.style.pointerEvents = locked ? 'none' : 'auto';
+        }
+        if (fileInput) fileInput.disabled = locked;
+
+        if (dismissGapBtn) {
+            dismissGapBtn.disabled = locked;
+            dismissGapBtn.style.opacity = locked ? '0.35' : '1';
+            dismissGapBtn.style.cursor = locked ? 'not-allowed' : 'pointer';
+            dismissGapBtn.style.pointerEvents = locked ? 'none' : 'auto';
+        }
+
+        // Re-render sync widget to reflect lock state
+        if (typeof StatsController !== 'undefined' && StatsController.renderSyncWidget && State.syncStatus) {
+            StatsController.renderSyncWidget(State.syncStatus);
+        }
+    },
+
     async handleFiles(files) {
         const statusBox = document.getElementById('import-status-box');
-        if (!statusBox) return;
+        const fileInput = document.getElementById('import-file-input');
+
+        if (!statusBox || files.length === 0) return;
+
+        this.setLockState(true);
 
         statusBox.style.display = 'block';
-        statusBox.innerHTML = `<div style="color: var(--color-accent); font-weight: 600;">${STRINGS.import?.importingFiles || 'Importing file(s)...'} (${files.length})</div>`;
+        statusBox.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; color: var(--color-accent); font-weight: 600; padding: 6px 0;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinning"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                <span>${STRINGS.import?.importingFiles || 'Importing statement(s)...'} (${files.length})</span>
+            </div>
+        `;
 
         let totalImported = 0;
         let totalCashImported = 0;
         let lastResult = null;
         let errors = [];
 
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            try {
-                const text = await this.readFileAsText(file);
-                const res = await API.importTrades(text);
-                lastResult = res;
-                totalImported += (res.trades_count || 0);
-                totalCashImported += (res.cash_count || 0);
-                if (res.currency_symbol) {
-                    State.currency = res.currency_symbol;
-                    if (typeof STRINGS !== 'undefined' && STRINGS.common) {
-                        STRINGS.common.currency = res.currency_symbol;
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                try {
+                    const text = await this.readFileAsText(file);
+                    const res = await API.importTrades(text);
+                    lastResult = res;
+                    totalImported += (res.trades_count || 0);
+                    totalCashImported += (res.cash_count || 0);
+                    if (res.currency_symbol) {
+                        State.currency = res.currency_symbol;
+                        if (typeof STRINGS !== 'undefined' && STRINGS.common) {
+                            STRINGS.common.currency = res.currency_symbol;
+                        }
                     }
+                } catch (err) {
+                    errors.push(`${file.name}: ${err.message}`);
                 }
-            } catch (err) {
-                errors.push(`${file.name}: ${err.message}`);
             }
+        } finally {
+            this.setLockState(false);
+            if (fileInput) fileInput.value = '';
         }
 
         if (errors.length > 0) {

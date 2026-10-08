@@ -563,9 +563,15 @@ body {
     gap: 4px;
 }
 
-.btn-dismiss-gap:hover {
+.btn-dismiss-gap:hover:not(:disabled) {
     background-color: rgba(245, 158, 11, 0.2);
     border-color: #d97706;
+}
+
+.btn-dismiss-gap:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 .import-dropzone {

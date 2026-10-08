@@ -286,6 +286,13 @@ const App = {
             if (btnSync.disabled || btnSync.classList.contains('disabled') || (State.syncStatus && State.syncStatus.is_configured === false)) {
                 return;
             }
+            if (State.isImporting || (State.syncStatus && State.syncStatus.is_importing)) {
+                this.showAlertModal({
+                    title: "Import in Progress",
+                    message: "A statement file import is currently in progress. Please wait until it completes."
+                });
+                return;
+            }
             try {
                 btnSync.disabled = true;
                 btnSync.classList.add('spinning');

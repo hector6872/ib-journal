@@ -319,13 +319,13 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         ]
         closed_trades = [g for g in all_grouped if g.get("status") == "CLOSED"]
 
-        # Compute Streaks from chronological closed trade stream
+        # Compute Streaks from chronological closed trade stream (forward in time: oldest to newest)
         max_winning_streak = 0
         current_winning_streak = 0
         max_losing_streak = 0
         current_losing_streak = 0
 
-        for t in closed_trades:
+        for t in reversed(closed_trades):
             pnl = float(t.get("net_pnl") or 0.0)
             if pnl > 0.005:
                 current_winning_streak += 1
@@ -341,16 +341,16 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 current_winning_streak = 0
                 current_losing_streak = 0
 
-        # Compute Rolling Win Rates for 10, 20, 50, 100 on closed trades
+        # Compute Rolling Win Rates for 10, 20, 50, 100 on most recent closed trades
         rolling_win_rate = {}
         for w in [10, 20, 50, 100]:
-            w_trades = closed_trades[-w:] if len(closed_trades) >= w else closed_trades
+            w_trades = closed_trades[:w] if len(closed_trades) >= w else closed_trades
             tot_w = len(w_trades)
             wins_w = sum(1 for t in w_trades if (t.get("net_pnl") or 0.0) > 0.005)
             losses_w = sum(1 for t in w_trades if (t.get("net_pnl") or 0.0) < -0.005)
             wr_w = round((wins_w / tot_w * 100.0), 1) if tot_w > 0 else 0.0
 
-            prior_trades = closed_trades[-2 * w : -w] if len(closed_trades) >= 2 * w else []
+            prior_trades = closed_trades[w : 2 * w] if len(closed_trades) >= 2 * w else []
             tot_p = len(prior_trades)
             wins_p = sum(1 for t in prior_trades if (t.get("net_pnl") or 0.0) > 0.005)
             wr_p = round((wins_p / tot_p * 100.0), 1) if tot_p > 0 else None
@@ -2030,7 +2030,7 @@ def detect_option_type(symbol: str, asset_category: str = "") -> Optional[str]:
 def get_trade_direction(asset_category: str, symbol: str, is_buy: bool) -> str:
     """
     Determines trade direction based on asset class and initial side:
-    - Equities / Derivatives: LONG / SHORT
+    - Equities / Stocks: LONG (in standard long-only equity portfolios)
     - Options: BUY CALL / SELL CALL / BUY PUT / SELL PUT
     - Forex / Cash currency conversions: EXCHANGE
     """
@@ -2048,7 +2048,11 @@ def get_trade_direction(asset_category: str, symbol: str, is_buy: bool) -> str:
     if opt_type:
         return f"BUY {opt_type}" if is_buy else f"SELL {opt_type}"
 
-    # Default equities / standard positions
+    # Equities / Stocks (account is long-only for equities)
+    if cat in ("STK", "STOCK", "EQUITY"):
+        return "LONG"
+
+    # Default
     return "LONG" if is_buy else "SHORT"
 
 
@@ -2104,8 +2108,8 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             has_pnl = abs(pnl) > 1e-6 or abs(raw_pnl) > 1e-6
 
             if current_trade is None:
-                # Standalone close of a prior position (only if marked close with non-zero realized PnL)
-                if ind == "C" and has_pnl:
+                # Standalone close of a prior position (if marked close or with non-zero realized PnL)
+                if ind == "C" or has_pnl:
                     is_initial_buy = (
                         not is_buy
                     )  # SELL with realized PnL closes an initial BUY; BUY with realized PnL closes a SHORT
@@ -2295,9 +2299,13 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
         if "fills" in trade and isinstance(trade["fills"], list):
             trade["fills"].sort(key=lambda x: (x.get("trade_time") or "00:00:00", x.get("id") or 0), reverse=True)
 
-    # Sort all grouped trades chronologically descending by date and open_time (most recent first)
+    # Sort all grouped trades chronologically descending by date and time (most recent first)
     all_grouped.sort(
-        key=lambda x: (x.get("close_date") or x.get("trade_date") or "", x.get("open_time") or "00:00:00", x.get("symbol") or ""),
+        key=lambda x: (
+            x.get("close_date") or x.get("open_date") or x.get("trade_date") or "",
+            x.get("close_time") or x.get("open_time") or "00:00:00",
+            x.get("symbol") or "",
+        ),
         reverse=True,
     )
     return all_grouped

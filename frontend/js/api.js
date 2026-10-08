@@ -95,12 +95,16 @@ const API = {
         return data;
     },
 
-    async importTrades(content) {
-        const res = await fetch('/api/trades/import', {
+    async importTrades(content, signal = null) {
+        const fetchOptions = {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },
             body: content
-        });
+        };
+        if (signal) {
+            fetchOptions.signal = signal;
+        }
+        const res = await fetch('/api/trades/import', fetchOptions);
         const text = await res.text();
         let data = null;
         try {

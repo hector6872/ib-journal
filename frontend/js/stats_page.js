@@ -1152,19 +1152,9 @@ const StatsPage = {
                             <div class="stats-section-title-wrap">
                                 <span>${sp.perfByTodTitle}</span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div class="segmented-control" id="stats-tod-tz-control">
-                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
-                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
-                                    </button>
-                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
-                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
-                                    </button>
-                                </div>
-                                <div class="segmented-control">
-                                    <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
-                                    <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
-                                </div>
+                            <div class="segmented-control">
+                                <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
+                                <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
                             </div>
                         </div>
                         <div id="wrap-tod-chart" class="chart-canvas-box ${this.viewModes.tod === 'chart' ? '' : 'hidden'}">

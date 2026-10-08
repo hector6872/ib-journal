@@ -477,3 +477,35 @@ class IBKRFlexClient:
         if txs:
             logger.info(f"Parsed {len(txs)} cash transactions from XML statement.")
         return txs
+
+    def parse_unrealized_pnl_xml(self, xml_content: str) -> Optional[float]:
+        """Extracts total Unrealized P&L from XML statement or Flex Query."""
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError:
+            return None
+
+        total_unrealized = 0.0
+        found = False
+        for node in root.iter("OpenPosition"):
+            found = True
+            attrs = node.attrib
+            unrealized = float(
+                attrs.get("fifoPnlUnrealized")
+                or attrs.get("unrealizedPnL")
+                or attrs.get("unrealizedPnl")
+                or attrs.get("markToMarketPnl")
+                or 0.0
+            )
+            fx_rate = float(attrs.get("fxRateToBase") or attrs.get("fxRate") or 1.0)
+            total_unrealized += unrealized * fx_rate
+
+        if found:
+            return round(total_unrealized, 2)
+
+        for node in root.iter("ChangeInNAV"):
+            attrs = node.attrib
+            mtm = attrs.get("markToMarket") or attrs.get("unrealizedPnL")
+            if mtm:
+                return round(float(mtm), 2)
+        return None

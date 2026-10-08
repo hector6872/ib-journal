@@ -1740,6 +1740,29 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
     return trades
 
 
+def parse_csv_unrealized_pnl(lines: List[str]) -> Optional[float]:
+    """Extracts total Unrealized P&L from an IBKR Activity Statement CSV if available."""
+    delimiter = detect_csv_delimiter(lines)
+    for line in lines:
+        row = parse_csv_line_tokens(line, delimiter)
+        if not row or len(row) < 3:
+            continue
+        sec = row[0].strip().lower().strip('"')
+        # 1. Performance Summary table
+        if ("realized & unrealized" in sec or "rendimiento" in sec or "performance" in sec) and len(row) >= 16:
+            if "total (all assets)" in line.lower() or "total (todos los activos)" in line.lower():
+                unrealized_str = row[14].strip()
+                val = clean_num(unrealized_str)
+                return round(val, 2)
+        # 2. Open Positions grand total
+        if ("open positions" in sec or "posiciones abiertas" in sec) and len(row) >= 13:
+            if row[1].strip().lower() in ("total", "total (all assets)") and len(row) >= 14:
+                val = clean_num(row[12])
+                if val != 0.0:
+                    return round(val, 2)
+    return None
+
+
 def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool = False) -> Tuple[int, int]:
     """Processes a single file or recursively traverses a directory."""
     files_to_process: List[Path] = []

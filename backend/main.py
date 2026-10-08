@@ -231,6 +231,7 @@ async def api_trades_import(request: Request):
                 detect_csv_delimiter,
                 parse_csv_cash_transactions,
                 parse_csv_line_tokens,
+                parse_csv_unrealized_pnl,
                 parse_generic_ibkr_csv,
                 parse_ibkr_activity_statement_csv,
             )
@@ -264,6 +265,11 @@ async def api_trades_import(request: Request):
                 if not trades:
                     trades = parse_ibkr_activity_statement_csv(lines)
                 cash_txs = parse_csv_cash_transactions(lines)
+
+            unrealized_val = parse_csv_unrealized_pnl(lines)
+            if unrealized_val is not None:
+                from backend.settings import update_settings
+                update_settings({"unrealized_pnl": unrealized_val})
 
         if not trades and not cash_txs:
             raise HTTPException(

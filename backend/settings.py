@@ -8,7 +8,7 @@ from backend.config import BASE_DIR
 SETTINGS_PATH = BASE_DIR / "data" / "settings.json"
 logger = logging.getLogger("ib-journal.settings")
 
-ALLOWED_SERVER_SETTINGS = {"starting_capital"}
+ALLOWED_SERVER_SETTINGS = {"starting_capital", "unrealized_pnl"}
 
 
 def get_all_settings() -> Dict[str, Any]:

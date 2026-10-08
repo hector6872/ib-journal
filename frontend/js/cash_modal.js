@@ -76,7 +76,8 @@ const CashModal = {
 
     render(container, cashSummary, settings, overview) {
         const sc = STRINGS.cash || {};
-        const startingCapital = Number(settings?.starting_capital || 0.0);
+        const startingCapital = Number(settings?.starting_capital !== undefined ? settings.starting_capital : (overview?.starting_capital || 0.0));
+        const unrealizedPnl = Number(settings?.unrealized_pnl !== undefined ? settings.unrealized_pnl : (overview?.unrealized_pnl || 0.0));
         const totalDeposits = Number(cashSummary?.total_deposits || 0.0);
         const totalWithdrawals = Number(cashSummary?.total_withdrawals || 0.0);
         const totalDividends = Number(cashSummary?.total_dividends || 0.0);
@@ -87,9 +88,11 @@ const CashModal = {
         const netTransfers = totalDeposits - totalWithdrawals;
         const netCashFlow = Number(cashSummary?.net_cash_flow || 0.0);
         const netPnl = Number(overview?.net_pnl || 0.0);
+        const totalPnl = netPnl + unrealizedPnl;
         const capitalBase = startingCapital + totalDeposits + totalDividends;
-        const accountBalance = startingCapital + netCashFlow + netPnl;
-        const roiPct = capitalBase > 0 ? ((netPnl / capitalBase) * 100).toFixed(2) : '0.00';
+        const realizedBalance = startingCapital + netCashFlow + netPnl;
+        const accountBalance = realizedBalance + unrealizedPnl;
+        const roiPct = capitalBase > 0 ? ((totalPnl / capitalBase) * 100).toFixed(2) : '0.00';
 
         const txs = cashSummary?.transactions || [];
         const today = new Date().toISOString().split('T')[0];
@@ -103,7 +106,15 @@ const CashModal = {
                         <span class="cash-card-value mono ${State.getPnlClass(accountBalance)}">
                             ${State.formatCurrency(accountBalance)}
                         </span>
-                        <span class="cash-card-sub">${sc.accountEquitySub || 'Capital + Net Flow + Realized P&L'}</span>
+                        <span class="cash-card-sub">Realized: ${State.formatCurrency(realizedBalance)} · Open: ${State.formatCurrency(unrealizedPnl)}</span>
+                    </div>
+
+                    <div class="cash-card">
+                        <span class="cash-card-label">${sc.unrealizedPnl || 'UNREALIZED P&L'}</span>
+                        <span class="cash-card-value mono ${State.getPnlClass(unrealizedPnl)}">
+                            ${State.formatCurrency(unrealizedPnl)}
+                        </span>
+                        <span class="cash-card-sub">${sc.unrealizedPnlSub || 'Open positions valuation / MTM'}</span>
                     </div>
 
                     <div class="cash-card">
@@ -135,7 +146,7 @@ const CashModal = {
                         <span class="cash-card-value mono ${State.getPnlClass(Number(roiPct))}">
                             ${Number(roiPct) > 0 ? '+' : ''}${roiPct}%
                         </span>
-                        <span class="cash-card-sub">${sc.roiSub || 'Realized P&L / Capital Base'}</span>
+                        <span class="cash-card-sub">${sc.roiSub || 'Total P&L / Capital Base'}</span>
                     </div>
                 </div>
 
@@ -176,7 +187,7 @@ const CashModal = {
                     <form id="starting-capital-form" class="cash-form-inline">
                         <div class="form-group" style="flex: 1;">
                             <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">${sc.inputCapitalLabel || 'STARTING CAPITAL'} (${State.currency})</label>
-                            <input type="number" step="0.01" min="0" id="input-starting-capital" class="cash-input" value="${startingCapital}" placeholder="10000.00">
+                            <input type="number" step="0.01" min="0" id="input-starting-capital" class="cash-input" value="${startingCapital}" placeholder="0.00">
                         </div>
                         <button type="submit" class="btn-pill btn-accent" style="margin-top: 18px; white-space: nowrap;">${sc.saveCapitalBtn || 'Save Capital'}</button>
                     </form>
@@ -286,22 +297,22 @@ const CashModal = {
         if (capForm) {
             capForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const inputVal = Number(container.querySelector('#input-starting-capital')?.value || 0);
+                const inputCapital = Number(container.querySelector('#input-starting-capital')?.value || 0);
                 try {
-                    await API.saveSettings({ starting_capital: inputVal });
+                    await API.saveSettings({ starting_capital: inputCapital });
                     await this.loadAndRender();
                     StatsController.updateOverview();
                     if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
                     if (typeof App !== 'undefined' && App.showAlertModal) {
                         App.showAlertModal({
                             title: sc.capitalSavedTitle || "Starting Capital Saved",
-                            message: `${sc.capitalSavedMsg || 'Starting capital successfully updated.'} (${State.formatCurrency(inputVal)})`,
+                            message: `${sc.capitalSavedMsg || 'Starting capital successfully updated.'} (${State.formatCurrency(inputCapital)})`,
                             isSuccess: true
                         });
                     }
                 } catch (err) {
                     if (typeof App !== 'undefined' && App.showErrorModal) {
-                        App.showErrorModal(sc.saveErrorTitle || "Save Capital Error", err.message);
+                        App.showErrorModal(sc.saveErrorTitle || "Save Error", err.message);
                     } else {
                         console.error("Failed to save starting capital:", err);
                     }

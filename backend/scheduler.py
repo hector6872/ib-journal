@@ -280,6 +280,12 @@ class SyncScheduler:
                     c_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
                     total_trades_count += t_count
                     total_cash_count += c_count
+
+                    unrealized_pnl = client.parse_unrealized_pnl_xml(xml_data)
+                    if unrealized_pnl is not None:
+                        from backend.settings import update_settings
+                        update_settings({"unrealized_pnl": unrealized_pnl})
+
                     queries_run.append("Intraday")
                 except Exception as e_trade:
                     logger.error(f"Trade query ({trade_query}) failed: {e_trade}")
@@ -301,6 +307,12 @@ class SyncScheduler:
                     c_count_act = upsert_cash_transactions(cash_act) if cash_act else 0
                     total_trades_count += t_count_act
                     total_cash_count += c_count_act
+
+                    unrealized_pnl_act = client.parse_unrealized_pnl_xml(xml_data_act)
+                    if unrealized_pnl_act is not None:
+                        from backend.settings import update_settings
+                        update_settings({"unrealized_pnl": unrealized_pnl_act})
+
                     queries_run.append("Activity")
                     self.last_activity_sync_time = datetime.now(timezone.utc)
                 except Exception as e_act:

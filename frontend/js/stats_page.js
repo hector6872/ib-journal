@@ -639,7 +639,14 @@ const StatsPage = {
                             <span class="cash-card-value mono ${this.getPnlClass(ov.account_balance)}">
                                 ${State.formatCurrency(ov.account_balance || 0)}
                             </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.accountEquitySub || 'Starting Capital + Net Flow + Realized P&L'}</span>
+                            <span class="cash-card-sub">Realized: ${State.formatCurrency(ov.realized_balance !== undefined ? ov.realized_balance : ov.account_balance)} · Open: ${State.formatCurrency(ov.unrealized_pnl || 0)}</span>
+                        </div>
+                        <div class="cash-card is-clickable" data-cash-modal="true">
+                            <span class="cash-card-label">${STRINGS.cash?.unrealizedPnl || 'UNREALIZED P&L'}</span>
+                            <span class="cash-card-value mono ${this.getPnlClass(ov.unrealized_pnl || 0)}">
+                                ${State.formatCurrency(ov.unrealized_pnl || 0)}
+                            </span>
+                            <span class="cash-card-sub">${STRINGS.cash?.unrealizedPnlSub || 'Open positions valuation / MTM'}</span>
                         </div>
                         <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.startingCapital || 'STARTING CAPITAL'}</span>
@@ -667,7 +674,7 @@ const StatsPage = {
                             <span class="cash-card-value mono ${this.getPnlClass(ov.roi_pct)}">
                                 ${(ov.roi_pct || 0) > 0 ? '+' : ''}${(ov.roi_pct || 0).toFixed(2)}%
                             </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.roiSub || 'Realized P&L / Capital Base'}</span>
+                            <span class="cash-card-sub">${STRINGS.cash?.roiSub || 'Total P&L / Capital Base'}</span>
                         </div>
                     </div>
                 </div>

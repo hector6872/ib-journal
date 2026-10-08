@@ -211,9 +211,12 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         app_settings = get_all_settings()
         starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
+        unrealized_pnl = float(app_settings.get("unrealized_pnl", 0.0) or 0.0)
         capital_base = starting_capital + (lifetime_deposits if lifetime_deposits > 0 else total_deposits)
-        account_balance = round(starting_capital + lifetime_net_flow + lifetime_net_pnl, 2)
-        roi_pct = round((net_pnl / capital_base * 100), 2) if capital_base >= 10.0 else 0.0
+        realized_balance = round(starting_capital + lifetime_net_flow + lifetime_net_pnl, 2)
+        account_balance = round(realized_balance + unrealized_pnl, 2)
+        total_pnl = round(net_pnl + unrealized_pnl, 2)
+        roi_pct = round((total_pnl / capital_base * 100), 2) if capital_base >= 10.0 else 0.0
 
         def format_duration(dur_list: List[float]) -> str:
             if not dur_list:
@@ -249,6 +252,9 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "total_commissions": round(total_commissions, 2),
             "gross_pnl": round(gross_pnl, 2),
             "net_pnl": round(net_pnl, 2),
+            "realized_pnl": round(net_pnl, 2),
+            "unrealized_pnl": round(unrealized_pnl, 2),
+            "total_pnl": round(total_pnl, 2),
             "largest_win": round(largest_win, 2),
             "largest_loss": round(largest_loss, 2),
             "largest_win_symbol": largest_win_sym,
@@ -267,6 +273,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "total_fees": round(total_fees, 2),
             "net_cash_flow": round(net_cash_flow, 2),
             "capital_base": round(capital_base, 2),
+            "realized_balance": round(realized_balance, 2),
             "account_balance": round(account_balance, 2),
             "roi_pct": roi_pct,
         }

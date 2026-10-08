@@ -795,7 +795,7 @@ Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount
 Deposits & Withdrawals,Data,EUR,2021-01-15,Wire In,5000.00
 Deposits & Withdrawals,Data,EUR,,Total,5000.00
 Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds,Comm/Fee,Realized P/L,Code
-Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O
+Trades,Data,Order,Stocks,EUR,SAN,"2021-01-20, 10:00:00",100,3.50,-350.00,-1.00,0.00,O
 """
             mock_req = MockRequest(csv_content.encode("utf-8"))
             result = asyncio.run(import_historical_statement(cast(Any, mock_req)))
@@ -814,7 +814,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "Deposits & Withdrawals,Data,EUR,2021-01-15,Wire In,5000.00",
                 "Deposits & Withdrawals,Data,EUR,,Total,5000.00",
                 "Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds,Comm/Fee,Realized P/L,Code",
-                "Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O",
+                'Trades,Data,Order,Stocks,EUR,SAN,"2021-01-20, 10:00:00",100,3.50,-350.00,-1.00,0.00,O',
             ]
             trades = parse_ibkr_activity_statement_csv(csv_lines)
             cash_txs = parse_csv_cash_transactions(csv_lines)
@@ -1240,6 +1240,112 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         ref_afternoon = datetime(2026, 10, 7, 8, 0, tzinfo=timezone.utc)
         next_daily_after = scheduler.calculate_next_daily_sync_time(ref_afternoon)
         self.assertEqual(next_daily_after, datetime(2026, 10, 8, 6, 0, tzinfo=timezone.utc))
+
+    def test_zero_quantity_and_grouped_statistics_consistency(self):
+        """Verifies zero quantity ghost trades are ignored and statistics are consistent between overview and detailed."""
+        trades = [
+            # Ghost trade with zero quantity (e.g. from non-trade section header or placeholder)
+            {
+                "ib_exec_id": "GHOST_1",
+                "trade_id": "GHOST_1",
+                "account_id": "U123",
+                "symbol": "GHOST",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 0.0,
+                "trade_price": 0.0,
+                "ib_commission": 0.0,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-08",
+                "trade_time": "",
+                "open_close_indicator": "O",
+            },
+            # Real Trade 1: AAPL Buy 10, Sell 10 (Win)
+            {
+                "ib_exec_id": "EXEC_1",
+                "trade_id": "T1",
+                "account_id": "U123",
+                "symbol": "AAPL",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 10.0,
+                "trade_price": 100.0,
+                "ib_commission": 1.0,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "10:00:00",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "EXEC_2",
+                "trade_id": "T2",
+                "account_id": "U123",
+                "symbol": "AAPL",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 10.0,
+                "trade_price": 110.0,
+                "ib_commission": 1.0,
+                "realized_pnl": 100.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "11:00:00",
+                "open_close_indicator": "C",
+            },
+            # Real Trade 2: TSLA Buy 5, Sell 5 (Loss)
+            {
+                "ib_exec_id": "EXEC_3",
+                "trade_id": "T3",
+                "account_id": "U123",
+                "symbol": "TSLA",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 5.0,
+                "trade_price": 200.0,
+                "ib_commission": 1.0,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-02",
+                "trade_time": "14:00:00",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "EXEC_4",
+                "trade_id": "T4",
+                "account_id": "U123",
+                "symbol": "TSLA",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 5.0,
+                "trade_price": 190.0,
+                "ib_commission": 1.0,
+                "realized_pnl": -50.0,
+                "trade_date": "2026-10-02",
+                "trade_time": "15:00:00",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(trades)
+
+        overview = get_overview_stats()
+        self.assertEqual(overview["total_trades"], 2)
+        self.assertEqual(overview["winning_trades"], 1)
+        self.assertEqual(overview["losing_trades"], 1)
+        self.assertEqual(overview["breakeven_trades"], 0)
+        self.assertEqual(overview["win_rate"], 50.0)
+        # Net PnL: Gross PnL (100 - 50 = 50) - Comm (4.0) = 46.0
+        self.assertEqual(overview["net_pnl"], 46.0)
+
+        detailed = get_detailed_stats()
+        self.assertEqual(detailed["overview"]["total_trades"], 2)
+        self.assertEqual(detailed["overview"]["net_pnl"], 46.0)
+        # Verify equity curve cumulative PnL matches overview Net PnL
+        self.assertEqual(detailed["equity_curve"][-1]["cumulative_pnl"], 46.0)
+        # Verify evolution cumulative PnL matches overview Net PnL
+        self.assertEqual(detailed["metric_evolution"]["day"][-1]["cumulative_pnl"], 46.0)
 
 
 if __name__ == "__main__":

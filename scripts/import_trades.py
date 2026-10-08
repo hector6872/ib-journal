@@ -13,7 +13,6 @@ import logging
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
-from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -144,9 +143,8 @@ def parse_datetime_str(raw: str) -> Tuple[str, str, str]:
     - 2023-05-12T14:32:00
     Returns: (trade_date: YYYY-MM-DD, trade_time: HH:MM:SS, trade_datetime_iso: ISO string)
     """
-    if not raw:
-        today_iso = date.today().isoformat()
-        return today_iso, "", today_iso
+    if not raw or not raw.strip():
+        return "", "", ""
 
     try:
         cleaned = raw.replace(";", " ").replace(",", " ").replace("T", " ").strip()
@@ -209,14 +207,13 @@ def parse_datetime_str(raw: str) -> Tuple[str, str, str]:
                 s = tp[2].zfill(2) if len(tp) > 2 else "00"
                 trade_time = f"{h}:{m}:{s}"
 
-        if not trade_date:
-            trade_date = date.today().isoformat()
+        if not trade_date or not trade_time:
+            return "", "", ""
 
-        iso_str = f"{trade_date}T{trade_time}" if trade_time else trade_date
+        iso_str = f"{trade_date}T{trade_time}"
         return trade_date, trade_time, iso_str
     except Exception:
-        today_iso = date.today().isoformat()
-        return today_iso, "", today_iso
+        return "", "", ""
 
 
 def detect_csv_delimiter(lines: List[str]) -> str:
@@ -436,6 +433,8 @@ def parse_xml_file(filepath: Path) -> List[Dict[str, Any]]:
         t_date, t_time, t_dt_iso = parse_datetime_str(date_raw)
 
         qty = clean_num(attrs.get("quantity") or attrs.get("shares") or attrs.get("size"))
+        if abs(qty) < 1e-5:
+            continue
         price = clean_num(attrs.get("tradePrice") or attrs.get("price"))
         side_val = (
             attrs.get("buySell") or attrs.get("side") or attrs.get("action") or ("BUY" if qty > 0 else "SELL")
@@ -1365,6 +1364,8 @@ def parse_ibkr_activity_statement_csv(lines: List[str]) -> List[Dict[str, Any]]:
             t_date, t_time, t_dt_iso = parse_datetime_str(dt_raw)
 
             qty = clean_num(get_field_val(row_dict, "quantity"))
+            if abs(qty) < 1e-5:
+                continue
             price = clean_num(get_field_val(row_dict, "price"))
             proceeds = clean_num(get_field_val(row_dict, "proceeds"))
 
@@ -1578,6 +1579,8 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
         qty = clean_num(
             row.get("quantity") or row.get("qty") or row.get("shares") or row.get("cantidad") or row.get("posiciones")
         )
+        if abs(qty) < 1e-5:
+            continue
         price = clean_num(
             row.get("tradeprice")
             or row.get("price")

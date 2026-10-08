@@ -74,6 +74,11 @@ def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
               AND ABS(t_real.trade_price - trades.trade_price) < 0.0001
         );
     """)
+    # 3. Delete ghost trades with zero quantity
+    cursor.execute("""
+        DELETE FROM trades
+        WHERE ABS(quantity) < 1e-5;
+    """)
     deleted_count = cursor.rowcount
     if deleted_count > 0:
         logger.info(f"Cleaned up {deleted_count} duplicate placeholder trades superseded by official executions.")
@@ -343,6 +348,9 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
 
     sanitized_trades = []
     for t in trades:
+        qty = float(t.get("quantity") or 0.0)
+        if abs(qty) < 1e-5:
+            continue
         curr = t.get("currency") or "EUR"
         raw_curr = t.get("raw_currency") or curr
         base_curr = t.get("base_currency") or "EUR"

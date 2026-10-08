@@ -1346,6 +1346,60 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         # Verify evolution cumulative PnL matches overview Net PnL
         self.assertEqual(detailed["metric_evolution"]["day"][-1]["cumulative_pnl"], 50.0)
 
+    def test_open_positions_and_unrealized_pnl_in_db(self):
+        """Tests that open positions and unrealized PnL are saved to and queried from SQLite."""
+        from backend.database import get_latest_unrealized_pnl, get_open_positions, upsert_open_positions
+
+        positions = [
+            {
+                "account_id": "U12345",
+                "symbol": "RKLB",
+                "description": "ROCKET LAB USA INC",
+                "asset_category": "STK",
+                "currency": "USD",
+                "quantity": 10.0,
+                "cost_price": 14.65,
+                "cost_basis": 146.50,
+                "close_price": 25.47,
+                "position_value": 254.70,
+                "unrealized_pnl": 108.20,
+                "raw_unrealized_pnl": 108.20,
+                "report_date": "2026-10-08",
+            },
+            {
+                "account_id": "U12345",
+                "symbol": "ELAB",
+                "description": "ELEVATION ONCOLOGY",
+                "asset_category": "STK",
+                "currency": "USD",
+                "quantity": 20.0,
+                "cost_price": 5.0,
+                "cost_basis": 100.0,
+                "close_price": 2.0,
+                "position_value": 40.0,
+                "unrealized_pnl": -60.0,
+                "raw_unrealized_pnl": -60.0,
+                "report_date": "2026-10-08",
+            },
+        ]
+
+        count = upsert_open_positions(positions)
+        self.assertEqual(count, 2)
+
+        saved = get_open_positions()
+        self.assertEqual(len(saved), 2)
+        symbols = [p["symbol"] for p in saved]
+        self.assertIn("RKLB", symbols)
+        self.assertIn("ELAB", symbols)
+
+        total_unrealized = get_latest_unrealized_pnl()
+        self.assertEqual(total_unrealized, 48.20)
+
+        # Verify overview stats includes unrealized PnL from SQLite
+        overview = get_overview_stats()
+        self.assertEqual(overview["unrealized_pnl"], 48.20)
+
 
 if __name__ == "__main__":
     unittest.main()
+

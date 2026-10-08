@@ -27,8 +27,10 @@ from backend.database import (
     get_active_base_currency,
     get_cash_summary,
     get_currency_symbol,
+    get_open_positions,
     init_db,
     upsert_cash_transactions,
+    upsert_open_positions,
     upsert_trades,
 )
 from backend.scheduler import scheduler
@@ -189,6 +191,7 @@ async def api_trades_import(request: Request):
         text = content_bytes.decode("utf-8-sig", errors="replace")
         trades = []
         cash_txs = []
+        open_positions = []
 
         # 1. Check XML
         trimmed = text.strip()
@@ -199,9 +202,14 @@ async def api_trades_import(request: Request):
             or "<Trade" in text
             or "<CashTransaction" in text
             or "<Order" in text
+            or "<OpenPosition" in text
         ):
             import tempfile
-            from scripts.import_trades import parse_xml_cash_transactions, parse_xml_file
+            from scripts.import_trades import (
+                parse_xml_cash_transactions,
+                parse_xml_file,
+                parse_xml_open_positions,
+            )
 
             with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", encoding="utf-8", delete=False) as tmp:
                 tmp.write(text)
@@ -209,6 +217,7 @@ async def api_trades_import(request: Request):
             try:
                 trades = parse_xml_file(tmp_path)
                 cash_txs = parse_xml_cash_transactions(tmp_path)
+                open_positions = parse_xml_open_positions(tmp_path)
             finally:
                 if tmp_path.exists():
                     tmp_path.unlink()
@@ -231,7 +240,7 @@ async def api_trades_import(request: Request):
                 detect_csv_delimiter,
                 parse_csv_cash_transactions,
                 parse_csv_line_tokens,
-                parse_csv_unrealized_pnl,
+                parse_csv_open_positions,
                 parse_generic_ibkr_csv,
                 parse_ibkr_activity_statement_csv,
             )
@@ -266,15 +275,12 @@ async def api_trades_import(request: Request):
                     trades = parse_ibkr_activity_statement_csv(lines)
                 cash_txs = parse_csv_cash_transactions(lines)
 
-            unrealized_val = parse_csv_unrealized_pnl(lines)
-            if unrealized_val is not None:
-                from backend.settings import update_settings
-                update_settings({"unrealized_pnl": unrealized_val})
+            open_positions = parse_csv_open_positions(lines)
 
-        if not trades and not cash_txs:
+        if not trades and not cash_txs and not open_positions:
             raise HTTPException(
                 status_code=400,
-                detail="No trade executions or cash transactions found in statement. Please ensure it is an IBKR Activity Statement CSV/XML, Flex Query export, or Trade Confirmation report.",
+                detail="No trade executions, cash transactions, or open positions found in statement. Please ensure it is an IBKR Activity Statement CSV/XML, Flex Query export, or Trade Confirmation report.",
             )
 
         from datetime import datetime, timezone
@@ -282,6 +288,7 @@ async def api_trades_import(request: Request):
         prev_currency = get_active_base_currency()
         count = upsert_trades(trades) if trades else 0
         cash_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
+        open_count = upsert_open_positions(open_positions) if open_positions else 0
         new_currency = get_active_base_currency()
         new_symbol = get_currency_symbol(new_currency)
         currency_changed = prev_currency != new_currency
@@ -309,12 +316,15 @@ async def api_trades_import(request: Request):
             msg_parts.append(f"{count} trades")
         if cash_count > 0:
             msg_parts.append(f"{cash_count} cash transactions")
+        if open_count > 0:
+            msg_parts.append(f"{open_count} open positions")
         msg_str = " and ".join(msg_parts) if msg_parts else "0 records"
 
         return {
             "status": "success",
             "trades_count": count,
             "cash_count": cash_count,
+            "open_positions_count": open_count,
             "base_currency": new_currency,
             "currency_symbol": new_symbol,
             "currency_changed": currency_changed,
@@ -355,6 +365,18 @@ async def api_delete_cash_transaction(tx_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Transaction not found.")
     return {"status": "success", "summary": get_cash_summary()}
+
+
+@app.get("/api/positions/open")
+async def api_open_positions():
+    """Returns all current open positions and total unrealized PnL from SQLite database."""
+    positions = get_open_positions()
+    total_unrealized = round(sum(p.get("unrealized_pnl", 0.0) for p in positions), 2)
+    return {
+        "positions": positions,
+        "count": len(positions),
+        "total_unrealized_pnl": total_unrealized,
+    }
 
 
 @app.post("/api/sync/gap/resolve")

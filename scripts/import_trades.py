@@ -10,6 +10,8 @@ import csv
 import glob
 import hashlib
 import logging
+import re
+from datetime import date, datetime
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
@@ -21,7 +23,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.config import DB_PATH  # noqa: E402
-from backend.database import db_session, init_db, normalize_symbol, upsert_cash_transactions, upsert_trades  # noqa: E402
+from backend.database import (  # noqa: E402
+    db_session,
+    init_db,
+    normalize_symbol,
+    upsert_cash_transactions,
+    upsert_open_positions,
+    upsert_trades,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("ib-journal.importer")
@@ -666,6 +675,65 @@ def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
         )
 
     return txs
+
+
+def parse_xml_open_positions(filepath: Path) -> List[Dict[str, Any]]:
+    """Parses open positions from IBKR Flex XML."""
+    positions: List[Dict[str, Any]] = []
+    tree = ET.parse(filepath)
+    root = tree.getroot()
+
+    base_currency = "EUR"
+    for node in root.iter("AccountInformation"):
+        base_currency = (node.attrib.get("baseCurrency") or "EUR").upper()
+
+    report_date = date.today().isoformat()
+    for node in root.iter("FlexStatement"):
+        rd = node.attrib.get("toDate") or node.attrib.get("reportDate")
+        if rd:
+            report_date = rd
+
+    for node in root.iter("OpenPosition"):
+        attrs = node.attrib
+        qty = clean_num(attrs.get("position") or attrs.get("quantity"))
+        if abs(qty) < 1e-6:
+            continue
+        raw_sym = attrs.get("symbol") or attrs.get("underlyingSymbol") or "UNKNOWN"
+        desc = attrs.get("description") or attrs.get("contractDescription") or ""
+        cat = (attrs.get("assetCategory") or attrs.get("secType") or "STK").upper()
+        norm_sym = normalize_symbol(raw_sym, desc, cat)
+        curr = (attrs.get("currency") or base_currency).upper()
+        fx_rate = clean_num(attrs.get("fxRateToBase") or attrs.get("fxRate"), 1.0)
+        raw_unrealized = clean_num(
+            attrs.get("fifoPnlUnrealized")
+            or attrs.get("unrealizedPnL")
+            or attrs.get("unrealizedPnl")
+            or attrs.get("markToMarketPnl")
+        )
+        unrealized = round(raw_unrealized * fx_rate, 4) if fx_rate > 0 else raw_unrealized
+
+        positions.append(
+            {
+                "account_id": attrs.get("accountId") or "",
+                "symbol": norm_sym,
+                "description": desc or norm_sym,
+                "asset_category": cat,
+                "currency": curr,
+                "raw_currency": curr,
+                "base_currency": base_currency,
+                "fx_rate_to_base": fx_rate,
+                "quantity": qty,
+                "cost_price": clean_num(attrs.get("costBasisPrice") or attrs.get("costPrice")),
+                "cost_basis": clean_num(attrs.get("costBasisMoney") or attrs.get("costBasis")),
+                "close_price": clean_num(attrs.get("markToMarketPrice") or attrs.get("closePrice")),
+                "position_value": clean_num(attrs.get("positionValue")),
+                "unrealized_pnl": unrealized,
+                "raw_unrealized_pnl": raw_unrealized,
+                "report_date": report_date,
+            }
+        )
+    return positions
+
 
 
 def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
@@ -1740,8 +1808,115 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
     return trades
 
 
+def parse_csv_open_positions(lines: List[str]) -> List[Dict[str, Any]]:
+    """
+    Parses Open Positions section from IBKR Activity Statement CSV into structured position dicts.
+    """
+    delimiter = detect_csv_delimiter(lines)
+    positions: List[Dict[str, Any]] = []
+
+    report_date = date.today().isoformat()
+    base_currency = "EUR"
+
+    for line in lines[:60]:
+        row = parse_csv_line_tokens(line, delimiter)
+        if len(row) >= 4:
+            sec = row[0].strip().lower().strip('"')
+            if sec in ("account information", "información de la cuenta", "información sobre la cuenta"):
+                f_name = row[2].strip().lower().strip('"')
+                if "base currency" in f_name or "moneda base" in f_name or "divisa base" in f_name:
+                    base_currency = row[3].strip().upper().strip('"')
+            elif sec in ("statement", "extracto", "informe", "estado"):
+                f_name = row[2].strip().lower().strip('"')
+                if "period" in f_name or "período" in f_name:
+                    p_val = row[3].strip()
+                    m = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", p_val)
+                    if m:
+                        report_date = m[-1]
+
+    header_map: Dict[str, int] = {}
+    in_open_pos = False
+
+    for line in lines:
+        row = parse_csv_line_tokens(line, delimiter)
+        if not row or len(row) < 3:
+            continue
+        sec = row[0].strip().lower().strip('"')
+        if sec not in ("open positions", "posiciones abiertas", "posiciones vivas"):
+            continue
+
+        row_type = row[1].strip().lower().strip('"')
+        if row_type == "header":
+            header_map = {col.strip().lower().strip('"'): i for i, col in enumerate(row)}
+            in_open_pos = True
+            continue
+
+        if row_type == "data" and in_open_pos and header_map:
+            def get_col(keys: List[str], default: str = "") -> str:
+                for k in keys:
+                    if k in header_map and header_map[k] < len(row):
+                        v = row[header_map[k]].strip().strip('"')
+                        if v:
+                            return v
+                return default
+
+            data_disc = get_col(["datadiscriminator", "discriminador", "tipo"]).lower()
+            if data_disc in ("subtotal", "total", "total (all assets)", "total (todos los activos)"):
+                continue
+
+            raw_sym = get_col(["symbol", "símbolo", "simbolo", "financial instrument", "instrumento financiero"])
+            if not raw_sym:
+                continue
+
+            qty = clean_num(get_col(["quantity", "cantidad", "posición", "posicion", "position"]))
+            if abs(qty) < 1e-6:
+                continue
+
+            cost_price = clean_num(get_col(["cost price", "precio de coste", "precio coste", "cost basis price"]))
+            cost_basis = clean_num(get_col(["cost basis", "base de coste", "base coste", "cost basis money"]))
+            close_price = clean_num(get_col(["close price", "precio de cierre", "precio cierre", "mark to market price", "mark price"]))
+            pos_val = clean_num(get_col(["value", "valor", "position value", "current value"]))
+            raw_unrealized = clean_num(get_col(["unrealized p/l", "p/l no realizado", "pnl no realizado", "unrealized pnl", "unrealized fifo p/l"]))
+            curr = get_col(["currency", "divisa", "moneda"], default=base_currency).upper()
+            cat = get_col(["asset category", "categoría del activo", "categoria del activo", "sectype"], default="STK").upper()
+            if "STOCK" in cat or "ACCION" in cat or "ACCIONES" in cat:
+                cat = "STK"
+            elif "OPTION" in cat or "OPCION" in cat or "OPCIONES" in cat:
+                cat = "OPT"
+
+            norm_sym = normalize_symbol(raw_sym, raw_sym, cat)
+            fx_rate = 1.0
+
+            positions.append(
+                {
+                    "account_id": "",
+                    "symbol": norm_sym,
+                    "description": norm_sym,
+                    "asset_category": cat,
+                    "currency": curr,
+                    "raw_currency": curr,
+                    "base_currency": base_currency,
+                    "fx_rate_to_base": fx_rate,
+                    "quantity": qty,
+                    "cost_price": cost_price,
+                    "cost_basis": cost_basis,
+                    "close_price": close_price,
+                    "position_value": pos_val,
+                    "unrealized_pnl": raw_unrealized,
+                    "raw_unrealized_pnl": raw_unrealized,
+                    "report_date": report_date,
+                }
+            )
+
+    return positions
+
+
 def parse_csv_unrealized_pnl(lines: List[str]) -> Optional[float]:
     """Extracts total Unrealized P&L from an IBKR Activity Statement CSV if available."""
+    open_pos = parse_csv_open_positions(lines)
+    if open_pos:
+        return round(sum(p["unrealized_pnl"] for p in open_pos), 2)
+
     delimiter = detect_csv_delimiter(lines)
     for line in lines:
         row = parse_csv_line_tokens(line, delimiter)
@@ -1784,6 +1959,7 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
     total_parsed = 0
     all_trades: List[Dict[str, Any]] = []
     all_cash_txs: List[Dict[str, Any]] = []
+    all_open_positions: List[Dict[str, Any]] = []
 
     for f in sorted(files_to_process):
         logger.info(f"Reading file: {f.name} ({f.stat().st_size / 1024:.1f} KB)")
@@ -1791,13 +1967,17 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
             if f.suffix.lower() == ".xml":
                 parsed = parse_xml_file(f)
                 cash_parsed = parse_xml_cash_transactions(f)
+                open_pos_parsed = parse_xml_open_positions(f)
             else:
                 parsed = parse_csv_file(f)
                 with open(f, "r", encoding="utf-8-sig", errors="replace") as cf:
                     csv_lines = cf.read().splitlines()
                 cash_parsed = parse_csv_cash_transactions(csv_lines)
+                open_pos_parsed = parse_csv_open_positions(csv_lines)
 
-            logger.info(f"  -> Extracted {len(parsed)} trade executions, {len(cash_parsed)} cash transactions.")
+            logger.info(
+                f"  -> Extracted {len(parsed)} trade executions, {len(cash_parsed)} cash transactions, {len(open_pos_parsed)} open positions."
+            )
             if verbose:
                 for t in parsed[:5]:
                     logger.debug(
@@ -1808,13 +1988,15 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
 
             all_trades.extend(parsed)
             all_cash_txs.extend(cash_parsed)
+            if open_pos_parsed:
+                all_open_positions = open_pos_parsed
             total_parsed += len(parsed)
         except Exception as e:
             logger.error(f"Error parsing {f}: {e}")
 
     if dry_run:
         logger.info(
-            f"[DRY-RUN] Would upsert {len(all_trades)} trades and {len(all_cash_txs)} cash transactions into {DB_PATH.name} (no changes written)."
+            f"[DRY-RUN] Would upsert {len(all_trades)} trades, {len(all_cash_txs)} cash transactions, and {len(all_open_positions)} open positions into {DB_PATH.name} (no changes written)."
         )
         return total_parsed, 0
 
@@ -1822,6 +2004,8 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
     upserted_count = upsert_trades(all_trades)
     if all_cash_txs:
         upsert_cash_transactions(all_cash_txs)
+    if all_open_positions:
+        upsert_open_positions(all_open_positions)
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -1837,7 +2021,7 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
             (upserted_count,),
         )
     logger.info(
-        f"✓ Successfully upserted {upserted_count} trades and {len(all_cash_txs)} cash transactions into SQLite ({DB_PATH.name})."
+        f"✓ Successfully upserted {upserted_count} trades, {len(all_cash_txs)} cash transactions, and {len(all_open_positions)} open positions into SQLite ({DB_PATH.name})."
     )
     return total_parsed, upserted_count
 

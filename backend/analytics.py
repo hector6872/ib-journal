@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from backend.database import db_session, get_currency_symbol
+from backend.database import db_session, get_currency_symbol, get_latest_unrealized_pnl
 from backend.settings import get_all_settings
 
 
@@ -211,7 +211,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         app_settings = get_all_settings()
         starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
-        unrealized_pnl = float(app_settings.get("unrealized_pnl", 0.0) or 0.0)
+        unrealized_pnl = get_latest_unrealized_pnl()
         capital_base = starting_capital + (lifetime_deposits if lifetime_deposits > 0 else total_deposits)
         realized_balance = round(starting_capital + lifetime_net_flow + lifetime_net_pnl, 2)
         account_balance = round(realized_balance + unrealized_pnl, 2)

@@ -74,7 +74,7 @@ const State = {
 /**
  * Application Settings Manager (Local & Cross-Device Persisted)
  */
-const SERVER_SYNC_KEYS = new Set(['starting_capital', 'unrealized_pnl']);
+const SERVER_SYNC_KEYS = new Set(['starting_capital']);
 
 const SettingsManager = {
     settings: {},

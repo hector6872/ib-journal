@@ -77,7 +77,7 @@ const CashModal = {
     render(container, cashSummary, settings, overview) {
         const sc = STRINGS.cash || {};
         const startingCapital = Number(settings?.starting_capital !== undefined ? settings.starting_capital : (overview?.starting_capital || 0.0));
-        const unrealizedPnl = Number(settings?.unrealized_pnl !== undefined ? settings.unrealized_pnl : (overview?.unrealized_pnl || 0.0));
+        const unrealizedPnl = Number(overview?.unrealized_pnl || 0.0);
         const totalDeposits = Number(cashSummary?.total_deposits || 0.0);
         const totalWithdrawals = Number(cashSummary?.total_withdrawals || 0.0);
         const totalDividends = Number(cashSummary?.total_dividends || 0.0);

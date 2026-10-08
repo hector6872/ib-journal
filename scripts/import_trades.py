@@ -131,9 +131,12 @@ def generate_deterministic_exec_id(
     return f"GEN_{h}"
 
 
-def generate_deterministic_cash_id(account_id: str, dt_str: str, tx_type: str, amount: float, desc: str = "") -> str:
+def generate_deterministic_cash_id(
+    account_id: str, dt_str: str, tx_type: str, amount: float, desc: str = "", currency: str = ""
+) -> str:
     """Generates a unique deterministic ID for cash transactions without a transaction ID."""
-    raw = f"{account_id}_{dt_str}_{tx_type}_{amount:.2f}_{desc[:20]}"
+    clean_desc = "".join(c for c in desc.upper() if c.isalnum() or c in (" ", "-", "."))[:30]
+    raw = f"{account_id}_{dt_str}_{tx_type}_{amount:.4f}_{currency.upper()}_{clean_desc}"
     h = hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
     return f"CASH_{h}"
 
@@ -855,7 +858,7 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
                 or row_dict.get("transactionid")
                 or row_dict.get("id de transacción")
                 or row_dict.get("ref #")
-                or generate_deterministic_cash_id(account_id, t_dt_iso, tx_type, amt, desc)
+                or generate_deterministic_cash_id(account_id, t_dt_iso, tx_type, amt, desc, raw_curr)
             )
 
             cash_txs.append(

@@ -648,7 +648,7 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         else:
             amount = abs(raw_val)
             raw_amount = abs(float(raw_amt_val)) if raw_amt_val is not None else amount
-            tx_type = raw_type if raw_type in ("DEPOSIT", "DIVIDEND", "TRANSFER", "INTEREST") else "DEPOSIT"
+            tx_type = raw_type if raw_type in ("DEPOSIT", "DIVIDEND", "TRANSFER", "INTEREST", "FEE", "SUBSCRIPTION") else "DEPOSIT"
 
         fx = float(tx.get("fx_rate_to_base") or 1.0)
         sanitized.append(

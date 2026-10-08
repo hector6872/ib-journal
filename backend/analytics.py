@@ -167,8 +167,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         # Cash summary & Starting Capital
         cash_query = """
             SELECT
-                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) as total_deposits,
-                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0.0) as total_withdrawals
+                id, type, amount, description
             FROM cash_transactions
             WHERE 1=1
         """
@@ -180,16 +179,21 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             cash_query += " AND transaction_date <= ?"
             cash_params.append(end_date)
         cursor.execute(cash_query, cash_params)
-        cash_row = cursor.fetchone()
-        total_deposits = float(cash_row["total_deposits"] if cash_row else 0.0)
-        total_withdrawals = float(cash_row["total_withdrawals"] if cash_row else 0.0)
-        net_cash_flow = total_deposits - total_withdrawals
+        c_rows = [dict(r) for r in cursor.fetchall()]
+
+        total_deposits = sum(r["amount"] for r in c_rows if r["amount"] > 0 and r["type"] == "DEPOSIT")
+        total_withdrawals = sum(abs(r["amount"]) for r in c_rows if r["amount"] < 0 and r["type"] in ("WITHDRAWAL", "TRANSFER"))
+        total_withholding_tax = sum(abs(r["amount"]) for r in c_rows if r["type"] == "WITHHOLDING TAX" or ("TAX" in (r["type"] or "") and r["amount"] < 0))
+        total_subscriptions = sum(abs(r["amount"]) for r in c_rows if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0))
+        total_fees = sum(abs(r["amount"]) for r in c_rows if r["type"] == "FEE")
+        total_account_expenses = total_subscriptions + total_fees + total_withholding_tax
+        net_transfers = total_deposits - total_withdrawals
+        net_cash_flow = sum(r["amount"] for r in c_rows)
 
         # Cumulative lifetime capital base (all historical deposits up to end_date)
         lifetime_cash_query = """
             SELECT
-                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) as lifetime_deposits,
-                COALESCE(SUM(amount), 0.0) as lifetime_net_flow
+                amount, type
             FROM cash_transactions
             WHERE 1=1
         """
@@ -198,9 +202,9 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             lifetime_cash_query += " AND transaction_date <= ?"
             lifetime_params.append(end_date)
         cursor.execute(lifetime_cash_query, lifetime_params)
-        lifetime_row = cursor.fetchone()
-        lifetime_deposits = float(lifetime_row["lifetime_deposits"] if lifetime_row else 0.0)
-        lifetime_net_flow = float(lifetime_row["lifetime_net_flow"] if lifetime_row else 0.0)
+        lt_rows = [dict(r) for r in cursor.fetchall()]
+        lifetime_deposits = sum(r["amount"] for r in lt_rows if r["amount"] > 0 and r["type"] == "DEPOSIT")
+        lifetime_net_flow = sum(r["amount"] for r in lt_rows)
 
         app_settings = get_all_settings()
         starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
@@ -253,6 +257,11 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "starting_capital": round(starting_capital, 2),
             "total_deposits": round(total_deposits, 2),
             "total_withdrawals": round(total_withdrawals, 2),
+            "net_transfers": round(net_transfers, 2),
+            "total_subscriptions": round(total_subscriptions, 2),
+            "total_fees": round(total_fees, 2),
+            "total_withholding_tax": round(total_withholding_tax, 2),
+            "total_account_expenses": round(total_account_expenses, 2),
             "net_cash_flow": round(net_cash_flow, 2),
             "capital_base": round(capital_base, 2),
             "account_balance": round(account_balance, 2),

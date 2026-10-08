@@ -650,10 +650,17 @@ const StatsPage = {
                         </div>
                         <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.netTransfersStats || 'NET CASH TRANSFERS'}</span>
-                            <span class="cash-card-value mono ${this.getPnlClass(ov.net_cash_flow)}">
-                                ${State.formatCurrency(ov.net_cash_flow || 0)}
+                            <span class="cash-card-value mono ${this.getPnlClass(ov.net_transfers !== undefined ? ov.net_transfers : (ov.total_deposits - ov.total_withdrawals))}">
+                                ${State.formatCurrency(ov.net_transfers !== undefined ? ov.net_transfers : (ov.total_deposits - ov.total_withdrawals))}
                             </span>
                             <span class="cash-card-sub">In: ${State.currency}${(ov.total_deposits || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${(ov.total_withdrawals || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
+                        </div>
+                        <div class="cash-card is-clickable" data-cash-modal="true">
+                            <span class="cash-card-label">${STRINGS.cash?.accountExpenses || 'SUBSCRIPTIONS & ACCOUNT FEES'}</span>
+                            <span class="cash-card-value mono ${(ov.total_account_expenses || 0) > 0 ? 'pnl-negative' : 'pnl-neutral'}">
+                                -${State.currency}${(ov.total_account_expenses || 0).toFixed(2)}
+                            </span>
+                            <span class="cash-card-sub">${STRINGS.cash?.accountExpensesSub || 'OPRA, data fees, taxes & charges'}</span>
                         </div>
                         <div class="cash-card is-clickable" data-scroll-sec="sec-equity-curve">
                             <span class="cash-card-label">${STRINGS.cash?.roi || 'RETURN ON CAPITAL (% ROI)'}</span>

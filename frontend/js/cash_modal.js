@@ -83,6 +83,8 @@ const CashModal = {
         const totalWithholdingTax = Number(cashSummary?.total_withholding_tax || 0.0);
         const totalSubscriptions = Number(cashSummary?.total_subscriptions || 0.0);
         const totalFees = Number(cashSummary?.total_fees || 0.0);
+        const totalAccountExpenses = totalSubscriptions + totalWithholdingTax + totalFees;
+        const netTransfers = totalDeposits - totalWithdrawals;
         const netCashFlow = Number(cashSummary?.net_cash_flow || 0.0);
         const netPnl = Number(overview?.net_pnl || 0.0);
         const capitalBase = startingCapital + totalDeposits + totalDividends;
@@ -114,10 +116,18 @@ const CashModal = {
 
                     <div class="cash-card">
                         <span class="cash-card-label">${sc.netTransfers || 'NET TRANSFERS IN/OUT'}</span>
-                        <span class="cash-card-value mono ${State.getPnlClass(netCashFlow)}">
-                            ${State.formatCurrency(netCashFlow)}
+                        <span class="cash-card-value mono ${State.getPnlClass(netTransfers)}">
+                            ${State.formatCurrency(netTransfers)}
                         </span>
-                        <span class="cash-card-sub">In: ${State.currency}${(cashSummary?.all_inflows || totalDeposits + totalDividends).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${(cashSummary?.all_outflows || totalWithdrawals + totalSubscriptions + totalWithholdingTax + totalFees).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
+                        <span class="cash-card-sub">In: ${State.currency}${totalDeposits.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})} · Out: ${State.currency}${totalWithdrawals.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
+                    </div>
+
+                    <div class="cash-card">
+                        <span class="cash-card-label">${sc.accountExpenses || 'SUBSCRIPTIONS & ACCOUNT FEES'}</span>
+                        <span class="cash-card-value mono ${totalAccountExpenses > 0 ? 'pnl-negative' : 'pnl-neutral'}">
+                            -${State.currency}${totalAccountExpenses.toFixed(2)}
+                        </span>
+                        <span class="cash-card-sub">${sc.accountExpensesSub || 'OPRA, data fees, taxes & charges'}</span>
                     </div>
 
                     <div class="cash-card">
@@ -132,27 +142,27 @@ const CashModal = {
                 <!-- 1b. Itemized Category Breakdown Strip -->
                 <div class="cash-breakdown-bar">
                     <div class="cash-breakdown-item">
-                        <span class="cash-breakdown-label">📥 ${sc.statDeposits || 'Deposits'}</span>
+                        <span class="cash-breakdown-label">${sc.statDeposits || 'Deposits'}</span>
                         <span class="cash-breakdown-val mono pnl-positive">+${State.currency}${totalDeposits.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                     <div class="cash-breakdown-item">
-                        <span class="cash-breakdown-label">📤 ${sc.statWithdrawals || 'Withdrawals'}</span>
+                        <span class="cash-breakdown-label">${sc.statWithdrawals || 'Withdrawals'}</span>
                         <span class="cash-breakdown-val mono ${totalWithdrawals > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalWithdrawals.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                     <div class="cash-breakdown-item">
-                        <span class="cash-breakdown-label">💵 ${sc.statDividends || 'Dividends'}</span>
+                        <span class="cash-breakdown-label">${sc.statDividends || 'Dividends'}</span>
                         <span class="cash-breakdown-val mono ${totalDividends > 0 ? 'pnl-positive' : 'pnl-neutral'}">+${State.currency}${totalDividends.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                     <div class="cash-breakdown-item">
-                        <span class="cash-breakdown-label">🏛️ ${sc.statWithholdingTax || 'Withholding Tax'}</span>
+                        <span class="cash-breakdown-label">${sc.statWithholdingTax || 'Withholding Tax'}</span>
                         <span class="cash-breakdown-val mono ${totalWithholdingTax > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalWithholdingTax.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                     <div class="cash-breakdown-item">
-                        <span class="cash-breakdown-label">📡 ${sc.statSubscriptions || 'Subscriptions'}</span>
+                        <span class="cash-breakdown-label">${sc.statSubscriptions || 'Subscriptions'}</span>
                         <span class="cash-breakdown-val mono ${totalSubscriptions > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalSubscriptions.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                     <div class="cash-breakdown-item">
-                        <span class="cash-breakdown-label">🏷️ ${sc.statFees || 'Broker Fees'}</span>
+                        <span class="cash-breakdown-label">${sc.statFees || 'Broker Fees'}</span>
                         <span class="cash-breakdown-val mono ${totalFees > 0 ? 'pnl-negative' : 'pnl-neutral'}">-${State.currency}${totalFees.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                 </div>

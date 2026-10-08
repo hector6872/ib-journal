@@ -448,20 +448,15 @@ const StatsPage = {
             : 'pnl-neutral';
 
         const currentYear = new Date().getFullYear();
-        const pastYears = (data.available_years || []).filter(y => Number(y) < currentYear);
+        const pastYears = (data.available_years || [])
+            .map(y => Number(y))
+            .filter(y => y < currentYear)
+            .sort((a, b) => a - b);
 
         container.innerHTML = `
             <div class="stats-main-container">
-                <!-- Top Statistics Bar with Date Range Filters, Past Years & Timezone -->
+                <!-- Top Statistics Bar with Past Years, Date Range Filters & Timezone -->
                 <div class="stats-header-bar">
-                    <div class="segmented-control" id="stats-date-range-filter">
-                        <button class="segmented-btn ${this.dateRange === '1W' ? 'active' : ''}" data-range="1W">${sp.filter1W}</button>
-                        <button class="segmented-btn ${this.dateRange === '1M' ? 'active' : ''}" data-range="1M">${sp.filter1M}</button>
-                        <button class="segmented-btn ${this.dateRange === '3M' ? 'active' : ''}" data-range="3M">${sp.filter3M}</button>
-                        <button class="segmented-btn ${this.dateRange === 'YTD' ? 'active' : ''}" data-range="YTD">${sp.filterYTD}</button>
-                        <button class="segmented-btn ${this.dateRange === 'ALL' ? 'active' : ''}" data-range="ALL">${sp.filterAll}</button>
-                    </div>
-
                     ${pastYears.length > 0 ? `
                     <div class="segmented-control" id="stats-year-filter">
                         ${pastYears.map(y => `
@@ -469,6 +464,14 @@ const StatsPage = {
                         `).join('')}
                     </div>
                     ` : ''}
+
+                    <div class="segmented-control" id="stats-date-range-filter">
+                        <button class="segmented-btn ${this.dateRange === '1W' ? 'active' : ''}" data-range="1W">${sp.filter1W}</button>
+                        <button class="segmented-btn ${this.dateRange === '1M' ? 'active' : ''}" data-range="1M">${sp.filter1M}</button>
+                        <button class="segmented-btn ${this.dateRange === '3M' ? 'active' : ''}" data-range="3M">${sp.filter3M}</button>
+                        <button class="segmented-btn ${this.dateRange === 'YTD' ? 'active' : ''}" data-range="YTD">${sp.filterYTD}</button>
+                        <button class="segmented-btn ${this.dateRange === 'ALL' ? 'active' : ''}" data-range="ALL">${sp.filterAll}</button>
+                    </div>
 
                     <div class="segmented-control" id="stats-global-tz-control">
                         <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">

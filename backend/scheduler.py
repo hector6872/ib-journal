@@ -17,7 +17,7 @@ from backend.config import (
     is_ibkr_configured,
     is_production,
 )
-from backend.database import db_session, upsert_cash_transactions, upsert_trades
+from backend.database import db_session, upsert_cash_transactions, upsert_open_positions, upsert_trades
 from backend.flex_client import IBKRFlexClient
 
 logger = logging.getLogger("ib-journal.scheduler")
@@ -275,11 +275,16 @@ class SyncScheduler:
                     xml_data = await client.fetch_statement_xml(query_id=trade_query)
                     trades = client.parse_trades_xml(xml_data)
                     cash_txs = client.parse_cash_transactions_xml(xml_data)
+                    open_pos = client.parse_open_positions_xml(xml_data)
 
                     t_count = upsert_trades(trades) if trades else 0
                     c_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
+                    if open_pos:
+                        upsert_open_positions(open_pos)
+
                     total_trades_count += t_count
                     total_cash_count += c_count
+
                     queries_run.append("Intraday")
                 except Exception as e_trade:
                     logger.error(f"Trade query ({trade_query}) failed: {e_trade}")
@@ -296,11 +301,16 @@ class SyncScheduler:
                     xml_data_act = await client.fetch_statement_xml(query_id=activity_query)
                     trades_act = client.parse_trades_xml(xml_data_act)
                     cash_act = client.parse_cash_transactions_xml(xml_data_act)
+                    open_pos_act = client.parse_open_positions_xml(xml_data_act)
 
                     t_count_act = upsert_trades(trades_act) if trades_act else 0
                     c_count_act = upsert_cash_transactions(cash_act) if cash_act else 0
+                    if open_pos_act:
+                        upsert_open_positions(open_pos_act)
+
                     total_trades_count += t_count_act
                     total_cash_count += c_count_act
+
                     queries_run.append("Activity")
                     self.last_activity_sync_time = datetime.now(timezone.utc)
                 except Exception as e_act:

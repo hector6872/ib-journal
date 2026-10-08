@@ -21,9 +21,9 @@ const State = {
     currentWeekData: null,
 
     // Helpers
-    formatCurrency(amount, includeSymbol = true) {
+    formatCurrency(amount, includeSymbol = true, showPositiveSign = true) {
         if (amount === undefined || amount === null || isNaN(amount)) amount = 0;
-        const sign = amount > 0 ? "+" : (amount < 0 ? "-" : "");
+        const sign = amount < 0 ? "-" : (showPositiveSign && amount > 0 ? "+" : "");
         const formatted = Math.abs(amount).toLocaleString('en-US', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 2

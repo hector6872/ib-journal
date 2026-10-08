@@ -145,6 +145,13 @@ const CalendarPage = {
         }
     },
 
+    renderInfoIcon(tooltipText) {
+        if (!tooltipText) return '';
+        return `<span class="stat-info-icon" data-tooltip="${tooltipText}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>`;
+    },
+
     buildDockHtml(sectionId, stats) {
         const hasTrades = stats.totalTrades > 0;
         let pnlColorVar = 'var(--text-muted)';
@@ -165,6 +172,8 @@ const CalendarPage = {
             ? `<span class="pnl-negative">-${State.currency}${stats.avgLoss.toFixed(2)}</span>`
             : `<span class="pnl-neutral">${State.currency}0.00</span>`;
 
+        const sp = STRINGS.statsPage || {};
+
         let riskStatHtml = '';
         if (sectionId === 'year') {
             const maxDdDisplay = stats.maxDrawdown > 0
@@ -173,7 +182,10 @@ const CalendarPage = {
 
             riskStatHtml = `
                 <div class="dock-stat-item">
-                    <span class="dock-stat-label">${STRINGS.calendar.maxDrawdownLabel || "Max Drawdown"}</span>
+                    <div class="dock-stat-label-row">
+                        <span class="dock-stat-label">${sp.maxDrawdown || STRINGS.calendar.maxDrawdownLabel || "Max Drawdown"}</span>
+                        ${this.renderInfoIcon(sp.tipMaxDrawdown || "Maximum peak-to-trough decline in realized performance.")}
+                    </div>
                     <span class="dock-stat-val mono">${maxDdDisplay}</span>
                 </div>
             `;
@@ -194,7 +206,10 @@ const CalendarPage = {
 
             riskStatHtml = `
                 <div class="dock-stat-item">
-                    <span class="dock-stat-label">${STRINGS.calendar.bestWorstTradeLabel || "Best / Worst"}</span>
+                    <div class="dock-stat-label-row">
+                        <span class="dock-stat-label">${STRINGS.calendar.bestWorstTradeLabel || "Best / Worst"}</span>
+                        ${this.renderInfoIcon("Largest single winning trade vs largest single losing trade in this period.")}
+                    </div>
                     <span class="dock-stat-val mono" style="font-size: 11px;">
                         ${bestWinDisplay} / ${worstLossDisplay}
                     </span>
@@ -227,26 +242,41 @@ const CalendarPage = {
                     <div class="dock-stats-panel">
                         <div class="dock-stats-grid">
                             <div class="dock-stat-item">
-                                <span class="dock-stat-label">${STRINGS.calendar.expectancyLabel || "Expectancy / Op"}</span>
+                                <div class="dock-stat-label-row">
+                                    <span class="dock-stat-label">${STRINGS.kpi.expectancy || "Expectancy"}</span>
+                                    ${this.renderInfoIcon(sp.tipExpectancy || "Expected average return per trade: (Win % × Avg Win) - (Loss % × Avg Loss).")}
+                                </div>
                                 <span class="dock-stat-val mono ${expClass}">${State.formatCurrency(stats.expectancy)}</span>
                             </div>
                             <div class="dock-stat-item">
-                                <span class="dock-stat-label">${STRINGS.calendar.winRateLabel || "Win Rate"}</span>
+                                <div class="dock-stat-label-row">
+                                    <span class="dock-stat-label">${STRINGS.kpi.winRate || "Win Rate"}</span>
+                                    ${this.renderInfoIcon(sp.tipWinRate || "Net Win Rate (% of trades profitable after fees).")}
+                                </div>
                                 <span class="dock-stat-val mono ${winRateClass}">${hasTrades ? `${stats.winRate}%` : '0.0%'}</span>
                             </div>
                             <div class="dock-stat-item">
-                                <span class="dock-stat-label">${STRINGS.calendar.profitFactorLabel || "Profit Factor"}</span>
+                                <div class="dock-stat-label-row">
+                                    <span class="dock-stat-label">${STRINGS.kpi.profitFactor || "Profit Factor"}</span>
+                                    ${this.renderInfoIcon(sp.tipProfitFactor || "Ratio of total gains to total losses (Gross Profit / Gross Loss).")}
+                                </div>
                                 <span class="dock-stat-val mono ${pfClass}">${hasTrades ? stats.profitFactor : '0.00'}</span>
                             </div>
                             <div class="dock-stat-item">
-                                <span class="dock-stat-label">${STRINGS.calendar.avgWinLossLabel || "Avg Win / Loss"}</span>
+                                <div class="dock-stat-label-row">
+                                    <span class="dock-stat-label">${STRINGS.calendar.avgWinLossLabel || "Avg Win / Loss"}</span>
+                                    ${this.renderInfoIcon(sp.tipRealizedRr || "Average Win vs Average Loss per trade.")}
+                                </div>
                                 <span class="dock-stat-val mono" style="font-size: 11px;">
                                     ${avgWinDisplay} / ${avgLossDisplay}
                                 </span>
                             </div>
                             ${riskStatHtml}
                             <div class="dock-stat-item">
-                                <span class="dock-stat-label">${STRINGS.calendar.activityLabel || "Activity"}</span>
+                                <div class="dock-stat-label-row">
+                                    <span class="dock-stat-label">${STRINGS.calendar.activityLabel || "Activity"}</span>
+                                    ${this.renderInfoIcon("Trading activity: Average number of closed trades per active trading day.")}
+                                </div>
                                 <span class="dock-stat-val mono ${hasTrades ? '' : 'pnl-neutral'}">${stats.activity} <span style="font-size: 9.5px; color: var(--text-muted); font-weight: 500;">${STRINGS.calendar?.tradesPerDayUnit || 'trades/day'}</span></span>
                             </div>
                         </div>

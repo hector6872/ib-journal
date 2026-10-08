@@ -25,8 +25,10 @@ const STRINGS = {
 
     // Header & KPIs
     kpi: {
+        nav: "NAV",
         winRate: "Win Rate",
         trades: "Total Trades",
+        totalTrades: "Total Trades",
         operations: "Total Trades",
         profitFactor: "Profit Factor",
         realizedRr: "R:R",
@@ -39,6 +41,7 @@ const STRINGS = {
 
     // Docked Mini KPIs in Sticky Header (Abbreviated)
     miniKpi: {
+        nav: "NAV",
         pnl: "P&L",
         wr: "WR",
         pf: "PF",
@@ -364,9 +367,11 @@ const STRINGS = {
         dropzoneTitle: "Drag and drop your IBKR CSV or XML files here",
         dropzoneSubtitle: "Compatible with Activity Statements and Flex Queries (multi-year)",
         selectFilesBtn: "Select Files",
-        cliLabel: "Or import via Terminal CLI:",
         closeBtn: "Close",
+        cancelBtn: "Cancel",
         importingFiles: "Importing file(s)...",
+        importCancelled: "Import cancelled by user.",
+        importBlockedBySync: "A synchronization is in progress. Please wait until sync finishes.",
         errorsTitle: "Import finished with errors:",
         successMsg: "Successfully processed statement."
     },
@@ -374,8 +379,12 @@ const STRINGS = {
     // Cash & Capital Management
     cash: {
         title: "Capital & Cash Management",
-        accountEquity: "ACCOUNT EQUITY (NAV)",
-        accountEquitySub: "Starting Capital + Net Flow + Realized P&L",
+        accountEquity: "NAV",
+        accountEquitySub: "Realized Balance + Unrealized P&L",
+        realizedBalance: "REALIZED BALANCE",
+        realizedBalanceSub: "Starting Capital + Net Flow + Realized P&L",
+        unrealizedPnl: "UNREALIZED P&L",
+        unrealizedPnlSub: "Open positions valuation / MTM",
         startingCapital: "STARTING CAPITAL",
         startingCapitalSub: "Initial configured balance",
         startingCapitalStatsSub: "Configured baseline capital",
@@ -383,9 +392,9 @@ const STRINGS = {
         netTransfersStats: "NET CASH TRANSFERS",
         netTransfersStatsSub: "User deposits vs withdrawals",
         accountExpenses: "SUBSCRIPTIONS & ACCOUNT FEES",
-        accountExpensesSub: "OPRA, data fees, taxes & charges",
+        accountExpensesSub: "Market subscriptions & fees",
         roi: "RETURN ON CAPITAL (% ROI)",
-        roiSub: "Realized P&L / Capital Base",
+        roiSub: "Total P&L / Capital Base",
         configSectionTitle: "Starting Capital Configuration",
         configSectionSubtitle: "Set your baseline portfolio balance before recorded transfers.",
         inputCapitalLabel: "STARTING CAPITAL",

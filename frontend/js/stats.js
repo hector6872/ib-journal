@@ -21,53 +21,87 @@ const StatsController = {
     renderOverview(data) {
         if (!data) return;
 
+        const sp = STRINGS.statsPage || {};
+
         // 1. Full Body Banner (Calendar view)
+        const elNav = document.getElementById('banner-nav');
+        const elNavSub = document.getElementById('banner-nav-sub');
         const elNetPnl = document.getElementById('banner-net-pnl');
+        const elNetPnlSub = document.getElementById('banner-net-pnl-sub');
         const elWr = document.getElementById('banner-wr');
-        const elOps = document.getElementById('banner-trades');
+        const elWrSub = document.getElementById('banner-wr-sub');
         const elPf = document.getElementById('banner-pf');
+        const elPfSub = document.getElementById('banner-pf-sub');
         const elExp = document.getElementById('banner-expectancy');
+        const elExpSub = document.getElementById('banner-expectancy-sub');
+
+        if (elNav) {
+            elNav.textContent = State.formatCurrency(data.account_balance || 0, true, false);
+            elNav.className = `stat-card-value mono ${State.getPnlClass(data.account_balance || 0)}`;
+        }
+        if (elNavSub) {
+            const realBal = data.realized_balance !== undefined ? data.realized_balance : (data.account_balance || 0);
+            const openPnl = data.unrealized_pnl || 0;
+            elNavSub.textContent = `Realized: ${State.formatCurrency(realBal, true, false)} · Open: ${State.formatCurrency(openPnl)}`;
+        }
 
         if (elNetPnl) {
-            elNetPnl.textContent = State.formatCurrency(data.net_pnl);
-            elNetPnl.className = `kpi-banner-value mono ${State.getPnlClass(data.net_pnl)}`;
+            elNetPnl.textContent = State.formatCurrency(data.net_pnl || 0);
+            elNetPnl.className = `stat-card-value mono ${State.getPnlClass(data.net_pnl)}`;
         }
+        if (elNetPnlSub) {
+            elNetPnlSub.textContent = `${sp.grossLabel || 'Gross'} ${State.formatCurrency(data.gross_pnl || 0)} · -${State.currency}${(data.total_commissions || 0).toFixed(2)} ${sp.feesLabel || 'fees'}`;
+        }
+
         if (elWr) {
-            elWr.textContent = `${data.win_rate.toFixed(1)}%`;
-            elWr.className = `kpi-banner-value mono ${State.getWinRateClass(data.win_rate, data.total_trades)}`;
+            elWr.textContent = `${(data.win_rate || 0).toFixed(2)}%`;
+            elWr.className = `stat-card-value mono ${State.getWinRateClass(data.win_rate, data.total_trades)}`;
         }
-        if (elOps) elOps.textContent = State.formatNumber(data.total_trades);
+        if (elWrSub) {
+            elWrSub.textContent = `${(data.gross_win_rate || 0).toFixed(1)}% ${sp.beforeCosts || 'before costs'} · ${data.winning_trades_price || 0}W / ${data.losing_trades_price || 0}L ${sp.onPrice || 'on price'}`;
+        }
+
         if (elPf) {
-            elPf.textContent = data.profit_factor.toFixed(2);
-            elPf.className = `kpi-banner-value mono ${State.getRatioClass(data.profit_factor, data.total_trades)}`;
+            elPf.textContent = (data.profit_factor || 0).toFixed(2);
+            elPf.className = `stat-card-value mono ${State.getRatioClass(data.profit_factor, data.total_trades)}`;
         }
+        if (elPfSub) {
+            elPfSub.textContent = `${State.formatCurrency(data.gross_profit || 0)} / ${State.formatCurrency(-(data.gross_loss || 0))}`;
+        }
+
         if (elExp) {
-            elExp.textContent = State.formatCurrency(data.expectancy);
-            elExp.className = `kpi-banner-value mono ${State.getPnlClass(data.expectancy)}`;
+            elExp.textContent = State.formatCurrency(data.expectancy || 0);
+            elExp.className = `stat-card-value mono ${State.getPnlClass(data.expectancy)}`;
+        }
+        if (elExpSub) {
+            elExpSub.textContent = 'Expected value per trade';
         }
 
         // 2. Compact Header Mini KPI (Tucked into header on scroll)
+        const miniNav = document.getElementById('mini-nav');
         const miniNetPnl = document.getElementById('mini-net-pnl');
         const miniWr = document.getElementById('mini-wr');
-        const miniOps = document.getElementById('mini-trades');
         const miniPf = document.getElementById('mini-pf');
         const miniExp = document.getElementById('mini-expectancy');
 
+        if (miniNav) {
+            miniNav.textContent = State.formatCurrency(data.account_balance || 0, true, false);
+            miniNav.className = `mini-kpi-value mono ${State.getPnlClass(data.account_balance || 0)}`;
+        }
         if (miniNetPnl) {
-            miniNetPnl.textContent = State.formatCurrency(data.net_pnl);
+            miniNetPnl.textContent = State.formatCurrency(data.net_pnl || 0);
             miniNetPnl.className = `mini-kpi-value mono ${State.getPnlClass(data.net_pnl)}`;
         }
         if (miniWr) {
-            miniWr.textContent = `${data.win_rate.toFixed(1)}%`;
+            miniWr.textContent = `${(data.win_rate || 0).toFixed(1)}%`;
             miniWr.className = `mini-kpi-value mono ${State.getWinRateClass(data.win_rate, data.total_trades)}`;
         }
-        if (miniOps) miniOps.textContent = State.formatNumber(data.total_trades);
         if (miniPf) {
-            miniPf.textContent = data.profit_factor.toFixed(2);
+            miniPf.textContent = (data.profit_factor || 0).toFixed(2);
             miniPf.className = `mini-kpi-value mono ${State.getRatioClass(data.profit_factor, data.total_trades)}`;
         }
         if (miniExp) {
-            miniExp.textContent = State.formatCurrency(data.expectancy);
+            miniExp.textContent = State.formatCurrency(data.expectancy || 0);
             miniExp.className = `mini-kpi-value mono ${State.getPnlClass(data.expectancy)}`;
         }
     },
@@ -242,10 +276,17 @@ const StatsController = {
             };
         }
 
-        // 4. Cooldown handling for Sync Now button (only when configured)
+        // 4. Cooldown and Import locking for Sync Now button (only when configured)
         if (status.is_configured !== false && status.status !== 'unconfigured') {
             const cooldownSec = status.cooldown_remaining_seconds || 0;
-            if (status.is_syncing) {
+            const isImporting = (typeof State !== 'undefined' && State.isImporting) || status.is_importing;
+
+            if (isImporting) {
+                btnSync.disabled = true;
+                btnSync.classList.remove('spinning');
+                btnSync.title = "Statement import in progress. Sync is paused.";
+                btnSync.querySelector('.btn-sync-label').textContent = STRINGS.import?.importingFiles || "Importing...";
+            } else if (status.is_syncing) {
                 btnSync.disabled = true;
                 btnSync.classList.add('spinning');
                 btnSync.querySelector('.btn-sync-label').textContent = STRINGS.sync.syncing;

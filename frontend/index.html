@@ -28,6 +28,11 @@
             <!-- Center: Docked Mini KPI Banner (Visible on scroll in Calendar view) -->
             <div class="header-mini-kpi" id="header-mini-kpi" data-i18n-title="kpi.clickToTop" title="Click to scroll to top">
                 <div class="mini-kpi-item">
+                    <span class="mini-kpi-label" data-i18n="miniKpi.nav">NAV</span>
+                    <span class="mini-kpi-value mono" id="mini-nav">--</span>
+                </div>
+                <div class="mini-kpi-divider"></div>
+                <div class="mini-kpi-item">
                     <span class="mini-kpi-label" data-i18n="miniKpi.pnl">P&L</span>
                     <span class="mini-kpi-value mono" id="mini-net-pnl">--</span>
                 </div>
@@ -45,11 +50,6 @@
                 <div class="mini-kpi-item">
                     <span class="mini-kpi-label" data-i18n="miniKpi.exp">EXP</span>
                     <span class="mini-kpi-value mono" id="mini-expectancy">--</span>
-                </div>
-                <div class="mini-kpi-divider"></div>
-                <div class="mini-kpi-item">
-                    <span class="mini-kpi-label" data-i18n="miniKpi.trades">TRADES</span>
-                    <span class="mini-kpi-value mono" id="mini-trades">--</span>
                 </div>
             </div>
 
@@ -98,25 +98,64 @@
         <div id="view-calendar">
             <!-- Executive KPI Summary Banner (5 Cards in Calendar view) -->
             <div class="kpi-summary-banner" id="global-kpi-banner">
-                <div class="kpi-banner-item">
-                    <span class="kpi-banner-label" data-i18n="kpi.netRealizedPnl">NET REALIZED P&L</span>
-                    <span class="kpi-banner-value mono" id="banner-net-pnl">--</span>
+                <!-- 1. NAV -->
+                <div class="kpi-banner-item stat-card is-clickable">
+                    <div class="stat-card-header">
+                        <span class="stat-card-label" data-i18n="kpi.nav">NAV</span>
+                        <span class="stat-info-icon" data-tooltip="Total account equity: Realized Balance + Unrealized P&L from open positions.">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        </span>
+                    </div>
+                    <span class="stat-card-value mono" id="banner-nav">--</span>
+                    <span class="stat-card-subtitle mono" id="banner-nav-sub">Realized: -- · Open: --</span>
                 </div>
-                <div class="kpi-banner-item">
-                    <span class="kpi-banner-label" data-i18n="kpi.winRate">WIN RATE</span>
-                    <span class="kpi-banner-value mono" id="banner-wr">--%</span>
+
+                <!-- 2. Net Realized P&L -->
+                <div class="kpi-banner-item stat-card is-clickable">
+                    <div class="stat-card-header">
+                        <span class="stat-card-label" data-i18n="kpi.netRealizedPnl">NET REALIZED P&L</span>
+                        <span class="stat-info-icon" data-tooltip="Total realized P&L after deducting all commissions. Subtitle shows gross trading returns and total IBKR fees paid.">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        </span>
+                    </div>
+                    <span class="stat-card-value mono" id="banner-net-pnl">--</span>
+                    <span class="stat-card-subtitle mono" id="banner-net-pnl-sub">Gross $0.00 · -$0.00 fees</span>
                 </div>
-                <div class="kpi-banner-item">
-                    <span class="kpi-banner-label" data-i18n="kpi.profitFactor">PROFIT FACTOR</span>
-                    <span class="kpi-banner-value mono" id="banner-pf">--</span>
+
+                <!-- 3. Win Rate -->
+                <div class="kpi-banner-item stat-card is-clickable">
+                    <div class="stat-card-header">
+                        <span class="stat-card-label" data-i18n="kpi.winRate">WIN RATE</span>
+                        <span class="stat-info-icon" data-tooltip="Net Win Rate (% of trades profitable after fees). Subtitle shows gross win rate before fees and price-based W/L counts.">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        </span>
+                    </div>
+                    <span class="stat-card-value mono" id="banner-wr">--%</span>
+                    <span class="stat-card-subtitle mono" id="banner-wr-sub">0.0% before costs · 0W / 0L on price</span>
                 </div>
-                <div class="kpi-banner-item">
-                    <span class="kpi-banner-label" data-i18n="kpi.expectancy">EXPECTANCY</span>
-                    <span class="kpi-banner-value mono" id="banner-expectancy">--</span>
+
+                <!-- 4. Profit Factor -->
+                <div class="kpi-banner-item stat-card is-clickable">
+                    <div class="stat-card-header">
+                        <span class="stat-card-label" data-i18n="kpi.profitFactor">PROFIT FACTOR</span>
+                        <span class="stat-info-icon" data-tooltip="Ratio of total gains to total losses (Gross Profit / Gross Loss). Values > 1.0 indicate profitability.">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        </span>
+                    </div>
+                    <span class="stat-card-value mono" id="banner-pf">--</span>
+                    <span class="stat-card-subtitle mono" id="banner-pf-sub">$0.00 / $0.00</span>
                 </div>
-                <div class="kpi-banner-item">
-                    <span class="kpi-banner-label" data-i18n="kpi.totalTrades">TOTAL TRADES</span>
-                    <span class="kpi-banner-value mono" id="banner-trades">--</span>
+
+                <!-- 5. Expectancy -->
+                <div class="kpi-banner-item stat-card is-clickable">
+                    <div class="stat-card-header">
+                        <span class="stat-card-label" data-i18n="kpi.expectancy">EXPECTANCY</span>
+                        <span class="stat-info-icon" data-tooltip="Expected average return per trade: (Win % × Avg Win) - (Loss % × Avg Loss).">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        </span>
+                    </div>
+                    <span class="stat-card-value mono" id="banner-expectancy">--</span>
+                    <span class="stat-card-subtitle mono" id="banner-expectancy-sub">Expected value per trade</span>
                 </div>
             </div>
 
@@ -193,12 +232,6 @@
                 </div>
 
                 <div id="import-status-box" style="margin-top: 12px; display: none;"></div>
-
-                <!-- Terminal CLI Command Hint -->
-                <div class="cli-import-box" style="margin-top: 16px;">
-                    <span class="cli-label" data-i18n="import.cliLabel">Or import via Terminal CLI:</span>
-                    <pre class="cli-code-block"><code>python3 scripts/import_trades.py /path/to/ibkr_statements/</code></pre>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-pill" id="import-modal-cancel-btn" data-i18n="import.closeBtn">Close</button>

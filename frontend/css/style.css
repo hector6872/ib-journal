@@ -563,9 +563,15 @@ body {
     gap: 4px;
 }
 
-.btn-dismiss-gap:hover {
+.btn-dismiss-gap:hover:not(:disabled) {
     background-color: rgba(245, 158, 11, 0.2);
     border-color: #d97706;
+}
+
+.btn-dismiss-gap:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 .import-dropzone {
@@ -691,22 +697,26 @@ body {
     background-color: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
-    padding: 12px 16px;
+    padding: 14px 16px;
     box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
+    min-height: 86px;
     gap: 6px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: border-color 0.15s ease;
     user-select: none;
     min-width: 0;
-    overflow: hidden;
+    position: relative;
 }
 
-.kpi-banner-item:hover {
+.kpi-banner-item:hover,
+.kpi-banner-item:has(.stat-info-icon:hover) {
     border-color: var(--border-active);
     background-color: var(--bg-hover);
     box-shadow: var(--shadow-md);
+    z-index: 60;
 }
 
 .kpi-banner-label {
@@ -714,16 +724,15 @@ body {
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.05em;
     white-space: nowrap;
 }
 
 .kpi-banner-value {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 800;
     color: var(--text-main);
     line-height: 1.1;
-    word-break: break-all;
 }
 
 .kpi-banner-divider {
@@ -747,13 +756,29 @@ body {
         grid-column: span 2;
     }
     .kpi-banner-item {
-        padding: 10px 12px;
+        padding: 10px 10px;
+        min-height: 74px;
         gap: 4px;
         min-width: 0;
-        overflow: hidden;
     }
     .kpi-banner-value {
-        font-size: clamp(14px, 4.5vw, 17px);
+        font-size: clamp(13px, 4vw, 16px);
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-summary-banner {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        width: 100%;
+    }
+    .kpi-banner-item {
+        padding: 8px 8px;
+        min-height: 68px;
+        min-width: 0;
+    }
+    .kpi-banner-value {
+        font-size: clamp(12px, 3.8vw, 15px);
     }
 }
 

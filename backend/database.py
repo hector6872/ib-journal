@@ -74,10 +74,52 @@ def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
               AND ABS(t_real.trade_price - trades.trade_price) < 0.0001
         );
     """)
+    # 3. Delete ghost trades with zero quantity
+    cursor.execute("""
+        DELETE FROM trades
+        WHERE ABS(quantity) < 1e-5;
+    """)
     deleted_count = cursor.rowcount
     if deleted_count > 0:
         logger.info(f"Cleaned up {deleted_count} duplicate placeholder trades superseded by official executions.")
     return deleted_count
+
+
+def cleanup_duplicate_cash_transactions(conn: sqlite3.Connection) -> int:
+    """
+    Cleans up duplicate cash transactions (from differing casing, old hashes vs new hashes, or XML vs CSV imports).
+    Prefers official numeric transaction IDs over synthetic CASH_* hashes.
+    """
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, transaction_id, transaction_date, currency, UPPER(TRIM(description)) as norm_desc, ROUND(ABS(amount), 2) as norm_amt
+        FROM cash_transactions
+        ORDER BY transaction_date, norm_desc, id
+    """)
+    rows = cursor.fetchall()
+    seen: Dict[Any, Any] = {}
+    to_delete: List[int] = []
+    for r in rows:
+        key = (r["transaction_date"], r["currency"], r["norm_desc"], r["norm_amt"])
+        if key in seen:
+            prev = seen[key]
+            prev_is_hash = str(prev["transaction_id"]).startswith("CASH_")
+            curr_is_hash = str(r["transaction_id"]).startswith("CASH_")
+            if prev_is_hash and not curr_is_hash:
+                to_delete.append(prev["id"])
+                seen[key] = r
+            else:
+                to_delete.append(r["id"])
+        else:
+            seen[key] = r
+
+    if to_delete:
+        placeholders = ",".join("?" for _ in to_delete)
+        cursor.execute(f"DELETE FROM cash_transactions WHERE id IN ({placeholders})", to_delete)
+        deleted = len(to_delete)
+        logger.info(f"Cleaned up {deleted} duplicate cash transaction records.")
+        return deleted
+    return 0
 
 
 def get_connection() -> sqlite3.Connection:
@@ -232,11 +274,43 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_date ON cash_transactions(transaction_date);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cash_type ON cash_transactions(type);")
 
+        # Open Positions Table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS open_positions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id TEXT,
+            symbol TEXT NOT NULL,
+            description TEXT,
+            asset_category TEXT DEFAULT 'STK',
+            currency TEXT DEFAULT 'EUR',
+            raw_currency TEXT DEFAULT 'EUR',
+            base_currency TEXT DEFAULT 'EUR',
+            fx_rate_to_base REAL DEFAULT 1.0,
+            quantity REAL NOT NULL,
+            cost_price REAL DEFAULT 0.0,
+            cost_basis REAL DEFAULT 0.0,
+            close_price REAL DEFAULT 0.0,
+            position_value REAL DEFAULT 0.0,
+            unrealized_pnl REAL DEFAULT 0.0,
+            raw_unrealized_pnl REAL DEFAULT 0.0,
+            report_date TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_open_positions_sym ON open_positions(symbol);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_open_positions_date ON open_positions(report_date);")
+
         # Deduplicate and normalize symbols on initialization
         cleanup_duplicate_trades(conn)
+        cleanup_duplicate_cash_transactions(conn)
 
-        # Reconcile FIFO PnL on any unassigned executions
-        reconcile_fifo_pnl(cursor)
+        # Reset BUY orders that were corrupted by old FIFO reconcile logic (BUY entries never have realized PnL)
+        cursor.execute("""
+            UPDATE trades
+            SET realized_pnl = 0.0, raw_realized_pnl = 0.0
+            WHERE buy_sell = 'BUY' AND (open_close_indicator = 'O' OR open_close_indicator IS NULL);
+        """)
 
         # Reconcile any existing cash transactions with incorrect positive signs or types for fees/taxes/subscriptions
         cursor.execute("""
@@ -275,7 +349,10 @@ def init_db():
                 OR UPPER(description) LIKE '%WITHHOLDING%'
                 OR UPPER(description) LIKE '%RETENCI%'
                 OR UPPER(description) LIKE '%IMPUESTO%'
-            );
+            )
+            AND UPPER(description) NOT LIKE '%REFUND%'
+            AND UPPER(description) NOT LIKE '%REEMBOLSO%'
+            AND UPPER(description) NOT LIKE '%REBATE%';
         """)
 
         cursor.execute("""
@@ -343,6 +420,9 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
 
     sanitized_trades = []
     for t in trades:
+        qty = float(t.get("quantity") or 0.0)
+        if abs(qty) < 1e-5:
+            continue
         curr = t.get("currency") or "EUR"
         raw_curr = t.get("raw_currency") or curr
         base_curr = t.get("base_currency") or "EUR"
@@ -448,9 +528,6 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
 
         if trades_to_insert:
             cursor.executemany(sql, trades_to_insert)
-
-        # Step 3: Automatically reconcile FIFO P&L for intraday Trade Confirmation fills
-        reconcile_fifo_pnl(cursor)
 
         return len(sanitized_trades)
 
@@ -582,7 +659,11 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         desc = str(tx.get("description") or "")
         desc_upper = desc.upper()
 
-        is_negative = (
+        is_refund = raw_val > 0 and (
+            "REFUND" in desc_upper or "REEMBOLSO" in desc_upper or "REBATE" in desc_upper or "ADJUSTMENT" in desc_upper
+        )
+
+        is_negative = not is_refund and (
             raw_val < 0
             or (raw_amt_val is not None and float(raw_amt_val) < 0)
             or "WITHDRAW" in raw_type
@@ -633,7 +714,11 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         else:
             amount = abs(raw_val)
             raw_amount = abs(float(raw_amt_val)) if raw_amt_val is not None else amount
-            tx_type = raw_type if raw_type in ("DEPOSIT", "DIVIDEND", "TRANSFER", "INTEREST") else "DEPOSIT"
+            tx_type = (
+                raw_type
+                if raw_type in ("DEPOSIT", "DIVIDEND", "TRANSFER", "INTEREST", "FEE", "SUBSCRIPTION")
+                else "DEPOSIT"
+            )
 
         fx = float(tx.get("fx_rate_to_base") or 1.0)
         sanitized.append(
@@ -657,6 +742,7 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.executemany(sql, sanitized)
+        cleanup_duplicate_cash_transactions(conn)
         return cursor.rowcount
 
 
@@ -805,3 +891,78 @@ def get_currency_symbol(currency_code: Optional[str] = None) -> str:
     """Maps ISO 3-letter currency code to UI display symbol, defaulting to '$' for USD."""
     code = (currency_code or get_active_base_currency()).strip().upper()
     return CURRENCY_SYMBOLS.get(code, "$")
+
+
+def upsert_open_positions(positions: List[Dict[str, Any]], clear_existing: bool = True) -> int:
+    """
+    Saves current open positions snapshot in SQLite database.
+    If clear_existing is True (default), removes old snapshot positions and inserts the new state.
+    """
+    if not positions and not clear_existing:
+        return 0
+
+    with db_session() as conn:
+        cursor = conn.cursor()
+        if clear_existing:
+            cursor.execute("DELETE FROM open_positions;")
+
+        if not positions:
+            return 0
+
+        inserted = 0
+        for p in positions:
+            sym = normalize_symbol(p.get("symbol", ""), p.get("description", ""), p.get("asset_category", "STK"))
+            cursor.execute(
+                """
+                INSERT INTO open_positions (
+                    account_id, symbol, description, asset_category, currency,
+                    raw_currency, base_currency, fx_rate_to_base, quantity,
+                    cost_price, cost_basis, close_price, position_value,
+                    unrealized_pnl, raw_unrealized_pnl, report_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+                (
+                    p.get("account_id", ""),
+                    sym,
+                    p.get("description", sym),
+                    p.get("asset_category", "STK"),
+                    p.get("currency", "EUR"),
+                    p.get("raw_currency", p.get("currency", "EUR")),
+                    p.get("base_currency", "EUR"),
+                    float(p.get("fx_rate_to_base", 1.0) or 1.0),
+                    float(p.get("quantity", 0.0) or 0.0),
+                    float(p.get("cost_price", 0.0) or 0.0),
+                    float(p.get("cost_basis", 0.0) or 0.0),
+                    float(p.get("close_price", 0.0) or 0.0),
+                    float(p.get("position_value", 0.0) or 0.0),
+                    float(p.get("unrealized_pnl", 0.0) or 0.0),
+                    float(p.get("raw_unrealized_pnl", 0.0) or 0.0),
+                    p.get("report_date", date.today().isoformat()),
+                ),
+            )
+            inserted += 1
+
+        logger.info(f"Updated {inserted} open positions in database.")
+        return inserted
+
+
+def get_open_positions() -> List[Dict[str, Any]]:
+    """Returns all current open positions stored in SQLite."""
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM open_positions ORDER BY symbol ASC;")
+        return [dict(r) for r in cursor.fetchall()]
+
+
+def get_latest_unrealized_pnl() -> float:
+    """Calculates total unrealized P&L from SQLite open positions table."""
+    try:
+        with db_session() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COALESCE(SUM(unrealized_pnl), 0.0) FROM open_positions;")
+            row = cursor.fetchone()
+            if row and row[0] is not None:
+                return round(float(row[0]), 2)
+    except Exception as e:
+        logger.warning(f"Failed to query unrealized PnL from open_positions: {e}")
+    return 0.0

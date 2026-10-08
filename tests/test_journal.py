@@ -160,8 +160,8 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertEqual(ov["winning_trades"], 1)
         self.assertEqual(ov["losing_trades"], 1)
         self.assertEqual(ov["win_rate"], 50.0)
-        self.assertEqual(ov["net_pnl"], 58.0)
-        self.assertEqual(ov["realized_rr"], 2.41)
+        self.assertEqual(ov["net_pnl"], 60.0)
+        self.assertEqual(ov["realized_rr"], 2.5)
 
         detailed = get_detailed_stats()
         self.assertIn("holding_durations", detailed)
@@ -296,15 +296,14 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertIsNotNone(day_30)
         # 2 round-trip trades (not 3 closing fills, and excluding CASH)
         self.assertEqual(day_30["count"], 2)
-        # Total gross pnl: 0.98 + 0.56 - 8.46 = -6.92
+        # Total net pnl: 0.98 + 0.56 - 8.46 = -6.92
         # Total commissions: 0.91 + 0.29 + 0.76 + 0.91 + 1.80 + 1.35 = 6.02
-        # Total net pnl: -6.92 - 6.02 = -12.94
         self.assertEqual(day_30["commissions"], 6.02)
-        self.assertEqual(day_30["pnl"], -12.94)
+        self.assertEqual(day_30["pnl"], -6.92)
 
         year_cal = get_year_calendar(2026)
         self.assertEqual(year_cal["total_trades"], 2)
-        self.assertEqual(year_cal["total_net_pnl"], -12.94)
+        self.assertEqual(year_cal["total_net_pnl"], -6.92)
 
     def test_import_script_parsers(self):
         """Tests parsing logic for IBKR Activity Statement and Generic Flex CSVs."""
@@ -755,12 +754,12 @@ Operações,Dados,Ordem,Ações,EUR,EDP,"2023-09-12, 16:00:00",-300,4.35,1305.00
             self.assertEqual(stats["total_deposits"], 7000.0)
             self.assertEqual(stats["total_withdrawals"], 1000.0)
             self.assertEqual(stats["net_cash_flow"], 6000.0)
-            self.assertEqual(stats["net_pnl"], 498.0)  # 500 - 2
-            # Account Balance = 10000 + 6000 + 498 = 16498.0
-            self.assertEqual(stats["account_balance"], 16498.0)
+            self.assertEqual(stats["net_pnl"], 500.0)
+            # Account Balance = 10000 + 6000 + 500 = 16500.0
+            self.assertEqual(stats["account_balance"], 16500.0)
             # Capital Base = 10000 + 7000 = 17000.0
-            # ROI = 498 / 17000 * 100 = 2.93%
-            self.assertEqual(stats["roi_pct"], 2.93)
+            # ROI = 500 / 17000 * 100 = 2.94%
+            self.assertEqual(stats["roi_pct"], 2.94)
 
             # 4. Delete manual transaction
             del_success = delete_cash_transaction(manual_record["transaction_id"])
@@ -795,7 +794,7 @@ Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount
 Deposits & Withdrawals,Data,EUR,2021-01-15,Wire In,5000.00
 Deposits & Withdrawals,Data,EUR,,Total,5000.00
 Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds,Comm/Fee,Realized P/L,Code
-Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O
+Trades,Data,Order,Stocks,EUR,SAN,"2021-01-20, 10:00:00",100,3.50,-350.00,-1.00,0.00,O
 """
             mock_req = MockRequest(csv_content.encode("utf-8"))
             result = asyncio.run(import_historical_statement(cast(Any, mock_req)))
@@ -814,7 +813,7 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
                 "Deposits & Withdrawals,Data,EUR,2021-01-15,Wire In,5000.00",
                 "Deposits & Withdrawals,Data,EUR,,Total,5000.00",
                 "Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds,Comm/Fee,Realized P/L,Code",
-                "Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.00,O",
+                'Trades,Data,Order,Stocks,EUR,SAN,"2021-01-20, 10:00:00",100,3.50,-350.00,-1.00,0.00,O',
             ]
             trades = parse_ibkr_activity_statement_csv(csv_lines)
             cash_txs = parse_csv_cash_transactions(csv_lines)
@@ -923,9 +922,9 @@ Trades,Data,Order,Stocks,EUR,SAN,2021-01-20, 10:00:00,100,3.50,-350.00,-1.00,0.0
         self.assertEqual(trade["duration"], "7m 14s")
         self.assertAlmostEqual(trade["avg_entry_price"], 0.54, places=2)
         self.assertAlmostEqual(trade["avg_exit_price"], 0.455, places=3)
-        self.assertAlmostEqual(trade["gross_pnl"], -18.00, places=2)
+        self.assertAlmostEqual(trade["gross_pnl"], -15.11, places=2)
         self.assertAlmostEqual(trade["commission"], 2.89, places=2)
-        self.assertAlmostEqual(trade["net_pnl"], -20.89, places=2)
+        self.assertAlmostEqual(trade["net_pnl"], -18.00, places=2)
         self.assertEqual(len(trade["fills"]), 3)
 
         # Test Forex / Cash conversion (must be BUY/SELL, never SHORT)
@@ -1240,6 +1239,165 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         ref_afternoon = datetime(2026, 10, 7, 8, 0, tzinfo=timezone.utc)
         next_daily_after = scheduler.calculate_next_daily_sync_time(ref_afternoon)
         self.assertEqual(next_daily_after, datetime(2026, 10, 8, 6, 0, tzinfo=timezone.utc))
+
+    def test_zero_quantity_and_grouped_statistics_consistency(self):
+        """Verifies zero quantity ghost trades are ignored and statistics are consistent between overview and detailed."""
+        trades = [
+            # Ghost trade with zero quantity (e.g. from non-trade section header or placeholder)
+            {
+                "ib_exec_id": "GHOST_1",
+                "trade_id": "GHOST_1",
+                "account_id": "U123",
+                "symbol": "GHOST",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 0.0,
+                "trade_price": 0.0,
+                "ib_commission": 0.0,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-08",
+                "trade_time": "",
+                "open_close_indicator": "O",
+            },
+            # Real Trade 1: AAPL Buy 10, Sell 10 (Win)
+            {
+                "ib_exec_id": "EXEC_1",
+                "trade_id": "T1",
+                "account_id": "U123",
+                "symbol": "AAPL",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 10.0,
+                "trade_price": 100.0,
+                "ib_commission": 1.0,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "10:00:00",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "EXEC_2",
+                "trade_id": "T2",
+                "account_id": "U123",
+                "symbol": "AAPL",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 10.0,
+                "trade_price": 110.0,
+                "ib_commission": 1.0,
+                "realized_pnl": 100.0,
+                "trade_date": "2026-10-01",
+                "trade_time": "11:00:00",
+                "open_close_indicator": "C",
+            },
+            # Real Trade 2: TSLA Buy 5, Sell 5 (Loss)
+            {
+                "ib_exec_id": "EXEC_3",
+                "trade_id": "T3",
+                "account_id": "U123",
+                "symbol": "TSLA",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 5.0,
+                "trade_price": 200.0,
+                "ib_commission": 1.0,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-02",
+                "trade_time": "14:00:00",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "EXEC_4",
+                "trade_id": "T4",
+                "account_id": "U123",
+                "symbol": "TSLA",
+                "asset_category": "STK",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 5.0,
+                "trade_price": 190.0,
+                "ib_commission": 1.0,
+                "realized_pnl": -50.0,
+                "trade_date": "2026-10-02",
+                "trade_time": "15:00:00",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(trades)
+
+        overview = get_overview_stats()
+        self.assertEqual(overview["total_trades"], 2)
+        self.assertEqual(overview["winning_trades"], 1)
+        self.assertEqual(overview["losing_trades"], 1)
+        self.assertEqual(overview["breakeven_trades"], 0)
+        self.assertEqual(overview["win_rate"], 50.0)
+        # Net PnL: Realized PnL (100 - 50 = 50.0)
+        self.assertEqual(overview["net_pnl"], 50.0)
+
+        detailed = get_detailed_stats()
+        self.assertEqual(detailed["overview"]["total_trades"], 2)
+        self.assertEqual(detailed["overview"]["net_pnl"], 50.0)
+        # Verify equity curve cumulative PnL matches overview Net PnL
+        self.assertEqual(detailed["equity_curve"][-1]["cumulative_pnl"], 50.0)
+        # Verify evolution cumulative PnL matches overview Net PnL
+        self.assertEqual(detailed["metric_evolution"]["day"][-1]["cumulative_pnl"], 50.0)
+
+    def test_open_positions_and_unrealized_pnl_in_db(self):
+        """Tests that open positions and unrealized PnL are saved to and queried from SQLite."""
+        from backend.database import get_latest_unrealized_pnl, get_open_positions, upsert_open_positions
+
+        positions = [
+            {
+                "account_id": "U12345",
+                "symbol": "RKLB",
+                "description": "ROCKET LAB USA INC",
+                "asset_category": "STK",
+                "currency": "USD",
+                "quantity": 10.0,
+                "cost_price": 14.65,
+                "cost_basis": 146.50,
+                "close_price": 25.47,
+                "position_value": 254.70,
+                "unrealized_pnl": 108.20,
+                "raw_unrealized_pnl": 108.20,
+                "report_date": "2026-10-08",
+            },
+            {
+                "account_id": "U12345",
+                "symbol": "ELAB",
+                "description": "ELEVATION ONCOLOGY",
+                "asset_category": "STK",
+                "currency": "USD",
+                "quantity": 20.0,
+                "cost_price": 5.0,
+                "cost_basis": 100.0,
+                "close_price": 2.0,
+                "position_value": 40.0,
+                "unrealized_pnl": -60.0,
+                "raw_unrealized_pnl": -60.0,
+                "report_date": "2026-10-08",
+            },
+        ]
+
+        count = upsert_open_positions(positions)
+        self.assertEqual(count, 2)
+
+        saved = get_open_positions()
+        self.assertEqual(len(saved), 2)
+        symbols = [p["symbol"] for p in saved]
+        self.assertIn("RKLB", symbols)
+        self.assertIn("ELAB", symbols)
+
+        total_unrealized = get_latest_unrealized_pnl()
+        self.assertEqual(total_unrealized, 48.20)
+
+        # Verify overview stats includes unrealized PnL from SQLite
+        overview = get_overview_stats()
+        self.assertEqual(overview["unrealized_pnl"], 48.20)
 
 
 if __name__ == "__main__":

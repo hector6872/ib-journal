@@ -112,7 +112,13 @@ const StatsPage = {
         const endDate = now.toISOString().split('T')[0];
         let start = new Date();
 
-        if (range === '1W') {
+        if (/^\d{4}$/.test(range)) {
+            const yr = parseInt(range, 10);
+            return {
+                startDate: `${yr}-01-01`,
+                endDate: `${yr}-12-31`
+            };
+        } else if (range === '1W') {
             start.setDate(now.getDate() - 7);
         } else if (range === '1M') {
             start.setMonth(now.getMonth() - 1);
@@ -218,12 +224,68 @@ const StatsPage = {
             : '<span class="sort-indicator active">▼</span>';
     },
 
+    getBracketNumericVal(bracketStr) {
+        if (!bracketStr) return 0;
+        const s = String(bracketStr).trim();
+        if (s.startsWith('<')) {
+            return -1;
+        }
+        if (s.startsWith('>')) {
+            const num = parseFloat(s.replace(/[^0-9.]/g, ''));
+            return isNaN(num) ? 999999999 : num + 0.001;
+        }
+        const cleaned = s.replace(/,/g, '');
+        const match = cleaned.match(/\d+(\.\d+)?/);
+        if (match) {
+            return parseFloat(match[0]) || 0;
+        }
+        return 0;
+    },
+
     sortData(tableTarget, dataList) {
         if (!dataList || !dataList.length) return [];
         const config = this.tableSort[tableTarget] || { col: 'net_pnl', dir: 'desc' };
         const { col, dir } = config;
         const sorted = [...dataList];
         sorted.sort((a, b) => {
+            // 1. Natural Sizing Bracket Sorting (Numeric range comparison)
+            if (col === 'bracket') {
+                const valA = a.min !== undefined && a.min !== null ? Number(a.min) : this.getBracketNumericVal(a.bracket);
+                const valB = b.min !== undefined && b.min !== null ? Number(b.min) : this.getBracketNumericVal(b.bracket);
+                if (valA !== valB) {
+                    return dir === 'asc' ? valA - valB : valB - valA;
+                }
+                const maxA = a.max !== undefined && a.max !== null ? Number(a.max) : valA;
+                const maxB = b.max !== undefined && b.max !== null ? Number(b.max) : valB;
+                return dir === 'asc' ? maxA - maxB : maxB - maxA;
+            }
+
+            // 2. Day of Week sorting (by calendar order Monday -> Sunday)
+            if (tableTarget === 'dow' && (col === 'day' || col === 'day_name' || col === 'day_index')) {
+                if (a.day_index !== undefined && b.day_index !== undefined) {
+                    return dir === 'asc' ? a.day_index - b.day_index : b.day_index - a.day_index;
+                }
+                const dayOrder = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7, 'lunes': 1, 'martes': 2, 'miércoles': 3, 'jueves': 4, 'viernes': 5, 'sábado': 6, 'domingo': 7, 'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7 };
+                const valA = dayOrder[String(a.day_name || a.day || a.short_name || '').toLowerCase()] || 0;
+                const valB = dayOrder[String(b.day_name || b.day || b.short_name || '').toLowerCase()] || 0;
+                return dir === 'asc' ? valA - valB : valB - valA;
+            }
+
+            // 3. Duration sorting (Scalp -> Day Trade -> Swing Trade)
+            if (tableTarget === 'duration' && col === 'duration') {
+                const durOrder = { 'scalp (<1h)': 1, 'day trade (<1d)': 2, 'swing trade (>1d)': 3 };
+                const valA = durOrder[String(a.duration || '').toLowerCase()] || 0;
+                const valB = durOrder[String(b.duration || '').toLowerCase()] || 0;
+                return dir === 'asc' ? valA - valB : valB - valA;
+            }
+
+            // 4. Time of Day sorting (00:00 -> 23:00)
+            if (tableTarget === 'tod' && (col === 'label' || col === 'hour')) {
+                const hourA = a.hour !== undefined ? Number(a.hour) : parseInt(a.label || '0', 10);
+                const hourB = b.hour !== undefined ? Number(b.hour) : parseInt(b.label || '0', 10);
+                return dir === 'asc' ? hourA - hourB : hourB - hourA;
+            }
+
             let valA = a[col];
             let valB = b[col];
             if (typeof valA === 'string' || typeof valB === 'string') {
@@ -385,10 +447,24 @@ const StatsPage = {
             ? (currentRolling.win_rate > 50 ? 'pnl-positive' : (currentRolling.win_rate < 50 ? 'pnl-negative' : 'pnl-neutral'))
             : 'pnl-neutral';
 
+        const currentYear = new Date().getFullYear();
+        const pastYears = (data.available_years || [])
+            .map(y => Number(y))
+            .filter(y => y < currentYear)
+            .sort((a, b) => a - b);
+
         container.innerHTML = `
             <div class="stats-main-container">
-                <!-- Top Statistics Bar with Date Range Filters & Timezone -->
+                <!-- Top Statistics Bar with Past Years, Date Range Filters & Timezone -->
                 <div class="stats-header-bar">
+                    ${pastYears.length > 0 ? `
+                    <div class="segmented-control" id="stats-year-filter">
+                        ${pastYears.map(y => `
+                            <button class="segmented-btn ${this.dateRange === String(y) ? 'active' : ''}" data-year="${y}">${y}</button>
+                        `).join('')}
+                    </div>
+                    ` : ''}
+
                     <div class="segmented-control" id="stats-date-range-filter">
                         <button class="segmented-btn ${this.dateRange === '1W' ? 'active' : ''}" data-range="1W">${sp.filter1W}</button>
                         <button class="segmented-btn ${this.dateRange === '1M' ? 'active' : ''}" data-range="1M">${sp.filter1M}</button>
@@ -412,7 +488,8 @@ const StatsPage = {
                     <!-- 1. Net Realized P&L -->
                     <div class="stat-card is-clickable" data-scroll-sec="sec-equity-curve">
                         <div class="stat-card-header">
-                            <span class="stat-card-label">${STRINGS.kpi.netPnl}</span>
+                            <span class="stat-card-label">${STRINGS.kpi.netRealizedPnl || STRINGS.kpi.netPnl}</span>
+                            ${this.renderInfoIcon(sp.tipNetPnl)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.net_pnl)}">
                             ${State.formatCurrency(ov.net_pnl || 0)}
@@ -468,6 +545,7 @@ const StatsPage = {
                     <div class="stat-card is-clickable" data-scroll-sec="sec-metric-evolution" data-scroll-metric="exp">
                         <div class="stat-card-header">
                             <span class="stat-card-label">${STRINGS.kpi.expectancy}</span>
+                            ${this.renderInfoIcon(sp.tipExpectancy)}
                         </div>
                         <span class="stat-card-value mono ${this.getPnlClass(ov.expectancy)}">
                             ${State.formatCurrency(ov.expectancy || 0)}
@@ -639,14 +717,14 @@ const StatsPage = {
                             <span class="cash-card-value mono ${this.getPnlClass(ov.account_balance)}">
                                 ${State.formatCurrency(ov.account_balance || 0)}
                             </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.accountEquitySub || 'Starting Capital + Net Flow + Realized P&L'}</span>
+                            <span class="cash-card-sub">Realized: ${State.formatCurrency(ov.realized_balance !== undefined ? ov.realized_balance : ov.account_balance)} · Open: ${State.formatCurrency(ov.unrealized_pnl || 0)}</span>
                         </div>
                         <div class="cash-card is-clickable" data-cash-modal="true">
-                            <span class="cash-card-label">${STRINGS.cash?.startingCapital || 'STARTING CAPITAL'}</span>
-                            <span class="cash-card-value mono pnl-neutral">
-                                ${State.formatCurrency(ov.starting_capital || 0)}
+                            <span class="cash-card-label">${STRINGS.cash?.unrealizedPnl || 'UNREALIZED P&L'}</span>
+                            <span class="cash-card-value mono ${this.getPnlClass(ov.unrealized_pnl || 0)}">
+                                ${State.formatCurrency(ov.unrealized_pnl || 0)}
                             </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.startingCapitalStatsSub || 'Configured baseline capital'}</span>
+                            <span class="cash-card-sub">${STRINGS.cash?.unrealizedPnlSub || 'Open positions valuation / MTM'}</span>
                         </div>
                         <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.netTransfersStats || 'NET CASH TRANSFERS'}</span>
@@ -660,14 +738,14 @@ const StatsPage = {
                             <span class="cash-card-value mono ${(ov.total_account_expenses || 0) > 0 ? 'pnl-negative' : 'pnl-neutral'}">
                                 -${State.currency}${(ov.total_account_expenses || 0).toFixed(2)}
                             </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.accountExpensesSub || 'OPRA, data fees, taxes & charges'}</span>
+                            <span class="cash-card-sub">${STRINGS.cash?.accountExpensesSub || 'Market subscriptions & fees'}</span>
                         </div>
                         <div class="cash-card is-clickable" data-scroll-sec="sec-equity-curve">
                             <span class="cash-card-label">${STRINGS.cash?.roi || 'RETURN ON CAPITAL (% ROI)'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.roi_pct)}">
                                 ${(ov.roi_pct || 0) > 0 ? '+' : ''}${(ov.roi_pct || 0).toFixed(2)}%
                             </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.roiSub || 'Realized P&L / Capital Base'}</span>
+                            <span class="cash-card-sub">${STRINGS.cash?.roiSub || 'Total P&L / Capital Base'}</span>
                         </div>
                     </div>
                 </div>
@@ -1152,19 +1230,9 @@ const StatsPage = {
                             <div class="stats-section-title-wrap">
                                 <span>${sp.perfByTodTitle}</span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div class="segmented-control" id="stats-tod-tz-control">
-                                    <button class="segmented-btn ${this.timezoneMode === 'local' ? 'active' : ''}" data-stats-tz="local" title="Local Time (Europe/Madrid / Browser)">
-                                        <span>${STRINGS.modal?.tzLocal || 'Local (CET)'}</span>
-                                    </button>
-                                    <button class="segmented-btn ${this.timezoneMode === 'market' ? 'active' : ''}" data-stats-tz="market" title="US Market Time (Wall Street EST/EDT)">
-                                        <span>${STRINGS.modal?.tzMarket || 'Market (EST)'}</span>
-                                    </button>
-                                </div>
-                                <div class="segmented-control">
-                                    <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
-                                    <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
-                                </div>
+                            <div class="segmented-control">
+                                <button class="segmented-btn ${this.viewModes.tod === 'chart' ? 'active' : ''}" data-view-target="tod" data-view-val="chart">${sp.chartView}</button>
+                                <button class="segmented-btn ${this.viewModes.tod === 'table' ? 'active' : ''}" data-view-target="tod" data-view-val="table">${sp.tableView}</button>
                             </div>
                         </div>
                         <div id="wrap-tod-chart" class="chart-canvas-box ${this.viewModes.tod === 'chart' ? '' : 'hidden'}">
@@ -1456,16 +1524,35 @@ const StatsPage = {
             });
         }
 
-        // Date range filter buttons
+        // Date range & Year filter buttons
         const rangeBtns = document.querySelectorAll('#stats-date-range-filter .segmented-btn');
+        const yearBtns = document.querySelectorAll('#stats-year-filter .segmented-btn');
+
         rangeBtns.forEach(btn => {
             btn.addEventListener('click', async () => {
                 const targetRange = btn.getAttribute('data-range') || 'ALL';
                 if (targetRange === this.dateRange && this.data) return;
 
                 rangeBtns.forEach(b => b.classList.remove('active'));
+                yearBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.dateRange = targetRange;
+                if (typeof SettingsManager !== 'undefined') {
+                    SettingsManager.set('stats_date_range', this.dateRange);
+                }
+                await this.load(false);
+            });
+        });
+
+        yearBtns.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const targetYear = btn.getAttribute('data-year');
+                if (!targetYear || (targetYear === this.dateRange && this.data)) return;
+
+                rangeBtns.forEach(b => b.classList.remove('active'));
+                yearBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.dateRange = targetYear;
                 if (typeof SettingsManager !== 'undefined') {
                     SettingsManager.set('stats_date_range', this.dateRange);
                 }

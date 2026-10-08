@@ -355,7 +355,10 @@ class IBKRFlexClient:
                     "trade_time": trade_time,
                     "trade_date_time": trade_datetime_iso,
                     "open_close_indicator": (
-                        attrs.get("openCloseIndicator") or attrs.get("code") or attrs.get("openClose") or "C"
+                        attrs.get("openCloseIndicator")
+                        or attrs.get("code")
+                        or attrs.get("openClose")
+                        or ("C" if abs(raw_pnl) > 1e-6 else ("O" if buy_sell == "BUY" else "C"))
                     ).upper(),
                     "order_type": (attrs.get("orderType") or attrs.get("order_type") or "MKT").upper(),
                     "exchange": (
@@ -474,3 +477,89 @@ class IBKRFlexClient:
         if txs:
             logger.info(f"Parsed {len(txs)} cash transactions from XML statement.")
         return txs
+
+    def parse_open_positions_xml(self, xml_content: str) -> List[Dict[str, Any]]:
+        """Parses XML statement extracting structured open positions."""
+        positions: List[Dict[str, Any]] = []
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse IBKR XML for open positions: {e}")
+            return []
+
+        base_currency = "EUR"
+        for node in root.iter("AccountInformation"):
+            base_currency = (node.attrib.get("baseCurrency") or "EUR").upper()
+
+        report_date = date.today().isoformat()
+        for node in root.iter("FlexStatement"):
+            rd = node.attrib.get("toDate") or node.attrib.get("reportDate")
+            if rd:
+                report_date = rd
+
+        for node in root.iter("OpenPosition"):
+            attrs = node.attrib
+            qty = float(attrs.get("position") or attrs.get("quantity") or 0.0)
+            if abs(qty) < 1e-6:
+                continue
+            raw_sym = attrs.get("symbol") or attrs.get("underlyingSymbol") or "UNKNOWN"
+            desc = attrs.get("description") or attrs.get("contractDescription") or ""
+            cat = (attrs.get("assetCategory") or attrs.get("secType") or "STK").upper()
+            norm_sym = normalize_symbol(raw_sym, desc, cat)
+            curr = (attrs.get("currency") or base_currency).upper()
+            fx_rate = float(attrs.get("fxRateToBase") or attrs.get("fxRate") or 1.0)
+
+            raw_unrealized = float(
+                attrs.get("fifoPnlUnrealized")
+                or attrs.get("unrealizedPnL")
+                or attrs.get("unrealizedPnl")
+                or attrs.get("markToMarketPnl")
+                or 0.0
+            )
+            unrealized = round(raw_unrealized * fx_rate, 4) if fx_rate > 0 else raw_unrealized
+            cost_price = float(attrs.get("costBasisPrice") or attrs.get("costPrice") or 0.0)
+            cost_basis = float(attrs.get("costBasisMoney") or attrs.get("costBasis") or 0.0)
+            close_price = float(attrs.get("markToMarketPrice") or attrs.get("closePrice") or 0.0)
+            position_value = float(attrs.get("positionValue") or 0.0)
+
+            positions.append(
+                {
+                    "account_id": attrs.get("accountId") or "",
+                    "symbol": norm_sym,
+                    "description": desc or norm_sym,
+                    "asset_category": cat,
+                    "currency": curr,
+                    "raw_currency": curr,
+                    "base_currency": base_currency,
+                    "fx_rate_to_base": fx_rate,
+                    "quantity": qty,
+                    "cost_price": cost_price,
+                    "cost_basis": cost_basis,
+                    "close_price": close_price,
+                    "position_value": position_value,
+                    "unrealized_pnl": unrealized,
+                    "raw_unrealized_pnl": raw_unrealized,
+                    "report_date": report_date,
+                }
+            )
+
+        if positions:
+            logger.info(f"Parsed {len(positions)} open positions from XML statement.")
+        return positions
+
+    def parse_unrealized_pnl_xml(self, xml_content: str) -> Optional[float]:
+        """Extracts total Unrealized P&L from XML statement or Flex Query."""
+        positions = self.parse_open_positions_xml(xml_content)
+        if positions:
+            return round(sum(p["unrealized_pnl"] for p in positions), 2)
+
+        try:
+            root = ET.fromstring(xml_content)
+            for node in root.iter("ChangeInNAV"):
+                attrs = node.attrib
+                mtm = attrs.get("markToMarket") or attrs.get("unrealizedPnL")
+                if mtm:
+                    return round(float(mtm), 2)
+        except Exception:
+            pass
+        return None

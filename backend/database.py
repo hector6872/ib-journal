@@ -660,10 +660,7 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         desc_upper = desc.upper()
 
         is_refund = raw_val > 0 and (
-            "REFUND" in desc_upper
-            or "REEMBOLSO" in desc_upper
-            or "REBATE" in desc_upper
-            or "ADJUSTMENT" in desc_upper
+            "REFUND" in desc_upper or "REEMBOLSO" in desc_upper or "REBATE" in desc_upper or "ADJUSTMENT" in desc_upper
         )
 
         is_negative = not is_refund and (
@@ -717,7 +714,11 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         else:
             amount = abs(raw_val)
             raw_amount = abs(float(raw_amt_val)) if raw_amt_val is not None else amount
-            tx_type = raw_type if raw_type in ("DEPOSIT", "DIVIDEND", "TRANSFER", "INTEREST", "FEE", "SUBSCRIPTION") else "DEPOSIT"
+            tx_type = (
+                raw_type
+                if raw_type in ("DEPOSIT", "DIVIDEND", "TRANSFER", "INTEREST", "FEE", "SUBSCRIPTION")
+                else "DEPOSIT"
+            )
 
         fx = float(tx.get("fx_rate_to_base") or 1.0)
         sanitized.append(
@@ -965,4 +966,3 @@ def get_latest_unrealized_pnl() -> float:
     except Exception as e:
         logger.warning(f"Failed to query unrealized PnL from open_positions: {e}")
     return 0.0
-

@@ -11,7 +11,7 @@ import glob
 import hashlib
 import logging
 import re
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
@@ -735,7 +735,6 @@ def parse_xml_open_positions(filepath: Path) -> List[Dict[str, Any]]:
     return positions
 
 
-
 def parse_csv_file(filepath: Path) -> List[Dict[str, Any]]:
     """
     Parses IBKR CSV exports supporting:
@@ -883,7 +882,15 @@ def parse_csv_cash_transactions(lines: List[str]) -> List[Dict[str, Any]]:
             sec_lower = section.lower()
 
             # Classification
-            if "tax" in sec_lower or "retenci" in sec_lower or "quellensteuer" in sec_lower or "withholding tax" in sec_lower or "WITHHOLDING" in desc_upper or " TAX" in desc_upper or desc_upper.endswith(" TAX"):
+            if (
+                "tax" in sec_lower
+                or "retenci" in sec_lower
+                or "quellensteuer" in sec_lower
+                or "withholding tax" in sec_lower
+                or "WITHHOLDING" in desc_upper
+                or " TAX" in desc_upper
+                or desc_upper.endswith(" TAX")
+            ):
                 tx_type = "WITHHOLDING TAX"
                 is_negative = True
             elif "dividend" in sec_lower or "DIVIDEND" in desc_upper:
@@ -1852,6 +1859,7 @@ def parse_csv_open_positions(lines: List[str]) -> List[Dict[str, Any]]:
             continue
 
         if row_type == "data" and in_open_pos and header_map:
+
             def get_col(keys: List[str], default: str = "") -> str:
                 for k in keys:
                     if k in header_map and header_map[k] < len(row):
@@ -1874,11 +1882,19 @@ def parse_csv_open_positions(lines: List[str]) -> List[Dict[str, Any]]:
 
             cost_price = clean_num(get_col(["cost price", "precio de coste", "precio coste", "cost basis price"]))
             cost_basis = clean_num(get_col(["cost basis", "base de coste", "base coste", "cost basis money"]))
-            close_price = clean_num(get_col(["close price", "precio de cierre", "precio cierre", "mark to market price", "mark price"]))
+            close_price = clean_num(
+                get_col(["close price", "precio de cierre", "precio cierre", "mark to market price", "mark price"])
+            )
             pos_val = clean_num(get_col(["value", "valor", "position value", "current value"]))
-            raw_unrealized = clean_num(get_col(["unrealized p/l", "p/l no realizado", "pnl no realizado", "unrealized pnl", "unrealized fifo p/l"]))
+            raw_unrealized = clean_num(
+                get_col(
+                    ["unrealized p/l", "p/l no realizado", "pnl no realizado", "unrealized pnl", "unrealized fifo p/l"]
+                )
+            )
             curr = get_col(["currency", "divisa", "moneda"], default=base_currency).upper()
-            cat = get_col(["asset category", "categoría del activo", "categoria del activo", "sectype"], default="STK").upper()
+            cat = get_col(
+                ["asset category", "categoría del activo", "categoria del activo", "sectype"], default="STK"
+            ).upper()
             if "STOCK" in cat or "ACCION" in cat or "ACCIONES" in cat:
                 cat = "STK"
             elif "OPTION" in cat or "OPCION" in cat or "OPCIONES" in cat:

@@ -530,8 +530,12 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     continue
                 wins = sum(1 for t in closed_group_trades if (t.get("net_pnl") or 0.0) > 0.005)
                 losses = sum(1 for t in closed_group_trades if (t.get("net_pnl") or 0.0) < -0.005)
-                g_profit = sum(float(t.get("net_pnl") or 0.0) for t in closed_group_trades if (t.get("net_pnl") or 0.0) > 0)
-                g_loss = abs(sum(float(t.get("net_pnl") or 0.0) for t in closed_group_trades if (t.get("net_pnl") or 0.0) < 0))
+                g_profit = sum(
+                    float(t.get("net_pnl") or 0.0) for t in closed_group_trades if (t.get("net_pnl") or 0.0) > 0
+                )
+                g_loss = abs(
+                    sum(float(t.get("net_pnl") or 0.0) for t in closed_group_trades if (t.get("net_pnl") or 0.0) < 0)
+                )
                 pnl = sum(float(t.get("net_pnl") or 0.0) for t in closed_group_trades)
                 cum_pnl += pnl
 
@@ -546,7 +550,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 series.append(
                     {
                         "period": k,
-                        "date": closed_group_trades[0].get("close_date") or closed_group_trades[0].get("trade_date") or "",
+                        "date": closed_group_trades[0].get("close_date")
+                        or closed_group_trades[0].get("trade_date")
+                        or "",
                         "pnl": round(pnl, 2),
                         "cumulative_pnl": round(cum_pnl, 2),
                         "win_rate": wr,
@@ -1043,7 +1049,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             dir_str = t.get("direction", "LONG").upper()
             cat = (t.get("asset_category") or "STK").upper()
             # Equities / Stocks in cash accounts are long-only
-            is_short = ("SHORT" in dir_str or "SELL CALL" in dir_str or "SELL PUT" in dir_str) if cat != "STK" else False
+            is_short = (
+                ("SHORT" in dir_str or "SELL CALL" in dir_str or "SELL PUT" in dir_str) if cat != "STK" else False
+            )
             s_key = "SHORT" if is_short else "LONG"
             net = float(t.get("net_pnl") or 0.0)
             side_data[s_key]["trades_count"] += 1
@@ -1968,8 +1976,12 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
         week_net_pnl += day_pnl
         week_trades_count += day_count
 
-    largest_win = max([float(t.get("net_pnl") or 0.0) for t in all_week_grouped if (t.get("net_pnl") or 0.0) > 0] or [0.0])
-    largest_loss = min([float(t.get("net_pnl") or 0.0) for t in all_week_grouped if (t.get("net_pnl") or 0.0) < 0] or [0.0])
+    largest_win = max(
+        [float(t.get("net_pnl") or 0.0) for t in all_week_grouped if (t.get("net_pnl") or 0.0) > 0] or [0.0]
+    )
+    largest_loss = min(
+        [float(t.get("net_pnl") or 0.0) for t in all_week_grouped if (t.get("net_pnl") or 0.0) < 0] or [0.0]
+    )
 
     return {
         "start_date": monday.isoformat(),

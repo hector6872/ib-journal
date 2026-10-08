@@ -563,4 +563,3 @@ class IBKRFlexClient:
         except Exception:
             pass
         return None
-

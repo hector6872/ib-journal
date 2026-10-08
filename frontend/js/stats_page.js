@@ -854,7 +854,189 @@ const StatsPage = {
                     </div>
                 </div>
 
-                <!-- 6. 2x2 Breakdowns Grid (Symbol, Tag, Day of Week, Time of Day) -->
+                <!-- 6. POSITION SIZING & RISK EXPOSURE (Stocks & Options) -->
+                <div class="stats-section-box" id="sec-position-sizing">
+                    <div class="stats-section-header">
+                        <div class="stats-section-title-wrap">
+                            <span>${sp.positionSizingTitle || 'POSITION SIZING & RISK EXPOSURE'}</span>
+                            ${this.renderInfoIcon(sp.tipPositionSizing)}
+                        </div>
+                    </div>
+
+                    <div class="stats-panels-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px;">
+                        <!-- Card 1: Stocks Position Sizing -->
+                        <div class="stats-panel" id="card-stk-sizing" style="padding: 16px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 12px;">
+                            <div class="stats-section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0;">
+                                <div class="stats-section-title-wrap">
+                                    <span>${sp.stocksSizingTitle || 'STOCKS POSITION SIZING'}</span>
+                                    ${this.renderInfoIcon(sp.tipStocksSizing || sp.tipPositionSizing)}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <!-- Dimension Toggle: Capital vs Shares -->
+                                    <div class="segmented-control" id="control-stk-sizing-dim">
+                                        <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'capital' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="capital">${sp.stockMetricCapital || 'Capital'} (${State.currency})</button>
+                                        <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'shares' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="shares">${sp.stockMetricShares || 'Shares'}</button>
+                                    </div>
+                                    <!-- View Toggle: Chart vs Table -->
+                                    <div class="segmented-control">
+                                        <button type="button" class="segmented-btn ${this.viewModes.stk_sizing === 'chart' ? 'active' : ''}" data-view-target="stk_sizing" data-view-val="chart">${sp.chartView}</button>
+                                        <button type="button" class="segmented-btn ${this.viewModes.stk_sizing === 'table' ? 'active' : ''}" data-view-target="stk_sizing" data-view-val="table">${sp.tableView}</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${sizingSummary ? `
+                                <div class="options-summary-subcard" style="padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
+                                        <div style="display: flex; gap: 6px; align-items: baseline;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
+                                            <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.stk_win_avg_shares > 0 ? `${sizingSummary.stk_win_avg_shares} ${sp.sharesUnit || 'shares'} (${State.currency}${sizingSummary.stk_win_avg_capital.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
+                                        </div>
+                                        <div style="display: flex; gap: 6px; align-items: baseline;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
+                                            <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.stk_loss_avg_shares > 0 ? `${sizingSummary.stk_loss_avg_shares} ${sp.sharesUnit || 'shares'} (${State.currency}${sizingSummary.stk_loss_avg_capital.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <!-- STOCKS: Capital Dimension Container -->
+                            <div id="dim-wrap-stk-capital" class="${this.sizingDimension.stock === 'capital' ? '' : 'hidden'}">
+                                <div id="wrap-stk_notional-chart" class="chart-container ${this.viewModes.stk_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                    <canvas id="chart-stk_notional"></canvas>
+                                </div>
+                                <div id="wrap-stk_notional-table" class="stats-table-wrapper ${this.viewModes.stk_sizing === 'table' ? '' : 'hidden'}">
+                                    <table class="institutional-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="sortable-th ${this.getSortThClass('stk_notional', 'bracket')}" data-sort-table="stk_notional" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('stk_notional', 'bracket')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_notional', 'trades_count')}" data-sort-table="stk_notional" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('stk_notional', 'trades_count')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_notional', 'win_rate')}" data-sort-table="stk_notional" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('stk_notional', 'win_rate')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_notional', 'profit_factor')}" data-sort-table="stk_notional" data-sort-col="profit_factor">PF ${this.getSortIndicator('stk_notional', 'profit_factor')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_notional', 'avg_trade_pnl')}" data-sort-table="stk_notional" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('stk_notional', 'avg_trade_pnl')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_notional', 'net_pnl')}" data-sort-table="stk_notional" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('stk_notional', 'net_pnl')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-table-stk_notional">
+                                            ${this.buildSizingTableRows(this.sortData('stk_notional', stkNotional))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- STOCKS: Shares Dimension Container -->
+                            <div id="dim-wrap-stk-shares" class="${this.sizingDimension.stock === 'shares' ? '' : 'hidden'}">
+                                <div id="wrap-stk_shares-chart" class="chart-container ${this.viewModes.stk_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                    <canvas id="chart-stk_shares"></canvas>
+                                </div>
+                                <div id="wrap-stk_shares-table" class="stats-table-wrapper ${this.viewModes.stk_sizing === 'table' ? '' : 'hidden'}">
+                                    <table class="institutional-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="sortable-th ${this.getSortThClass('stk_shares', 'bracket')}" data-sort-table="stk_shares" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('stk_shares', 'bracket')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_shares', 'trades_count')}" data-sort-table="stk_shares" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('stk_shares', 'trades_count')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_shares', 'win_rate')}" data-sort-table="stk_shares" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('stk_shares', 'win_rate')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_shares', 'profit_factor')}" data-sort-table="stk_shares" data-sort-col="profit_factor">PF ${this.getSortIndicator('stk_shares', 'profit_factor')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_shares', 'avg_trade_pnl')}" data-sort-table="stk_shares" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('stk_shares', 'avg_trade_pnl')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('stk_shares', 'net_pnl')}" data-sort-table="stk_shares" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('stk_shares', 'net_pnl')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-table-stk_shares">
+                                            ${this.buildSizingTableRows(this.sortData('stk_shares', stkShares))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Options Position Sizing -->
+                        <div class="stats-panel" id="card-opt-sizing" style="padding: 16px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 12px;">
+                            <div class="stats-section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0;">
+                                <div class="stats-section-title-wrap">
+                                    <span>${sp.optionsSizingTitle || 'OPTIONS POSITION SIZING'}</span>
+                                    ${this.renderInfoIcon(sp.tipOptionsSizing || sp.tipPositionSizing)}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <!-- Dimension Toggle: Premium vs Contracts -->
+                                    <div class="segmented-control" id="control-opt-sizing-dim">
+                                        <button type="button" class="segmented-btn ${this.sizingDimension.option === 'premium' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="premium">${sp.optionMetricPremium || 'Total Premium'} (${State.currency})</button>
+                                        <button type="button" class="segmented-btn ${this.sizingDimension.option === 'contracts' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="contracts">${sp.optionMetricContracts || 'Contracts'}</button>
+                                    </div>
+                                    <!-- View Toggle: Chart vs Table -->
+                                    <div class="segmented-control">
+                                        <button type="button" class="segmented-btn ${this.viewModes.opt_sizing === 'chart' ? 'active' : ''}" data-view-target="opt_sizing" data-view-val="chart">${sp.chartView}</button>
+                                        <button type="button" class="segmented-btn ${this.viewModes.opt_sizing === 'table' ? 'active' : ''}" data-view-target="opt_sizing" data-view-val="table">${sp.tableView}</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${sizingSummary ? `
+                                <div class="options-summary-subcard" style="padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
+                                        <div style="display: flex; gap: 6px; align-items: baseline;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
+                                            <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.opt_win_avg_contracts > 0 ? `${sizingSummary.opt_win_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.currency}${sizingSummary.opt_win_avg_premium.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
+                                        </div>
+                                        <div style="display: flex; gap: 6px; align-items: baseline;">
+                                            <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
+                                            <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.opt_loss_avg_contracts > 0 ? `${sizingSummary.opt_loss_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.currency}${sizingSummary.opt_loss_avg_premium.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <!-- OPTIONS: Premium Dimension Container -->
+                            <div id="dim-wrap-opt-premium" class="${this.sizingDimension.option === 'premium' ? '' : 'hidden'}">
+                                <div id="wrap-opt_premium-chart" class="chart-container ${this.viewModes.opt_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                    <canvas id="chart-opt_premium"></canvas>
+                                </div>
+                                <div id="wrap-opt_premium-table" class="stats-table-wrapper ${this.viewModes.opt_sizing === 'table' ? '' : 'hidden'}">
+                                    <table class="institutional-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="sortable-th ${this.getSortThClass('opt_premium', 'bracket')}" data-sort-table="opt_premium" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('opt_premium', 'bracket')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_premium', 'trades_count')}" data-sort-table="opt_premium" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('opt_premium', 'trades_count')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_premium', 'win_rate')}" data-sort-table="opt_premium" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('opt_premium', 'win_rate')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_premium', 'profit_factor')}" data-sort-table="opt_premium" data-sort-col="profit_factor">PF ${this.getSortIndicator('opt_premium', 'profit_factor')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_premium', 'avg_trade_pnl')}" data-sort-table="opt_premium" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('opt_premium', 'avg_trade_pnl')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_premium', 'net_pnl')}" data-sort-table="opt_premium" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('opt_premium', 'net_pnl')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-table-opt_premium">
+                                            ${this.buildSizingTableRows(this.sortData('opt_premium', optPremium))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- OPTIONS: Contracts Dimension Container -->
+                            <div id="dim-wrap-opt-contracts" class="${this.sizingDimension.option === 'contracts' ? '' : 'hidden'}">
+                                <div id="wrap-opt_contracts-chart" class="chart-container ${this.viewModes.opt_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
+                                    <canvas id="chart-opt_contracts"></canvas>
+                                </div>
+                                <div id="wrap-opt_contracts-table" class="stats-table-wrapper ${this.viewModes.opt_sizing === 'table' ? '' : 'hidden'}">
+                                    <table class="institutional-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="sortable-th ${this.getSortThClass('opt_contracts', 'bracket')}" data-sort-table="opt_contracts" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('opt_contracts', 'bracket')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_contracts', 'trades_count')}" data-sort-table="opt_contracts" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('opt_contracts', 'trades_count')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_contracts', 'win_rate')}" data-sort-table="opt_contracts" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('opt_contracts', 'win_rate')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_contracts', 'profit_factor')}" data-sort-table="opt_contracts" data-sort-col="profit_factor">PF ${this.getSortIndicator('opt_contracts', 'profit_factor')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_contracts', 'avg_trade_pnl')}" data-sort-table="opt_contracts" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('opt_contracts', 'avg_trade_pnl')}</th>
+                                                <th class="sortable-th ${this.getSortThClass('opt_contracts', 'net_pnl')}" data-sort-table="opt_contracts" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('opt_contracts', 'net_pnl')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-table-opt_contracts">
+                                            ${this.buildSizingTableRows(this.sortData('opt_contracts', optContracts))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. 2x2 Breakdowns Grid (Symbol, Tag, Day of Week, Time of Day) -->
                 <div class="breakdowns-2x2-grid">
                     <!-- P&L by Symbol -->
                     <div class="stats-section-box" id="sec-pnl-symbol">
@@ -1061,32 +1243,14 @@ const StatsPage = {
                     </div>
                 </div>
 
-                <!-- 7. Category Allocation & Long/Short Side Tables -->
+                <!-- 7. Long/Short, Options Strategy & Category Allocation Tables -->
                 <div class="stats-tables-grid">
+                    <!-- 1. Long vs Short Breakdown -->
                     <div class="stats-panel">
-                        <div class="section-header">
-                            <h3 class="section-title">${sp.categoryTableTitle}</h3>
-                        </div>
-                        <div class="stats-table-wrapper">
-                            <table class="institutional-table">
-                                <thead>
-                                    <tr>
-                                        <th class="sortable-th ${this.getSortThClass('category', 'category')}" data-sort-table="category" data-sort-col="category">${sp.colCategory} ${this.getSortIndicator('category', 'category')}</th>
-                                        <th class="sortable-th ${this.getSortThClass('category', 'trades_count')}" data-sort-table="category" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('category', 'trades_count')}</th>
-                                        <th class="sortable-th ${this.getSortThClass('category', 'win_rate')}" data-sort-table="category" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('category', 'win_rate')}</th>
-                                        <th class="sortable-th ${this.getSortThClass('category', 'net_pnl')}" data-sort-table="category" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('category', 'net_pnl')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-table-category">
-                                    ${this.buildCategoryTableRows(this.sortData('category', categories))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div class="stats-panel">
-                        <div class="section-header">
-                            <h3 class="section-title">${sp.sideTableTitle}</h3>
+                        <div class="stats-section-header">
+                            <div class="stats-section-title-wrap">
+                                <span>${sp.sideTableTitle}</span>
+                            </div>
                         </div>
                         <div class="stats-table-wrapper">
                             <table class="institutional-table">
@@ -1105,10 +1269,12 @@ const StatsPage = {
                         </div>
                     </div>
 
-                    <!-- Options Strategy Breakdown (Long Calls, Long Puts, Short Calls, Short Puts) -->
+                    <!-- 2. Options Strategy Breakdown (Long Calls, Long Puts, Short Calls, Short Puts) -->
                     <div class="stats-panel">
-                        <div class="section-header">
-                            <h3 class="section-title">${sp.optionsTableTitle || 'Options Strategy Breakdown'}</h3>
+                        <div class="stats-section-header">
+                            <div class="stats-section-title-wrap">
+                                <span>${sp.optionsTableTitle || 'OPTIONS STRATEGY BREAKDOWN'}</span>
+                            </div>
                         </div>
                         <div class="stats-table-wrapper">
                             <table class="institutional-table">
@@ -1177,185 +1343,27 @@ const StatsPage = {
                         ` : ''}
                     </div>
 
-                    <!-- 14. POSITION SIZING & RISK EXPOSURE (Stocks & Options) -->
-                    <div class="stats-panel full-width" style="grid-column: 1 / -1;" id="sec-position-sizing">
-                        <div class="section-header" style="margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <h3 class="section-title">${sp.positionSizingTitle || 'POSITION SIZING & RISK EXPOSURE'}</h3>
-                                ${this.renderInfoIcon(sp.tipPositionSizing)}
+                    <!-- 3. Asset Category Allocation -->
+                    <div class="stats-panel">
+                        <div class="stats-section-header">
+                            <div class="stats-section-title-wrap">
+                                <span>${sp.categoryTableTitle}</span>
                             </div>
                         </div>
-
-                        <div class="stats-panels-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px;">
-                            <!-- Card 1: Stocks Position Sizing -->
-                            <div class="stats-panel" id="card-stk-sizing" style="padding: 16px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 12px;">
-                                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <h4 style="font-size: 13px; font-weight: 700; color: var(--text-main); margin: 0;">${sp.stocksSizingTitle || 'Stocks Position Sizing'}</h4>
-                                        ${this.renderInfoIcon(sp.tipStocksSizing || sp.tipPositionSizing)}
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                        <!-- Dimension Toggle: Capital vs Shares -->
-                                        <div class="segmented-control" id="control-stk-sizing-dim">
-                                            <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'capital' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="capital">${sp.stockMetricCapital || 'Capital'} (${State.currency})</button>
-                                            <button type="button" class="segmented-btn ${this.sizingDimension.stock === 'shares' ? 'active' : ''}" data-sizing-dim="stock" data-dim-val="shares">${sp.stockMetricShares || 'Shares'}</button>
-                                        </div>
-                                        <!-- View Toggle: Chart vs Table -->
-                                        <div class="segmented-control">
-                                            <button type="button" class="segmented-btn ${this.viewModes.stk_sizing === 'chart' ? 'active' : ''}" data-view-target="stk_sizing" data-view-val="chart">${sp.chartView}</button>
-                                            <button type="button" class="segmented-btn ${this.viewModes.stk_sizing === 'table' ? 'active' : ''}" data-view-target="stk_sizing" data-view-val="table">${sp.tableView}</button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                ${sizingSummary ? `
-                                    <div class="options-summary-subcard" style="padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
-                                            <div style="display: flex; gap: 6px; align-items: baseline;">
-                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
-                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.stk_win_avg_shares > 0 ? `${sizingSummary.stk_win_avg_shares} ${sp.sharesUnit || 'shares'} (${State.currency}${sizingSummary.stk_win_avg_capital.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
-                                            </div>
-                                            <div style="display: flex; gap: 6px; align-items: baseline;">
-                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
-                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.stk_loss_avg_shares > 0 ? `${sizingSummary.stk_loss_avg_shares} ${sp.sharesUnit || 'shares'} (${State.currency}${sizingSummary.stk_loss_avg_capital.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ` : ''}
-
-                                <!-- STOCKS: Capital Dimension Container -->
-                                <div id="dim-wrap-stk-capital" class="${this.sizingDimension.stock === 'capital' ? '' : 'hidden'}">
-                                    <div id="wrap-stk_notional-chart" class="chart-container ${this.viewModes.stk_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
-                                        <canvas id="chart-stk_notional"></canvas>
-                                    </div>
-                                    <div id="wrap-stk_notional-table" class="stats-table-wrapper ${this.viewModes.stk_sizing === 'table' ? '' : 'hidden'}">
-                                        <table class="institutional-table">
-                                            <thead>
-                                                <tr>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'bracket')}" data-sort-table="stk_notional" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('stk_notional', 'bracket')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'trades_count')}" data-sort-table="stk_notional" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('stk_notional', 'trades_count')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'win_rate')}" data-sort-table="stk_notional" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('stk_notional', 'win_rate')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'profit_factor')}" data-sort-table="stk_notional" data-sort-col="profit_factor">PF ${this.getSortIndicator('stk_notional', 'profit_factor')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'avg_trade_pnl')}" data-sort-table="stk_notional" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('stk_notional', 'avg_trade_pnl')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_notional', 'net_pnl')}" data-sort-table="stk_notional" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('stk_notional', 'net_pnl')}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="tbody-table-stk_notional">
-                                                ${this.buildSizingTableRows(this.sortData('stk_notional', stkNotional))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                <!-- STOCKS: Shares Dimension Container -->
-                                <div id="dim-wrap-stk-shares" class="${this.sizingDimension.stock === 'shares' ? '' : 'hidden'}">
-                                    <div id="wrap-stk_shares-chart" class="chart-container ${this.viewModes.stk_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
-                                        <canvas id="chart-stk_shares"></canvas>
-                                    </div>
-                                    <div id="wrap-stk_shares-table" class="stats-table-wrapper ${this.viewModes.stk_sizing === 'table' ? '' : 'hidden'}">
-                                        <table class="institutional-table">
-                                            <thead>
-                                                <tr>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'bracket')}" data-sort-table="stk_shares" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('stk_shares', 'bracket')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'trades_count')}" data-sort-table="stk_shares" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('stk_shares', 'trades_count')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'win_rate')}" data-sort-table="stk_shares" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('stk_shares', 'win_rate')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'profit_factor')}" data-sort-table="stk_shares" data-sort-col="profit_factor">PF ${this.getSortIndicator('stk_shares', 'profit_factor')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'avg_trade_pnl')}" data-sort-table="stk_shares" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('stk_shares', 'avg_trade_pnl')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('stk_shares', 'net_pnl')}" data-sort-table="stk_shares" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('stk_shares', 'net_pnl')}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="tbody-table-stk_shares">
-                                                ${this.buildSizingTableRows(this.sortData('stk_shares', stkShares))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Card 2: Options Position Sizing -->
-                            <div class="stats-panel" id="card-opt-sizing" style="padding: 16px; background: var(--bg-card-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 12px;">
-                                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <h4 style="font-size: 13px; font-weight: 700; color: var(--text-main); margin: 0;">${sp.optionsSizingTitle || 'Options Position Sizing'}</h4>
-                                        ${this.renderInfoIcon(sp.tipOptionsSizing || sp.tipPositionSizing)}
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                        <!-- Dimension Toggle: Premium vs Contracts -->
-                                        <div class="segmented-control" id="control-opt-sizing-dim">
-                                            <button type="button" class="segmented-btn ${this.sizingDimension.option === 'premium' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="premium">${sp.optionMetricPremium || 'Total Premium'} (${State.currency})</button>
-                                            <button type="button" class="segmented-btn ${this.sizingDimension.option === 'contracts' ? 'active' : ''}" data-sizing-dim="option" data-dim-val="contracts">${sp.optionMetricContracts || 'Contracts'}</button>
-                                        </div>
-                                        <!-- View Toggle: Chart vs Table -->
-                                        <div class="segmented-control">
-                                            <button type="button" class="segmented-btn ${this.viewModes.opt_sizing === 'chart' ? 'active' : ''}" data-view-target="opt_sizing" data-view-val="chart">${sp.chartView}</button>
-                                            <button type="button" class="segmented-btn ${this.viewModes.opt_sizing === 'table' ? 'active' : ''}" data-view-target="opt_sizing" data-view-val="table">${sp.tableView}</button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                ${sizingSummary ? `
-                                    <div class="options-summary-subcard" style="padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-xs);">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
-                                            <div style="display: flex; gap: 6px; align-items: baseline;">
-                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
-                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.opt_win_avg_contracts > 0 ? `${sizingSummary.opt_win_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.currency}${sizingSummary.opt_win_avg_premium.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
-                                            </div>
-                                            <div style="display: flex; gap: 6px; align-items: baseline;">
-                                                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
-                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.opt_loss_avg_contracts > 0 ? `${sizingSummary.opt_loss_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.currency}${sizingSummary.opt_loss_avg_premium.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ` : ''}
-
-                                <!-- OPTIONS: Premium Dimension Container -->
-                                <div id="dim-wrap-opt-premium" class="${this.sizingDimension.option === 'premium' ? '' : 'hidden'}">
-                                    <div id="wrap-opt_premium-chart" class="chart-container ${this.viewModes.opt_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
-                                        <canvas id="chart-opt_premium"></canvas>
-                                    </div>
-                                    <div id="wrap-opt_premium-table" class="stats-table-wrapper ${this.viewModes.opt_sizing === 'table' ? '' : 'hidden'}">
-                                        <table class="institutional-table">
-                                            <thead>
-                                                <tr>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'bracket')}" data-sort-table="opt_premium" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('opt_premium', 'bracket')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'trades_count')}" data-sort-table="opt_premium" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('opt_premium', 'trades_count')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'win_rate')}" data-sort-table="opt_premium" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('opt_premium', 'win_rate')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'profit_factor')}" data-sort-table="opt_premium" data-sort-col="profit_factor">PF ${this.getSortIndicator('opt_premium', 'profit_factor')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'avg_trade_pnl')}" data-sort-table="opt_premium" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('opt_premium', 'avg_trade_pnl')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_premium', 'net_pnl')}" data-sort-table="opt_premium" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('opt_premium', 'net_pnl')}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="tbody-table-opt_premium">
-                                                ${this.buildSizingTableRows(this.sortData('opt_premium', optPremium))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                <!-- OPTIONS: Contracts Dimension Container -->
-                                <div id="dim-wrap-opt-contracts" class="${this.sizingDimension.option === 'contracts' ? '' : 'hidden'}">
-                                    <div id="wrap-opt_contracts-chart" class="chart-container ${this.viewModes.opt_sizing === 'chart' ? '' : 'hidden'}" style="height: 240px;">
-                                        <canvas id="chart-opt_contracts"></canvas>
-                                    </div>
-                                    <div id="wrap-opt_contracts-table" class="stats-table-wrapper ${this.viewModes.opt_sizing === 'table' ? '' : 'hidden'}">
-                                        <table class="institutional-table">
-                                            <thead>
-                                                <tr>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'bracket')}" data-sort-table="opt_contracts" data-sort-col="bracket">${sp.colBracket} ${this.getSortIndicator('opt_contracts', 'bracket')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'trades_count')}" data-sort-table="opt_contracts" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('opt_contracts', 'trades_count')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'win_rate')}" data-sort-table="opt_contracts" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('opt_contracts', 'win_rate')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'profit_factor')}" data-sort-table="opt_contracts" data-sort-col="profit_factor">PF ${this.getSortIndicator('opt_contracts', 'profit_factor')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'avg_trade_pnl')}" data-sort-table="opt_contracts" data-sort-col="avg_trade_pnl">${sp.colAvgTradePnl} ${this.getSortIndicator('opt_contracts', 'avg_trade_pnl')}</th>
-                                                    <th class="sortable-th ${this.getSortThClass('opt_contracts', 'net_pnl')}" data-sort-table="opt_contracts" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('opt_contracts', 'net_pnl')}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="tbody-table-opt_contracts">
-                                                ${this.buildSizingTableRows(this.sortData('opt_contracts', optContracts))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="stats-table-wrapper">
+                            <table class="institutional-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'category')}" data-sort-table="category" data-sort-col="category">${sp.colCategory} ${this.getSortIndicator('category', 'category')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'trades_count')}" data-sort-table="category" data-sort-col="trades_count">${sp.colTrades} ${this.getSortIndicator('category', 'trades_count')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'win_rate')}" data-sort-table="category" data-sort-col="win_rate">${sp.colWinRate} ${this.getSortIndicator('category', 'win_rate')}</th>
+                                        <th class="sortable-th ${this.getSortThClass('category', 'net_pnl')}" data-sort-table="category" data-sort-col="net_pnl">${sp.colNetPnl} ${this.getSortIndicator('category', 'net_pnl')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-table-category">
+                                    ${this.buildCategoryTableRows(this.sortData('category', categories))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

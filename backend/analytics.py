@@ -36,7 +36,7 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         COALESCE(MAX(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) > 0 THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_win,
         COALESCE(MIN(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) < 0 THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_loss
     FROM trades
-    WHERE 1=1
+    WHERE asset_category NOT IN ('CASH', 'FX')
     """
     params = []
     if start_date:
@@ -1414,10 +1414,10 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
     query = """
     SELECT
         trade_date,
-        COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
+        COUNT(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 END) as trades_count,
         COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as net_pnl,
-        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
+        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as wins,
+        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as losses
     FROM trades
     WHERE trade_date BETWEEN ? AND ?
     GROUP BY trade_date
@@ -1476,11 +1476,11 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
     query = """
     SELECT
         trade_date,
-        COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
+        COUNT(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 END) as trades_count,
         COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as net_pnl,
         COALESCE(SUM(ib_commission), 0.0) as commissions,
-        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
+        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as wins,
+        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) AND asset_category NOT IN ('CASH', 'FX') THEN 1 ELSE 0 END), 0) as losses
     FROM trades
     WHERE trade_date BETWEEN ? AND ?
     GROUP BY trade_date

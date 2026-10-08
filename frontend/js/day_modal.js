@@ -368,8 +368,10 @@ const DayModal = {
         }
 
         // Totals calculation
-        const closedRawTrades = rawTrades.filter(t => (t.open_close_indicator || '').toUpperCase() === 'C' || (t.realized_pnl !== 0 && t.realized_pnl !== null && t.realized_pnl !== undefined));
-        const closedGrouped = groupedTrades.filter(g => g.status === 'CLOSED');
+        const tradingRawTrades = rawTrades.filter(t => (t.asset_category || '').toUpperCase() !== 'CASH' && (t.asset_category || '').toUpperCase() !== 'FX');
+        const closedRawTrades = tradingRawTrades.filter(t => (t.open_close_indicator || '').toUpperCase() === 'C' || (t.realized_pnl !== 0 && t.realized_pnl !== null && t.realized_pnl !== undefined));
+        const tradingGrouped = groupedTrades.filter(g => (g.asset_category || '').toUpperCase() !== 'CASH' && (g.asset_category || '').toUpperCase() !== 'FX' && g.direction !== 'EXCHANGE');
+        const closedGrouped = tradingGrouped.filter(g => g.status === 'CLOSED');
 
         let grossPnl = closedRawTrades.reduce((acc, t) => acc + (t.realized_pnl || 0), 0);
         if (Math.abs(grossPnl) < 1e-6 && closedGrouped.length > 0) {
@@ -406,7 +408,7 @@ const DayModal = {
                 </div>
                 <div class="modal-kpi-card">
                     <span class="modal-kpi-label">${STRINGS.modal?.summaryCount || 'Round-Trip Trades'}</span>
-                    <span class="modal-kpi-val mono">${groupedTrades.length} <span class="modal-kpi-sub">(${rawTrades.length} fills)</span></span>
+                    <span class="modal-kpi-val mono">${tradingGrouped.length} <span class="modal-kpi-sub">(${tradingRawTrades.length} fills)</span></span>
                 </div>
                 <div class="modal-kpi-card">
                     <span class="modal-kpi-label">${STRINGS.modal?.summaryWinRate || 'Win Rate'}</span>
@@ -425,7 +427,7 @@ const DayModal = {
                     <button class="segmented-btn ${isGroupedView ? 'active' : ''}" id="btn-view-grouped">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
                         <span>${STRINGS.modal?.viewGrouped || 'Grouped Trades'}</span>
-                        <span class="badge-count">${groupedTrades.length}</span>
+                        <span class="badge-count">${tradingGrouped.length > 0 && tradingGrouped.length !== groupedTrades.length ? `${tradingGrouped.length} + ${groupedTrades.length - tradingGrouped.length} FX` : groupedTrades.length}</span>
                     </button>
                 </div>
 
@@ -489,22 +491,23 @@ const DayModal = {
     },
 
     renderGroupedTradesHtml(groupedTrades) {
+        let tradingIndex = groupedTrades.filter(g => (g.asset_category || '').toUpperCase() !== 'CASH' && (g.asset_category || '').toUpperCase() !== 'FX' && g.direction !== 'EXCHANGE').length;
+
         return `
             <div class="grouped-trades-container">
                 ${groupedTrades.map((t, idx) => {
-                    const isExpanded = this.expandedTradeIds.has(idx);
-                    const dirInfo = this.getDirectionBadgeInfo(t.direction);
-                    const isWin = t.result === 'WIN';
-                    const isLoss = t.result === 'LOSS';
-                    const isOpen = t.status === 'OPEN' || t.result === 'OPEN';
-                    const tradeNumber = groupedTrades.length - idx;
+                    const isCash = (t.asset_category || '').toUpperCase() === 'CASH' || (t.asset_category || '').toUpperCase() === 'FX' || t.direction === 'EXCHANGE';
+                    const isWin = !isCash && t.result === 'WIN';
+                    const isLoss = !isCash && t.result === 'LOSS';
+                    const isOpen = !isCash && (t.status === 'OPEN' || t.result === 'OPEN');
+                    const tradeNumber = isCash ? 'FX' : `#${tradingIndex--}`;
 
-                    const resultBadgeClass = isOpen ? 'badge-res-open' : (isWin ? 'badge-res-win' : (isLoss ? 'badge-res-loss' : 'badge-res-be'));
-                    const resultLabel = isOpen ? (STRINGS.modal?.open || 'OPEN') : (isWin ? (STRINGS.modal?.win || 'WIN') : (isLoss ? (STRINGS.modal?.loss || 'LOSS') : (STRINGS.modal?.breakeven || 'BE')));
+                    const resultBadgeClass = isCash ? 'badge-res-be' : (isOpen ? 'badge-res-open' : (isWin ? 'badge-res-win' : (isLoss ? 'badge-res-loss' : 'badge-res-be')));
+                    const resultLabel = isCash ? (STRINGS.modal?.converted || 'CONVERTED') : (isOpen ? (STRINGS.modal?.open || 'OPEN') : (isWin ? (STRINGS.modal?.win || 'WIN') : (isLoss ? (STRINGS.modal?.loss || 'LOSS') : (STRINGS.modal?.breakeven || 'BE'))));
 
                     const pnlVal = t.net_pnl || 0;
-                    const pnlClass = isOpen ? 'pnl-neutral' : State.getPnlClass(pnlVal);
-                    const pnlDisplay = isOpen && pnlVal === 0 ? '<span style="color: var(--text-muted); font-size: 11px;">(Open)</span>' : State.formatCurrency(pnlVal);
+                    const pnlClass = isCash ? (pnlVal !== 0 ? State.getPnlClass(pnlVal) : 'pnl-neutral') : (isOpen ? 'pnl-neutral' : State.getPnlClass(pnlVal));
+                    const pnlDisplay = isCash ? (pnlVal !== 0 ? State.formatCurrency(pnlVal) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>') : (isOpen && pnlVal === 0 ? '<span style="color: var(--text-muted); font-size: 11px;">(Open)</span>' : State.formatCurrency(pnlVal));
 
                     const curr = t.raw_currency || t.currency || '';
                     const currSym = curr === 'USD' ? '$' : (curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : (curr ? `${curr} ` : '')));
@@ -515,24 +518,26 @@ const DayModal = {
                     const openTime = this.formatTime(t.open_time, this.currentDate);
                     const closeTime = t.close_time ? this.formatTime(t.close_time, this.currentDate) : null;
                     const tzSuffix = this.timezoneMode === 'local' ? 'CET' : 'EST';
-                    const durationStr = t.duration || (closeTime ? `${openTime} → ${closeTime} (${tzSuffix})` : `${openTime} (Open)`);
+                    const durationStr = isCash ? `${openTime} (${STRINGS.modal?.instant || 'Instant'})` : (t.duration || (closeTime ? `${openTime} → ${closeTime} (${tzSuffix})` : `${openTime} (Open)`));
                     const fillsCount = (t.fills || []).length;
                     const fillsLabel = fillsCount === 1 ? `1 ${STRINGS.modal?.fillSingle || 'fill'}` : `${fillsCount} ${STRINGS.modal?.fills || 'fills'}`;
 
                     // Sub-table of fills (numbered from bottom to top)
                     const fillsRowsHtml = (t.fills || []).map((f, fIdx) => {
                         const isBuy = (f.buy_sell || '').toUpperCase() === 'BUY';
-                        const isCash = (f.asset_category || t.asset_category || '').toUpperCase() === 'CASH' || (f.asset_category || t.asset_category || '').toUpperCase() === 'FX';
+                        const isCashFill = (f.asset_category || t.asset_category || '').toUpperCase() === 'CASH' || (f.asset_category || t.asset_category || '').toUpperCase() === 'FX';
                         const fPnl = (f.realized_pnl || 0) - (f.ib_commission || 0);
-                        const fIsOpen = (f.open_close_indicator || '').toUpperCase() === 'O' && (!f.realized_pnl);
+                        const fIsOpen = !isCashFill && (f.open_close_indicator || '').toUpperCase() === 'O' && (!f.realized_pnl);
                         const fPnlClass = fIsOpen ? 'pnl-neutral' : State.getPnlClass(fPnl);
-                        const fPnlDisplay = fIsOpen ? '<span style="color: var(--text-muted); font-size: 11px;">(Entry)</span>' : State.formatCurrency(fPnl);
+                        const fPnlDisplay = isCashFill
+                            ? (fPnl !== 0 ? State.formatCurrency(fPnl) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>')
+                            : (fIsOpen ? '<span style="color: var(--text-muted); font-size: 11px;">(Entry)</span>' : State.formatCurrency(fPnl));
                         const fPrice = currSym ? `${currSym}${parseFloat(f.trade_price).toFixed(2)}` : parseFloat(f.trade_price).toFixed(2);
                         const fillNumber = fillsCount - fIdx;
                         const fillTimeStr = this.formatTime(f.trade_time, f.trade_date);
                         const fillTimeTooltip = this.getTimeTooltip(f.trade_time, f.trade_date);
 
-                        const sideBadgeHtml = isCash
+                        const sideBadgeHtml = isCashFill
                             ? `<span class="badge-side badge-exchange">${STRINGS.modal?.exchange || 'EXCHANGE'}</span>`
                             : `<span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${f.buy_sell}</span>`;
 
@@ -555,7 +560,7 @@ const DayModal = {
                             <div class="trade-card-header" data-trade-idx="${idx}">
                                 <!-- Left: Number, Direction, Symbol & Badges -->
                                 <div class="trade-card-left">
-                                    <span class="mono" style="font-size: 11px; font-weight: 800; color: var(--text-muted); min-width: 20px;">#${tradeNumber}</span>
+                                    <span class="mono" style="font-size: 11px; font-weight: 800; color: var(--text-muted); min-width: 20px;">${tradeNumber}</span>
                                     <span class="badge-direction ${dirInfo.badgeClass}">${dirInfo.label}</span>
                                     <div class="trade-symbol-block">
                                         <div class="trade-symbol-line">
@@ -564,7 +569,7 @@ const DayModal = {
                                             <span class="badge-result ${resultBadgeClass}">${resultLabel}</span>
                                         </div>
                                         <div class="trade-meta-sub">
-                                            <span class="trade-time-chip">⏱ ${durationStr}</span>
+                                            <span class="trade-time-chip">${durationStr}</span>
                                             <span class="meta-dot">·</span>
                                             <span>${t.quantity} qty (${fillsLabel})</span>
                                         </div>
@@ -573,11 +578,17 @@ const DayModal = {
 
                                 <!-- Center: Price Progression -->
                                 <div class="trade-card-center">
-                                    <div class="price-flow">
-                                        <span class="price-step"><span class="price-label">${STRINGS.modal?.entry || 'In'}:</span> <strong class="mono">${entryPriceStr}</strong></span>
-                                        <span class="price-arrow">→</span>
-                                        <span class="price-step"><span class="price-label">${STRINGS.modal?.exit || 'Out'}:</span> <strong class="mono">${exitPriceStr}</strong></span>
-                                    </div>
+                                    ${isCash ? `
+                                        <div class="price-flow">
+                                            <span class="price-step"><span class="price-label">${STRINGS.modal?.spotRate || 'Rate'}:</span> <strong class="mono">${entryPriceStr}</strong></span>
+                                        </div>
+                                    ` : `
+                                        <div class="price-flow">
+                                            <span class="price-step"><span class="price-label">${STRINGS.modal?.entry || 'In'}:</span> <strong class="mono">${entryPriceStr}</strong></span>
+                                            <span class="price-arrow">→</span>
+                                            <span class="price-step"><span class="price-label">${STRINGS.modal?.exit || 'Out'}:</span> <strong class="mono">${exitPriceStr}</strong></span>
+                                        </div>
+                                    `}
                                 </div>
 
                                 <!-- Right: Financials & Chevron -->
@@ -635,12 +646,14 @@ const DayModal = {
         const rowsHtml = rawTrades.map((t, idx) => {
             const isBuy = (t.buy_sell || '').toUpperCase() === 'BUY';
             const isCash = (t.asset_category || '').toUpperCase() === 'CASH' || (t.asset_category || '').toUpperCase() === 'FX';
-            const isOpen = (t.open_close_indicator || '').toUpperCase() === 'O' && (t.realized_pnl === 0 || t.realized_pnl === null);
+            const isOpen = !isCash && (t.open_close_indicator || '').toUpperCase() === 'O' && (t.realized_pnl === 0 || t.realized_pnl === null);
             const pnl = (t.realized_pnl || 0) - (t.ib_commission || 0);
             const pnlClass = isOpen ? 'pnl-neutral' : State.getPnlClass(pnl);
-            const pnlDisplay = isOpen
-                ? `<span style="color: var(--text-muted); font-size: 11px;">(Open)</span>`
-                : State.formatCurrency(pnl);
+            const pnlDisplay = isCash
+                ? (pnl !== 0 ? State.formatCurrency(pnl) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>')
+                : (isOpen
+                    ? `<span style="color: var(--text-muted); font-size: 11px;">(Open)</span>`
+                    : State.formatCurrency(pnl));
             const timeStr = this.formatTime(t.trade_time, t.trade_date);
             const timeTooltip = this.getTimeTooltip(t.trade_time, t.trade_date);
 

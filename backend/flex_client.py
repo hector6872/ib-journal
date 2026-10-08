@@ -89,7 +89,9 @@ class IBKRFlexClient:
 
         for send_url, get_url in IBKR_SERVICE_ENDPOINTS:
             try:
-                status_code, resp_text = await self._http_get(send_url, {"t": self.token, "q": active_query_id, "v": "3"})
+                status_code, resp_text = await self._http_get(
+                    send_url, {"t": self.token, "q": active_query_id, "v": "3"}
+                )
                 if status_code == 200 and "<Status>Success</Status>" in resp_text:
                     self._active_get_url = get_url
                     last_network_error = None
@@ -250,14 +252,23 @@ class IBKRFlexClient:
                 realized_pnl = round(raw_pnl * fx_rate, 4) if fx_rate > 0 else raw_pnl
                 commission = round(raw_comm * fx_rate, 4) if fx_rate > 0 else raw_comm
 
-                raw_sym = attrs.get("symbol") or attrs.get("underlyingSymbol") or attrs.get("contractDescription") or "UNKNOWN"
+                raw_sym = (
+                    attrs.get("symbol")
+                    or attrs.get("underlyingSymbol")
+                    or attrs.get("contractDescription")
+                    or "UNKNOWN"
+                )
                 desc = attrs.get("description") or attrs.get("contractDescription") or ""
                 asset_category = (attrs.get("assetCategory") or attrs.get("secType") or "STK").upper()
                 norm_symbol = normalize_symbol(raw_sym, desc, asset_category)
                 if asset_category == "STK" and ("OPT" in norm_symbol or " " in raw_sym):
                     asset_category = "OPT"
 
-                multiplier = float(attrs.get("multiplier") or attrs.get("contractMultiplier") or (100.0 if asset_category == "OPT" else 1.0))
+                multiplier = float(
+                    attrs.get("multiplier")
+                    or attrs.get("contractMultiplier")
+                    or (100.0 if asset_category == "OPT" else 1.0)
+                )
                 if multiplier <= 0:
                     multiplier = 100.0 if asset_category == "OPT" else 1.0
 
@@ -271,7 +282,7 @@ class IBKRFlexClient:
                     or attrs.get("execQty")
                     or 0.0
                 )
-                
+
                 trade_price = float(
                     attrs.get("tradePrice")
                     or attrs.get("price")
@@ -296,8 +307,17 @@ class IBKRFlexClient:
                 if trade_price == 0.0 and proceeds != 0.0 and quantity != 0.0:
                     trade_price = round(abs(proceeds) / (abs(quantity) * multiplier), 4)
 
-                side_raw = (attrs.get("buySell") or attrs.get("side") or attrs.get("action") or ("BUY" if quantity > 0 else "SELL")).upper()
-                buy_sell = "BUY" if ("BUY" in side_raw or "BOT" in side_raw) else ("SELL" if ("SELL" in side_raw or "SLD" in side_raw) else side_raw)
+                side_raw = (
+                    attrs.get("buySell")
+                    or attrs.get("side")
+                    or attrs.get("action")
+                    or ("BUY" if quantity > 0 else "SELL")
+                ).upper()
+                buy_sell = (
+                    "BUY"
+                    if ("BUY" in side_raw or "BOT" in side_raw)
+                    else ("SELL" if ("SELL" in side_raw or "SLD" in side_raw) else side_raw)
+                )
 
                 if proceeds == 0.0 and quantity != 0.0 and trade_price > 0.0:
                     sign = -1.0 if buy_sell == "BUY" else 1.0
@@ -334,9 +354,13 @@ class IBKRFlexClient:
                     "trade_date": trade_date,
                     "trade_time": trade_time,
                     "trade_date_time": trade_datetime_iso,
-                    "open_close_indicator": (attrs.get("openCloseIndicator") or attrs.get("code") or attrs.get("openClose") or "C").upper(),
+                    "open_close_indicator": (
+                        attrs.get("openCloseIndicator") or attrs.get("code") or attrs.get("openClose") or "C"
+                    ).upper(),
                     "order_type": (attrs.get("orderType") or attrs.get("order_type") or "MKT").upper(),
-                    "exchange": (attrs.get("exchange") or attrs.get("listingExchange") or attrs.get("execExchange") or "SMART").upper(),
+                    "exchange": (
+                        attrs.get("exchange") or attrs.get("listingExchange") or attrs.get("execExchange") or "SMART"
+                    ).upper(),
                 }
                 trades.append(trade_record)
 
@@ -366,10 +390,38 @@ class IBKRFlexClient:
                 continue
 
             tx_type_raw = (attrs.get("type") or "DEPOSIT").upper()
+            desc = attrs.get("description") or attrs.get("type") or ""
+            desc_upper = desc.upper()
+
             tx_type = "DEPOSIT"
-            if "WITHDRAW" in tx_type_raw or amount_raw < 0:
-                tx_type = "WITHDRAWAL"
-            elif "DIVIDEND" in tx_type_raw or "WITHHOLDING" in tx_type_raw:
+            if "WITHDRAW" in tx_type_raw or "FEE" in tx_type_raw or "TAX" in tx_type_raw or amount_raw < 0:
+                if (
+                    "SUBSCRIPTION" in tx_type_raw
+                    or "SUBSCRIPTION" in desc_upper
+                    or "SUSCRIPCI" in desc_upper
+                    or "OPRA" in desc_upper
+                    or "MARKET DATA" in desc_upper
+                    or "NP L1" in desc_upper
+                    or "L1 FOR" in desc_upper
+                    or "L2 FOR" in desc_upper
+                    or "LEVEL 1" in desc_upper
+                    or "LEVEL 2" in desc_upper
+                    or "QUOTE" in desc_upper
+                ):
+                    tx_type = "SUBSCRIPTION"
+                elif (
+                    "TAX" in tx_type_raw
+                    or "WITHHOLDING" in tx_type_raw
+                    or "TAX" in desc_upper
+                    or "RETENCI" in desc_upper
+                    or "IMPUESTO" in desc_upper
+                ):
+                    tx_type = "WITHHOLDING TAX"
+                elif "FEE" in tx_type_raw or "FEE" in desc_upper or "COMISI" in desc_upper:
+                    tx_type = "FEE"
+                else:
+                    tx_type = "WITHDRAWAL"
+            elif "DIVIDEND" in tx_type_raw or "DIVIDEND" in desc_upper:
                 tx_type = "DIVIDEND"
             elif "TRANSFER" in tx_type_raw:
                 tx_type = "TRANSFER"
@@ -389,7 +441,6 @@ class IBKRFlexClient:
             fx_rate = float(attrs.get("fxRateToBase") or 1.0)
             amount_base = round(amount_raw * fx_rate, 2)
 
-            desc = attrs.get("description") or attrs.get("type") or ""
             account_id = attrs.get("accountId") or ""
             tx_id = (
                 attrs.get("transactionID")
@@ -406,13 +457,17 @@ class IBKRFlexClient:
                     "transaction_id": tx_id,
                     "account_id": account_id,
                     "transaction_date": t_date,
+                    "type": tx_type,
                     "transaction_type": tx_type,
-                    "amount": amount_raw,
+                    "amount": amount_base,
+                    "raw_amount": amount_raw,
                     "currency": curr,
+                    "raw_currency": curr,
                     "amount_in_base": amount_base,
                     "base_currency": base_currency,
                     "fx_rate_to_base": fx_rate,
                     "description": desc,
+                    "is_manual": False,
                 }
             )
 

@@ -110,7 +110,7 @@
 html, body {
     max-width: 100vw;
     width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 body {
@@ -856,13 +856,25 @@ body {
 
 .cash-summary-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 12px;
+}
+
+@media (max-width: 1024px) {
+    .cash-summary-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }
 
 @media (max-width: 768px) {
     .cash-summary-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .cash-summary-grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -998,14 +1010,19 @@ select.cash-input {
 }
 
 .cash-badge {
+    display: inline-block;
     font-size: 10px;
     font-weight: 700;
-    padding: 2px 6px;
+    padding: 2px 7px;
     border-radius: var(--radius-xs);
     text-transform: uppercase;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+    line-height: 1.3;
 }
 
-.badge-deposit {
+.badge-deposit,
+.badge-dividend {
     background-color: var(--color-profit-bg);
     color: var(--color-profit);
     border: 1px solid var(--color-profit-border);
@@ -1017,11 +1034,79 @@ select.cash-input {
     border: 1px solid var(--color-loss-border);
 }
 
-.source-tag {
+.badge-fee {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.28);
+}
+[data-theme="dark"] .badge-fee {
+    color: #fbbf24;
+}
+
+.badge-subscription {
+    background-color: rgba(139, 92, 246, 0.12);
+    color: #7c3aed;
+    border: 1px solid rgba(139, 92, 246, 0.28);
+}
+[data-theme="dark"] .badge-subscription {
+    color: #a78bfa;
+}
+
+.badge-tax,
+.badge-withholding-tax {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: var(--color-loss);
+    border: 1px solid var(--color-loss-border);
+}
+
+.badge-transfer {
+    background-color: var(--bg-hover);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+/* Category Breakdown Bar */
+.cash-breakdown-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+}
+
+.cash-breakdown-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.cash-breakdown-label {
     font-size: 10px;
-    padding: 2px 6px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.cash-breakdown-val {
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.source-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 7px;
     border-radius: var(--radius-xs);
     font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+    line-height: 1.3;
 }
 
 .source-ibkr {

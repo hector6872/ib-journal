@@ -7,7 +7,7 @@ from typing import Any, cast
 import backend.config as config
 import backend.database as database
 import backend.settings as settings_mod
-from backend.analytics import get_detailed_stats, get_overview_stats
+from backend.analytics import get_detailed_stats, get_month_calendar, get_overview_stats, get_year_calendar
 from backend.config import is_production
 from backend.database import db_session, init_db, upsert_trades
 from backend.settings import get_all_settings, update_settings
@@ -167,6 +167,144 @@ class TestIBKRJournal(unittest.TestCase):
         self.assertIn("holding_durations", detailed)
         self.assertIn("order_types", detailed)
         self.assertEqual(len(detailed["symbols"]), 2)
+
+    def test_calendar_grouping_and_pnl(self):
+        """Verifies calendar groups multi-fill executions into round trips and includes entry commissions in net PnL."""
+        sample_trades = [
+            # Trade 1: QQQ 747 C (Buy 2 in two fills, Sell 2 in two partial fills) -> 1 Round trip trade
+            {
+                "ib_exec_id": "E1",
+                "trade_id": "T1",
+                "account_id": "U123",
+                "symbol": "QQQ 747 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.56,
+                "ib_commission": 0.91,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-09-30",
+                "trade_time": "16:48:30",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "E2",
+                "trade_id": "T2",
+                "account_id": "U123",
+                "symbol": "QQQ 747 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.56,
+                "ib_commission": 0.29,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-09-30",
+                "trade_time": "16:48:30",
+                "open_close_indicator": "O",
+            },
+            # FX auto-conversion (should be excluded from trade count)
+            {
+                "ib_exec_id": "E3",
+                "trade_id": "T3",
+                "account_id": "U123",
+                "symbol": "EUR.USD",
+                "asset_category": "CASH",
+                "currency": "USD",
+                "buy_sell": "BUY",
+                "quantity": 56.57,
+                "trade_price": 1.14,
+                "ib_commission": 0.0,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-09-30",
+                "trade_time": "16:48:31",
+                "open_close_indicator": "O",
+            },
+            # Partial Exit 1 of Trade 1
+            {
+                "ib_exec_id": "E4",
+                "trade_id": "T4",
+                "account_id": "U123",
+                "symbol": "QQQ 747 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 1.0,
+                "trade_price": 0.59,
+                "ib_commission": 0.76,
+                "realized_pnl": 0.98,
+                "trade_date": "2026-09-30",
+                "trade_time": "16:50:41",
+                "open_close_indicator": "C",
+            },
+            # Partial Exit 2 of Trade 1
+            {
+                "ib_exec_id": "E5",
+                "trade_id": "T5",
+                "account_id": "U123",
+                "symbol": "QQQ 747 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 1.0,
+                "trade_price": 0.58,
+                "ib_commission": 0.91,
+                "realized_pnl": 0.56,
+                "trade_date": "2026-09-30",
+                "trade_time": "16:51:48",
+                "open_close_indicator": "C",
+            },
+            # Trade 2: QQQ 748 C (Buy 3, Sell 3) -> 1 Round trip trade
+            {
+                "ib_exec_id": "E6",
+                "trade_id": "T6",
+                "account_id": "U123",
+                "symbol": "QQQ 748 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "buy_sell": "BUY",
+                "quantity": 3.0,
+                "trade_price": 0.44,
+                "ib_commission": 1.80,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-09-30",
+                "trade_time": "17:32:35",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "E7",
+                "trade_id": "T7",
+                "account_id": "U123",
+                "symbol": "QQQ 748 C",
+                "asset_category": "OPT",
+                "currency": "EUR",
+                "buy_sell": "SELL",
+                "quantity": 3.0,
+                "trade_price": 0.42,
+                "ib_commission": 1.35,
+                "realized_pnl": -8.46,
+                "trade_date": "2026-09-30",
+                "trade_time": "17:34:00",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(sample_trades)
+
+        month_cal = get_month_calendar(2026, 9)
+        day_30 = month_cal["daily_map"].get("2026-09-30")
+        self.assertIsNotNone(day_30)
+        # 2 round-trip trades (not 3 closing fills, and excluding CASH)
+        self.assertEqual(day_30["count"], 2)
+        # Total gross pnl: 0.98 + 0.56 - 8.46 = -6.92
+        # Total commissions: 0.91 + 0.29 + 0.76 + 0.91 + 1.80 + 1.35 = 6.02
+        # Total net pnl: -6.92 - 6.02 = -12.94
+        self.assertEqual(day_30["commissions"], 6.02)
+        self.assertEqual(day_30["pnl"], -12.94)
+
+        year_cal = get_year_calendar(2026)
+        self.assertEqual(year_cal["total_trades"], 2)
+        self.assertEqual(year_cal["total_net_pnl"], -12.94)
 
     def test_import_script_parsers(self):
         """Tests parsing logic for IBKR Activity Statement and Generic Flex CSVs."""
@@ -1022,6 +1160,12 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
                         <CashTransaction accountId="U123456" currency="EUR" fxRateToBase="1.0" amount="5000.0"
                                          type="Electronic Fund Transfer" dateTime="20261005;090000"
                                          description="Deposit via Wire" transactionID="CASH_XML_1" />
+                        <CashTransaction accountId="U123456" currency="EUR" fxRateToBase="1.0" amount="-1.33"
+                                         type="Other Fees" dateTime="20261005;120000"
+                                         description="H*******72:OPRA NP L1 FOR OCT 2026" transactionID="CASH_XML_OPRA" />
+                        <CashTransaction accountId="U123456" currency="EUR" fxRateToBase="1.0" amount="-0.19"
+                                         type="Withholding Tax" dateTime="20261001;120000"
+                                         description="NVDA CASH DIVIDEND - US TAX" transactionID="CASH_XML_TAX" />
                     </CashTransactions>
                 </FlexStatement>
             </FlexStatements>
@@ -1035,10 +1179,20 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         self.assertAlmostEqual(trades[0]["realized_pnl"], 45.0)  # 50 * 0.9
 
         cash_txs = client.parse_cash_transactions_xml(sample_xml)
-        self.assertEqual(len(cash_txs), 1)
+        self.assertEqual(len(cash_txs), 3)
         self.assertEqual(cash_txs[0]["transaction_id"], "CASH_XML_1")
         self.assertEqual(cash_txs[0]["transaction_type"], "TRANSFER")
         self.assertEqual(cash_txs[0]["amount"], 5000.0)
+
+        # Verify OPRA NP L1 subscription
+        self.assertEqual(cash_txs[1]["transaction_id"], "CASH_XML_OPRA")
+        self.assertEqual(cash_txs[1]["type"], "SUBSCRIPTION")
+        self.assertEqual(cash_txs[1]["amount"], -1.33)
+
+        # Verify Withholding Tax
+        self.assertEqual(cash_txs[2]["transaction_id"], "CASH_XML_TAX")
+        self.assertEqual(cash_txs[2]["type"], "WITHHOLDING TAX")
+        self.assertEqual(cash_txs[2]["amount"], -0.19)
 
         # Test Trade Confirmation XML parsing (intraday fills format)
         trade_confirm_xml = """<FlexQueryResponse>
@@ -1069,6 +1223,7 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
 
         # Test group_executions_to_trades calculates round-trip gross PnL correctly
         from backend.analytics import group_executions_to_trades
+
         grouped = group_executions_to_trades(tc_trades)
         self.assertEqual(len(grouped), 1)
         self.assertEqual(grouped[0]["status"], "CLOSED")

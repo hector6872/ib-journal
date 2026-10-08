@@ -5,62 +5,103 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from backend.database import db_session
+from backend.database import db_session, get_currency_symbol
 from backend.settings import get_all_settings
 
 
 def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
     """
-    Computes global trading performance KPIs:
+    Computes global trading performance KPIs based on round-trip trades:
     - Net P&L & Gross P&L & Fees
     - Net Win Rate & Gross Win Rate (before costs)
     - Profit Factor (PF) & Adjusted Win/Loss Ratio
     - Expectancy & Sharpe Ratio per trade
     - Total Trades, Avg Win, Avg Loss, Largest Win, Largest Loss
     """
-    query = """
-    SELECT
-        COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as total_trades,
-        MIN(trade_date) as min_trade_date,
-        MAX(trade_date) as max_trade_date,
-        COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN realized_pnl ELSE 0 END), 0.0) as gross_pnl,
-        COALESCE(SUM(ib_commission), 0.0) as total_commissions,
-        COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as net_pnl,
-        COALESCE(SUM(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) > 0 THEN 1 ELSE 0 END), 0) as winning_trades,
-        COALESCE(SUM(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) < 0 THEN 1 ELSE 0 END), 0) as losing_trades,
-        COALESCE(SUM(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) = 0 THEN 1 ELSE 0 END), 0) as breakeven_trades,
-        COALESCE(SUM(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND realized_pnl > 0 THEN 1 ELSE 0 END), 0) as winning_trades_price,
-        COALESCE(SUM(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND realized_pnl < 0 THEN 1 ELSE 0 END), 0) as losing_trades_price,
-        COALESCE(SUM(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) > 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as gross_profit,
-        COALESCE(ABS(SUM(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) < 0 THEN (realized_pnl - ib_commission) ELSE 0 END)), 0.0) as gross_loss,
-        COALESCE(MAX(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) > 0 THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_win,
-        COALESCE(MIN(CASE WHEN (open_close_indicator = 'C' OR realized_pnl != 0) AND (realized_pnl - ib_commission) < 0 THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_loss
-    FROM trades
-    WHERE 1=1
-    """
+    where_clause = "WHERE asset_category NOT IN ('CASH', 'FX')"
     params = []
     if start_date:
-        query += " AND trade_date >= ?"
+        where_clause += " AND trade_date >= ?"
         params.append(start_date)
     if end_date:
-        query += " AND trade_date <= ?"
+        where_clause += " AND trade_date <= ?"
         params.append(end_date)
 
     with db_session() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, params)
-        row = cursor.fetchone()
+        cursor.execute(
+            f"""
+            SELECT
+                id, ib_exec_id, trade_id, symbol, description,
+                COALESCE(asset_category, 'STK') as asset_category,
+                COALESCE(buy_sell, 'BUY') as buy_sell,
+                quantity, trade_price, ib_commission, realized_pnl,
+                currency, raw_currency, base_currency, fx_rate_to_base,
+                raw_commission, raw_realized_pnl,
+                trade_date, trade_time, trade_date_time,
+                COALESCE(open_close_indicator, 'C') as open_close_indicator,
+                notes
+            FROM trades
+            {where_clause}
+            ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
+            """,
+            params,
+        )
+        trade_rows = [dict(r) for r in cursor.fetchall()]
 
-        total_trades = row["total_trades"]
-        winning_trades = row["winning_trades"]
-        losing_trades = row["losing_trades"]
-        winning_trades_price = row["winning_trades_price"]
-        losing_trades_price = row["losing_trades_price"]
-        gross_profit = row["gross_profit"]
-        gross_loss = row["gross_loss"]
-        net_pnl = row["net_pnl"]
-        gross_pnl = row["gross_pnl"]
-        commissions = row["total_commissions"]
+        # Total commissions and gross pnl across all executions
+        total_commissions = sum(float(r.get("ib_commission") or 0.0) for r in trade_rows)
+        gross_pnl = sum(float(r.get("realized_pnl") or 0.0) for r in trade_rows)
+        net_pnl = round(gross_pnl - total_commissions, 2)
+
+        min_trade_date = trade_rows[0]["trade_date"] if trade_rows else None
+        max_trade_date = trade_rows[-1]["trade_date"] if trade_rows else None
+
+        # Reconstruct round-trip trades by grouping executions per day
+        from collections import defaultdict
+
+        trades_by_date = defaultdict(list)
+        for t in trade_rows:
+            trades_by_date[t["trade_date"]].append(t)
+
+        all_grouped: List[Dict[str, Any]] = []
+        for d_str in sorted(trades_by_date.keys()):
+            d_grouped = group_executions_to_trades(trades_by_date[d_str])
+            trading_d_grouped = [
+                g
+                for g in d_grouped
+                if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
+            ]
+            all_grouped.extend(trading_d_grouped)
+
+        closed_trades = [g for g in all_grouped if g.get("status") == "CLOSED"]
+        total_trades = len(closed_trades)
+
+        winning_trades = sum(1 for g in closed_trades if (g.get("net_pnl") or 0.0) > 0.005)
+        losing_trades = sum(1 for g in closed_trades if (g.get("net_pnl") or 0.0) < -0.005)
+        breakeven_trades = total_trades - winning_trades - losing_trades
+
+        winning_trades_price = sum(1 for g in closed_trades if (g.get("gross_pnl") or 0.0) > 0.005)
+        losing_trades_price = sum(1 for g in closed_trades if (g.get("gross_pnl") or 0.0) < -0.005)
+
+        gross_profit = sum(float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) > 0)
+        gross_loss = abs(sum(float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) < 0))
+
+        largest_win = max(
+            [float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) > 0] or [0.0]
+        )
+        largest_loss = min(
+            [float(g.get("net_pnl") or 0.0) for g in closed_trades if (g.get("net_pnl") or 0.0) < 0] or [0.0]
+        )
+
+        largest_win_sym = ""
+        largest_loss_sym = ""
+        for g in closed_trades:
+            pnl_val = float(g.get("net_pnl") or 0.0)
+            if pnl_val == largest_win and largest_win > 0:
+                largest_win_sym = g.get("symbol", "")
+            if pnl_val == largest_loss and largest_loss < 0:
+                largest_loss_sym = g.get("symbol", "")
 
         # Win Rates
         win_rate = round((winning_trades / total_trades * 100), 2) if total_trades > 0 else 0.0
@@ -87,88 +128,40 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         else:
             adj_win_loss_ratio = round(avg_win, 2) if avg_win > 0 else 0.0
 
-        # Calculate Sharpe Ratio per trade from closed trades in the range
-        cursor.execute(
-            """
-            SELECT symbol, open_close_indicator, quantity, realized_pnl, ib_commission, (realized_pnl - ib_commission) as net_pnl, trade_date, trade_time, trade_date_time
-            FROM trades
-            WHERE 1=1
-            """
-            + (" AND trade_date >= ?" if start_date else "")
-            + (" AND trade_date <= ?" if end_date else "")
-            + """
-            ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
-        """,
-            params,
-        )
-        trade_rows = cursor.fetchall()
-
-        closed_trade_rows = [
-            r
-            for r in trade_rows
-            if (r["open_close_indicator"] or "").upper() == "C"
-            or (r["realized_pnl"] is not None and r["realized_pnl"] != 0)
-        ]
+        # Calculate Sharpe Ratio per trade from closed trades
         sharpe_per_trade = 0.0
-        if len(closed_trade_rows) >= 2:
-            pnls = [r["net_pnl"] for r in closed_trade_rows]
+        if len(closed_trades) >= 2:
+            pnls = [float(g.get("net_pnl") or 0.0) for g in closed_trades]
             mean_val = sum(pnls) / len(pnls)
             var_val = sum((x - mean_val) ** 2 for x in pnls) / (len(pnls) - 1)
             std_val = math.sqrt(var_val) if var_val > 0 else 0.0
             if std_val > 0:
                 sharpe_per_trade = round(mean_val / std_val, 2)
 
-        # Compute dynamic holding times and largest win/loss symbol
+        # Compute dynamic holding times
         win_durations = []
         loss_durations = []
-        open_positions: Dict[str, List[datetime]] = {}
-        largest_win_sym = ""
-        largest_loss_sym = ""
-        max_win_val = 0.0
-        max_loss_val = 0.0
-
-        for r in trade_rows:
-            sym = r["symbol"]
-            pnl = r["net_pnl"]
-            indicator = (r["open_close_indicator"] or "").upper()
-            is_closed = indicator == "C" or (r["realized_pnl"] is not None and r["realized_pnl"] != 0)
-
-            if is_closed:
-                if pnl > max_win_val:
-                    max_win_val = pnl
-                    largest_win_sym = sym
-                if pnl < max_loss_val:
-                    max_loss_val = pnl
-                    largest_loss_sym = sym
-
-            indicator = (r["open_close_indicator"] or "").upper()
-            dt_str = r["trade_date_time"] or (f"{r['trade_date']} {r['trade_time']}" if r["trade_time"] else None)
-            trade_dt = None
-            if dt_str:
+        for g in closed_trades:
+            pnl_val = float(g.get("net_pnl") or 0.0)
+            ot = g.get("open_time")
+            ct = g.get("close_time")
+            if ot and ct and ot != "--:--" and ct != "--:--":
                 try:
-                    trade_dt = datetime.fromisoformat(dt_str.replace("Z", "").replace(" ", "T"))
+                    t1 = datetime.strptime(ot[:8], "%H:%M:%S")
+                    t2 = datetime.strptime(ct[:8], "%H:%M:%S")
+                    sec = (t2 - t1).total_seconds()
+                    if sec >= 0:
+                        if pnl_val > 0:
+                            win_durations.append(sec)
+                        elif pnl_val < 0:
+                            loss_durations.append(sec)
                 except Exception:
                     pass
-
-            if sym and trade_dt:
-                if "O" in indicator and "C" not in indicator:
-                    if sym not in open_positions:
-                        open_positions[sym] = []
-                    open_positions[sym].append(trade_dt)
-                elif "C" in indicator and sym in open_positions and open_positions[sym]:
-                    open_dt = open_positions[sym].pop(0)
-                    sec = (trade_dt - open_dt).total_seconds()
-                    if sec >= 0:
-                        if pnl > 0:
-                            win_durations.append(sec)
-                        elif pnl < 0:
-                            loss_durations.append(sec)
 
         # Cash summary & Starting Capital
         cash_query = """
             SELECT
-                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) as total_deposits,
-                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0.0) as total_withdrawals
+                id, type, amount, description
             FROM cash_transactions
             WHERE 1=1
         """
@@ -180,16 +173,31 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             cash_query += " AND transaction_date <= ?"
             cash_params.append(end_date)
         cursor.execute(cash_query, cash_params)
-        cash_row = cursor.fetchone()
-        total_deposits = float(cash_row["total_deposits"] if cash_row else 0.0)
-        total_withdrawals = float(cash_row["total_withdrawals"] if cash_row else 0.0)
-        net_cash_flow = total_deposits - total_withdrawals
+        c_rows = [dict(r) for r in cursor.fetchall()]
+
+        total_deposits = sum(r["amount"] for r in c_rows if r["amount"] > 0 and r["type"] == "DEPOSIT")
+        total_withdrawals = sum(
+            abs(r["amount"]) for r in c_rows if r["amount"] < 0 and r["type"] in ("WITHDRAWAL", "TRANSFER")
+        )
+        total_withholding_tax = sum(
+            abs(r["amount"])
+            for r in c_rows
+            if r["type"] == "WITHHOLDING TAX" or ("TAX" in (r["type"] or "") and r["amount"] < 0)
+        )
+        total_subscriptions = sum(
+            abs(r["amount"])
+            for r in c_rows
+            if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0)
+        )
+        total_fees = sum(abs(r["amount"]) for r in c_rows if r["type"] == "FEE")
+        total_account_expenses = total_subscriptions + total_fees + total_withholding_tax
+        net_transfers = total_deposits - total_withdrawals
+        net_cash_flow = sum(r["amount"] for r in c_rows)
 
         # Cumulative lifetime capital base (all historical deposits up to end_date)
         lifetime_cash_query = """
             SELECT
-                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) as lifetime_deposits,
-                COALESCE(SUM(amount), 0.0) as lifetime_net_flow
+                amount, type
             FROM cash_transactions
             WHERE 1=1
         """
@@ -198,9 +206,9 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             lifetime_cash_query += " AND transaction_date <= ?"
             lifetime_params.append(end_date)
         cursor.execute(lifetime_cash_query, lifetime_params)
-        lifetime_row = cursor.fetchone()
-        lifetime_deposits = float(lifetime_row["lifetime_deposits"] if lifetime_row else 0.0)
-        lifetime_net_flow = float(lifetime_row["lifetime_net_flow"] if lifetime_row else 0.0)
+        lt_rows = [dict(r) for r in cursor.fetchall()]
+        lifetime_deposits = sum(r["amount"] for r in lt_rows if r["amount"] > 0 and r["type"] == "DEPOSIT")
+        lifetime_net_flow = sum(r["amount"] for r in lt_rows)
 
         app_settings = get_all_settings()
         starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
@@ -223,11 +231,11 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         return {
             "total_trades": total_trades,
-            "min_trade_date": row["min_trade_date"],
-            "max_trade_date": row["max_trade_date"],
+            "min_trade_date": min_trade_date,
+            "max_trade_date": max_trade_date,
             "winning_trades": winning_trades,
             "losing_trades": losing_trades,
-            "breakeven_trades": row["breakeven_trades"],
+            "breakeven_trades": breakeven_trades,
             "winning_trades_price": winning_trades_price,
             "losing_trades_price": losing_trades_price,
             "win_rate": win_rate,
@@ -239,11 +247,11 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "expectancy": expectancy,
             "gross_profit": round(gross_profit, 2),
             "gross_loss": round(gross_loss, 2),
-            "total_commissions": round(commissions, 2),
+            "total_commissions": round(total_commissions, 2),
             "gross_pnl": round(gross_pnl, 2),
             "net_pnl": round(net_pnl, 2),
-            "largest_win": round(row["largest_win"], 2),
-            "largest_loss": round(row["largest_loss"], 2),
+            "largest_win": round(largest_win, 2),
+            "largest_loss": round(largest_loss, 2),
             "largest_win_symbol": largest_win_sym,
             "largest_loss_symbol": largest_loss_sym,
             "avg_win": round(avg_win, 2),
@@ -253,6 +261,11 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
             "starting_capital": round(starting_capital, 2),
             "total_deposits": round(total_deposits, 2),
             "total_withdrawals": round(total_withdrawals, 2),
+            "net_transfers": round(net_transfers, 2),
+            "total_account_expenses": round(total_account_expenses, 2),
+            "total_withholding_tax": round(total_withholding_tax, 2),
+            "total_subscriptions": round(total_subscriptions, 2),
+            "total_fees": round(total_fees, 2),
             "net_cash_flow": round(net_cash_flow, 2),
             "capital_base": round(capital_base, 2),
             "account_balance": round(account_balance, 2),
@@ -390,8 +403,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
             ]
             day_pnl = sum(t["net_pnl"] for t in day_closed_trades)
-            day_wins = sum(1 for t in day_closed_trades if t["realized_pnl"] > 0)
-            day_losses = sum(1 for t in day_closed_trades if t["realized_pnl"] < 0)
+            day_wins = sum(1 for t in day_closed_trades if t["net_pnl"] > 0)
+            day_losses = sum(1 for t in day_closed_trades if t["net_pnl"] < 0)
             running_cumulative += day_pnl
 
             if running_cumulative > peak_equity:
@@ -463,10 +476,10 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             }
         )
 
-        # Metric Evolution Series (Day, Week, Month)
+        # Metric Evolution Series (Day, Week, Month) - Only for periods with closed trades
         def build_evolution_series(group_by: str) -> List[Dict[str, Any]]:
             grouped: Dict[str, List[Dict[str, Any]]] = {}
-            for t in all_trades:
+            for t in closed_trades:
                 dt_str = t["trade_date"]
                 try:
                     dt = datetime.strptime(dt_str, "%Y-%m-%d")
@@ -486,18 +499,14 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             series = []
             cum_pnl = 0.0
             for k in sorted(grouped.keys()):
-                group_trades = grouped[k]
-                closed_group_trades = [
-                    t
-                    for t in group_trades
-                    if (t.get("open_close_indicator") or "").upper() == "C"
-                    or (t.get("realized_pnl") is not None and t.get("realized_pnl") != 0)
-                ]
+                closed_group_trades = grouped[k]
                 tot = len(closed_group_trades)
-                wins = sum(1 for t in closed_group_trades if t["realized_pnl"] > 0)
-                losses = sum(1 for t in closed_group_trades if t["realized_pnl"] < 0)
-                g_profit = sum(t["realized_pnl"] for t in closed_group_trades if t["realized_pnl"] > 0)
-                g_loss = abs(sum(t["realized_pnl"] for t in closed_group_trades if t["realized_pnl"] < 0))
+                if tot == 0:
+                    continue
+                wins = sum(1 for t in closed_group_trades if t["net_pnl"] > 0)
+                losses = sum(1 for t in closed_group_trades if t["net_pnl"] < 0)
+                g_profit = sum(t["net_pnl"] for t in closed_group_trades if t["net_pnl"] > 0)
+                g_loss = abs(sum(t["net_pnl"] for t in closed_group_trades if t["net_pnl"] < 0))
                 pnl = sum(t["net_pnl"] for t in closed_group_trades)
                 cum_pnl += pnl
 
@@ -512,7 +521,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 series.append(
                     {
                         "period": k,
-                        "date": group_trades[0]["trade_date"],
+                        "date": closed_group_trades[0]["trade_date"],
                         "pnl": round(pnl, 2),
                         "cumulative_pnl": round(cum_pnl, 2),
                         "win_rate": wr,
@@ -540,8 +549,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 symbol,
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-                COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
                 COALESCE(SUM(ib_commission), 0.0) as commissions,
                 COALESCE(SUM(ABS(quantity)), 0.0) as total_volume
@@ -695,9 +704,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 if tag not in tag_map_market:
                     tag_map_market[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
                 tag_map_market[tag]["trades_count"] += 1
-                if t["realized_pnl"] > 0:
+                if t["net_pnl"] > 0:
                     tag_map_market[tag]["wins"] += 1
-                elif t["realized_pnl"] < 0:
+                elif t["net_pnl"] < 0:
                     tag_map_market[tag]["losses"] += 1
                 tag_map_market[tag]["net_pnl"] += t["net_pnl"]
 
@@ -709,9 +718,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 if tag not in tag_map_local:
                     tag_map_local[tag] = {"tag": tag, "trades_count": 0, "wins": 0, "losses": 0, "net_pnl": 0.0}
                 tag_map_local[tag]["trades_count"] += 1
-                if t["realized_pnl"] > 0:
+                if t["net_pnl"] > 0:
                     tag_map_local[tag]["wins"] += 1
-                elif t["realized_pnl"] < 0:
+                elif t["net_pnl"] < 0:
                     tag_map_local[tag]["losses"] += 1
                 tag_map_local[tag]["net_pnl"] += t["net_pnl"]
 
@@ -747,8 +756,8 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 strftime('%w', trade_date) as day_of_week,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-                COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
             FROM trades
             {where_clause}
             GROUP BY strftime('%w', trade_date)
@@ -815,18 +824,18 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if h_market is not None and h_market in hourly_market:
                 if is_closed:
                     hourly_market[h_market]["trades_count"] += 1
-                    if t["realized_pnl"] > 0:
+                    if t["net_pnl"] > 0:
                         hourly_market[h_market]["wins"] += 1
-                    elif t["realized_pnl"] < 0:
+                    elif t["net_pnl"] < 0:
                         hourly_market[h_market]["losses"] += 1
                 hourly_market[h_market]["net_pnl"] += t["net_pnl"]
 
             if h_local is not None and h_local in hourly_local:
                 if is_closed:
                     hourly_local[h_local]["trades_count"] += 1
-                    if t["realized_pnl"] > 0:
+                    if t["net_pnl"] > 0:
                         hourly_local[h_local]["wins"] += 1
-                    elif t["realized_pnl"] < 0:
+                    elif t["net_pnl"] < 0:
                         hourly_local[h_local]["losses"] += 1
                 hourly_local[h_local]["net_pnl"] += t["net_pnl"]
 
@@ -894,9 +903,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if dur_key in duration_data:
                 if is_closed:
                     duration_data[dur_key]["trades_count"] = int(duration_data[dur_key]["trades_count"]) + 1
-                    if t["realized_pnl"] > 0:
+                    if t["net_pnl"] > 0:
                         duration_data[dur_key]["wins"] = int(duration_data[dur_key]["wins"]) + 1
-                    elif t["realized_pnl"] < 0:
+                    elif t["net_pnl"] < 0:
                         duration_data[dur_key]["losses"] = int(duration_data[dur_key]["losses"]) + 1
                 duration_data[dur_key]["net_pnl"] = float(duration_data[dur_key]["net_pnl"]) + float(t["net_pnl"])
 
@@ -943,9 +952,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 }
             if is_closed:
                 order_data[ot_label]["trades_count"] += 1
-                if t["realized_pnl"] > 0:
+                if t["net_pnl"] > 0:
                     order_data[ot_label]["wins"] += 1
-                elif t["realized_pnl"] < 0:
+                elif t["net_pnl"] < 0:
                     order_data[ot_label]["losses"] += 1
             order_data[ot_label]["net_pnl"] += t["net_pnl"]
 
@@ -982,7 +991,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             SELECT
                 COALESCE(asset_category, 'STK') as category,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
             {where_clause}
@@ -1014,7 +1023,7 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                     ELSE buy_sell
                 END as side,
                 COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-                COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
+                COALESCE(SUM(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(realized_pnl - ib_commission), 0.0) as net_pnl
             FROM trades
             {side_where}
@@ -1122,9 +1131,9 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             net = (t["realized_pnl"] or 0.0) - (t["ib_commission"] or 0.0)
             if strat_key:
                 opt_stats[strat_key]["trades_count"] += 1
-                if (t["realized_pnl"] or 0.0) > 0:
+                if net > 0:
                     opt_stats[strat_key]["wins"] += 1
-                elif (t["realized_pnl"] or 0.0) < 0:
+                elif net < 0:
                     opt_stats[strat_key]["losses"] += 1
                 opt_stats[strat_key]["net_pnl"] += net
 
@@ -1136,16 +1145,16 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             if is_expired:
                 expired_count += 1
                 expired_net_pnl += net
-                if (t["realized_pnl"] or 0.0) > 0:
+                if net > 0:
                     expired_wins += 1
-                elif (t["realized_pnl"] or 0.0) < 0:
+                elif net < 0:
                     expired_losses += 1
             else:
                 manual_count += 1
                 manual_net_pnl += net
-                if (t["realized_pnl"] or 0.0) > 0:
+                if net > 0:
                     manual_wins += 1
-                elif (t["realized_pnl"] or 0.0) < 0:
+                elif net < 0:
                     manual_losses += 1
 
         total_opt_count = len(opt_rows)
@@ -1181,6 +1190,482 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
                 }
             )
 
+        # 10. Position Sizing Breakdowns (Stocks & Options)
+        curr_sym = get_currency_symbol()
+        sizing_where = "WHERE (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+        if where_clause:
+            sizing_where = (
+                f"{where_clause} AND (open_close_indicator = 'C' OR realized_pnl != 0) AND ABS(quantity) > 0.0001"
+            )
+
+        cursor.execute(
+            f"""
+            SELECT
+                asset_category,
+                quantity,
+                trade_price,
+                trade_money,
+                realized_pnl,
+                ib_commission
+            FROM trades
+            {sizing_where}
+        """,
+            params,
+        )
+        sizing_rows = cursor.fetchall()
+
+        stock_notional_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "stk_cap_under_250",
+                "label": f"< {curr_sym}250",
+                "min": 0.0,
+                "max": 250.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_250_500",
+                "label": f"{curr_sym}250 – {curr_sym}500",
+                "min": 250.0,
+                "max": 500.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_500_1k",
+                "label": f"{curr_sym}500 – {curr_sym}1,000",
+                "min": 500.0,
+                "max": 1000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_1k_2.5k",
+                "label": f"{curr_sym}1,000 – {curr_sym}2,500",
+                "min": 1000.0,
+                "max": 2500.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_2.5k_5k",
+                "label": f"{curr_sym}2,500 – {curr_sym}5,000",
+                "min": 2500.0,
+                "max": 5000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_5k_10k",
+                "label": f"{curr_sym}5,000 – {curr_sym}10,000",
+                "min": 5000.0,
+                "max": 10000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_cap_over_10k",
+                "label": f"> {curr_sym}10,000",
+                "min": 10000.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+        ]
+
+        stock_shares_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "stk_sh_1_10",
+                "label": "1 – 10 shares",
+                "min": 1.0,
+                "max": 10.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_11_25",
+                "label": "11 – 25 shares",
+                "min": 11.0,
+                "max": 25.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_26_50",
+                "label": "26 – 50 shares",
+                "min": 26.0,
+                "max": 50.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_51_100",
+                "label": "51 – 100 shares",
+                "min": 51.0,
+                "max": 100.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_101_250",
+                "label": "101 – 250 shares",
+                "min": 101.0,
+                "max": 250.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "stk_sh_over_250",
+                "label": "> 250 shares",
+                "min": 251.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+        ]
+
+        option_contracts_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "opt_cnt_1",
+                "label": "1 contract",
+                "min": 1.0,
+                "max": 1.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_2_3",
+                "label": "2 – 3 contracts",
+                "min": 2.0,
+                "max": 3.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_4_5",
+                "label": "4 – 5 contracts",
+                "min": 4.0,
+                "max": 5.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_6_10",
+                "label": "6 – 10 contracts",
+                "min": 6.0,
+                "max": 10.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_cnt_over_10",
+                "label": "> 10 contracts",
+                "min": 11.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+        ]
+
+        option_premium_brackets: List[Dict[str, Any]] = [
+            {
+                "key": "opt_prem_under_20",
+                "label": f"< {curr_sym}20",
+                "min": 0.0,
+                "max": 20.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_20_50",
+                "label": f"{curr_sym}20 – {curr_sym}50",
+                "min": 20.0,
+                "max": 50.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_50_100",
+                "label": f"{curr_sym}50 – {curr_sym}100",
+                "min": 50.0,
+                "max": 100.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_100_250",
+                "label": f"{curr_sym}100 – {curr_sym}250",
+                "min": 100.0,
+                "max": 250.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_250_500",
+                "label": f"{curr_sym}250 – {curr_sym}500",
+                "min": 250.0,
+                "max": 500.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_500_1k",
+                "label": f"{curr_sym}500 – {curr_sym}1,000",
+                "min": 500.0,
+                "max": 1000.0,
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+            {
+                "key": "opt_prem_over_1k",
+                "label": f"> {curr_sym}1,000",
+                "min": 1000.0,
+                "max": float("inf"),
+                "trades_count": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+            },
+        ]
+
+        stk_win_shares, stk_loss_shares = [], []
+        stk_win_cap, stk_loss_cap = [], []
+        opt_win_contracts, opt_loss_contracts = [], []
+        opt_win_prem, opt_loss_prem = [], []
+
+        for sr in sizing_rows:
+            cat = (sr["asset_category"] or "STK").upper()
+            qty = abs(float(sr["quantity"] or 0.0))
+            if qty < 0.0001:
+                continue
+            price = float(sr["trade_price"] or 0.0)
+            tm = abs(float(sr["trade_money"] or 0.0))
+            if tm == 0.0:
+                mult = 100.0 if cat == "OPT" else 1.0
+                tm = qty * price * mult
+
+            pnl = float(sr["realized_pnl"] or 0.0)
+            comm = float(sr["ib_commission"] or 0.0)
+            net = pnl - comm
+            is_win = net > 0
+            is_loss = net < 0
+
+            if cat in ("STK", "ETF"):
+                if is_win:
+                    stk_win_shares.append(qty)
+                    stk_win_cap.append(tm)
+                elif is_loss:
+                    stk_loss_shares.append(qty)
+                    stk_loss_cap.append(tm)
+
+                for b in stock_notional_brackets:
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= tm < b_max or (b_max == float("inf") and tm >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
+                        if is_win:
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
+                        elif is_loss:
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
+                        break
+
+                for b in stock_shares_brackets:
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= qty <= b_max or (b_max == float("inf") and qty >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
+                        if is_win:
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
+                        elif is_loss:
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
+                        break
+
+            elif cat == "OPT":
+                if is_win:
+                    opt_win_contracts.append(qty)
+                    opt_win_prem.append(tm)
+                elif is_loss:
+                    opt_loss_contracts.append(qty)
+                    opt_loss_prem.append(tm)
+
+                for b in option_contracts_brackets:
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= qty <= b_max or (b_max == float("inf") and qty >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
+                        if is_win:
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
+                        elif is_loss:
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
+                        break
+
+                for b in option_premium_brackets:
+                    b_min = float(b["min"])
+                    b_max = float(b["max"])
+                    if b_min <= tm < b_max or (b_max == float("inf") and tm >= b_min):
+                        b["trades_count"] = int(b["trades_count"]) + 1
+                        b["net_pnl"] = float(b["net_pnl"]) + net
+                        if is_win:
+                            b["wins"] = int(b["wins"]) + 1
+                            b["gross_profit"] = float(b["gross_profit"]) + pnl
+                        elif is_loss:
+                            b["losses"] = int(b["losses"]) + 1
+                            b["gross_loss"] = float(b["gross_loss"]) + abs(pnl)
+                        break
+
+        def _finalize_brackets(b_list):
+            res = []
+            for b in b_list:
+                cnt = b["trades_count"]
+                wins = b["wins"]
+                net = round(b["net_pnl"], 2)
+                wr = round((wins / cnt * 100), 1) if cnt > 0 else 0.0
+                gp = b["gross_profit"]
+                gl = abs(b["gross_loss"])
+                pf = round(gp / gl, 2) if gl > 0 else (round(gp, 2) if gp > 0 else 0.0)
+                avg_pnl = round(net / cnt, 2) if cnt > 0 else 0.0
+                res.append(
+                    {
+                        "key": b["key"],
+                        "bracket": b["label"],
+                        "trades_count": cnt,
+                        "wins": wins,
+                        "losses": b["losses"],
+                        "win_rate": wr,
+                        "net_pnl": net,
+                        "profit_factor": pf,
+                        "avg_trade_pnl": avg_pnl,
+                    }
+                )
+            return res
+
+        stock_sizing_notional = _finalize_brackets(stock_notional_brackets)
+        stock_sizing_shares = _finalize_brackets(stock_shares_brackets)
+        option_sizing_contracts = _finalize_brackets(option_contracts_brackets)
+        option_sizing_premium = _finalize_brackets(option_premium_brackets)
+
+        sizing_summary = {
+            "stk_win_avg_shares": round(sum(stk_win_shares) / len(stk_win_shares), 1) if stk_win_shares else 0.0,
+            "stk_loss_avg_shares": round(sum(stk_loss_shares) / len(stk_loss_shares), 1) if stk_loss_shares else 0.0,
+            "stk_win_avg_capital": round(sum(stk_win_cap) / len(stk_win_cap), 2) if stk_win_cap else 0.0,
+            "stk_loss_avg_capital": round(sum(stk_loss_cap) / len(stk_loss_cap), 2) if stk_loss_cap else 0.0,
+            "opt_win_avg_contracts": round(sum(opt_win_contracts) / len(opt_win_contracts), 1)
+            if opt_win_contracts
+            else 0.0,
+            "opt_loss_avg_contracts": round(sum(opt_loss_contracts) / len(opt_loss_contracts), 1)
+            if opt_loss_contracts
+            else 0.0,
+            "opt_win_avg_premium": round(sum(opt_win_prem) / len(opt_win_prem), 2) if opt_win_prem else 0.0,
+            "opt_loss_avg_premium": round(sum(opt_loss_prem) / len(opt_loss_prem), 2) if opt_loss_prem else 0.0,
+        }
+
     return {
         "overview": overview,
         "rolling_win_rate": rolling_win_rate,
@@ -1201,6 +1686,11 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         "sides": sides,
         "option_strategies": option_strategies,
         "options_summary": options_summary,
+        "stock_sizing_notional": stock_sizing_notional,
+        "stock_sizing_shares": stock_sizing_shares,
+        "option_sizing_contracts": option_sizing_contracts,
+        "option_sizing_premium": option_sizing_premium,
+        "sizing_summary": sizing_summary,
     }
 
 
@@ -1215,30 +1705,55 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
     start_date = f"{year_str}-01-01"
     end_date = f"{year_str}-12-31"
 
-    # Daily aggregation query
-    query = """
-    SELECT
-        trade_date,
-        COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-        COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as net_pnl,
-        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
-    FROM trades
-    WHERE trade_date BETWEEN ? AND ?
-    GROUP BY trade_date
-    """
-
-    daily_map = {}
     with db_session() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, (start_date, end_date))
-        for row in cursor.fetchall():
-            daily_map[row["trade_date"]] = {
-                "pnl": round(row["net_pnl"], 2),
-                "count": row["trades_count"],
-                "wins": row["wins"],
-                "losses": row["losses"],
-            }
+        cursor.execute(
+            """
+            SELECT
+                id, ib_exec_id, trade_id, symbol, description,
+                COALESCE(asset_category, 'STK') as asset_category,
+                COALESCE(buy_sell, 'BUY') as buy_sell,
+                quantity, trade_price, ib_commission, realized_pnl,
+                currency, raw_currency, base_currency, fx_rate_to_base,
+                raw_commission, raw_realized_pnl,
+                trade_date, trade_time, trade_date_time,
+                COALESCE(open_close_indicator, 'C') as open_close_indicator
+            FROM trades
+            WHERE trade_date BETWEEN ? AND ?
+            ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
+            """,
+            (start_date, end_date),
+        )
+        all_trades = [dict(r) for r in cursor.fetchall()]
+
+    from collections import defaultdict
+
+    trades_by_date = defaultdict(list)
+    for t in all_trades:
+        trades_by_date[t["trade_date"]].append(t)
+
+    daily_map = {}
+    for d_str, day_trades in trades_by_date.items():
+        day_gross = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
+        day_comm = sum(float(t.get("ib_commission") or 0.0) for t in day_trades)
+        day_net = round(day_gross - day_comm, 2)
+
+        grouped = group_executions_to_trades(day_trades)
+        trading_grouped = [
+            g
+            for g in grouped
+            if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
+        ]
+        closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
+        day_wins = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) > 0)
+        day_losses = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) < 0)
+
+        daily_map[d_str] = {
+            "pnl": day_net,
+            "count": len(trading_grouped),
+            "wins": day_wins,
+            "losses": day_losses,
+        }
 
     # Compute 12 monthly sums
     monthly_totals = []
@@ -1252,7 +1767,7 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
         m_end = f"{year_str}-{m_str}-{last_day:02d}"
 
         m_pnl = sum(daily_map[d]["pnl"] for d in daily_map if m_start <= d <= m_end)
-        m_count = sum(daily_map[d]["count"] for d in daily_map if m_start <= d <= m_end)
+        m_count = int(sum(daily_map[d]["count"] for d in daily_map if m_start <= d <= m_end))
 
         monthly_totals.append({"month": m, "net_pnl": round(m_pnl, 2), "trades_count": m_count})
         year_net_pnl += m_pnl
@@ -1278,54 +1793,73 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
     start_date = f"{year}-{m_str}-01"
     end_date = f"{year}-{m_str}-{last_day:02d}"
 
-    query = """
-    SELECT
-        trade_date,
-        COUNT(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN 1 END) as trades_count,
-        COALESCE(SUM(CASE WHEN open_close_indicator = 'C' OR realized_pnl != 0 THEN (realized_pnl - ib_commission) ELSE 0 END), 0.0) as net_pnl,
-        COALESCE(SUM(ib_commission), 0.0) as commissions,
-        COALESCE(SUM(CASE WHEN realized_pnl > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as wins,
-        COALESCE(SUM(CASE WHEN realized_pnl < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN 1 ELSE 0 END), 0) as losses
-    FROM trades
-    WHERE trade_date BETWEEN ? AND ?
-    GROUP BY trade_date
-    """
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                id, ib_exec_id, trade_id, symbol, description,
+                COALESCE(asset_category, 'STK') as asset_category,
+                COALESCE(buy_sell, 'BUY') as buy_sell,
+                quantity, trade_price, ib_commission, realized_pnl,
+                currency, raw_currency, base_currency, fx_rate_to_base,
+                raw_commission, raw_realized_pnl,
+                trade_date, trade_time, trade_date_time,
+                COALESCE(open_close_indicator, 'C') as open_close_indicator
+            FROM trades
+            WHERE trade_date BETWEEN ? AND ?
+            ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
+            """,
+            (start_date, end_date),
+        )
+        all_trades = [dict(r) for r in cursor.fetchall()]
+
+    from collections import defaultdict
+
+    trades_by_date = defaultdict(list)
+    for t in all_trades:
+        trades_by_date[t["trade_date"]].append(t)
 
     daily_map = {}
     month_net_pnl = 0.0
     month_trades_count = 0
     month_wins = 0
+    largest_win = 0.0
+    largest_loss = 0.0
 
-    with db_session() as conn:
-        cursor = conn.cursor()
-        cursor.execute(query, (start_date, end_date))
-        for row in cursor.fetchall():
-            pnl = round(row["net_pnl"], 2)
-            daily_map[row["trade_date"]] = {
-                "date": row["trade_date"],
-                "pnl": pnl,
-                "commissions": round(row["commissions"], 2),
-                "count": row["trades_count"],
-                "wins": row["wins"],
-                "losses": row["losses"],
-            }
-            month_net_pnl += pnl
-            month_trades_count += row["trades_count"]
-            month_wins += row["wins"]
+    for d_str, day_trades in trades_by_date.items():
+        day_gross = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
+        day_comm = sum(float(t.get("ib_commission") or 0.0) for t in day_trades)
+        day_net = round(day_gross - day_comm, 2)
 
-        cursor.execute(
-            """
-            SELECT
-                COALESCE(MAX(CASE WHEN (realized_pnl - ib_commission) > 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_win,
-                COALESCE(MIN(CASE WHEN (realized_pnl - ib_commission) < 0 AND (open_close_indicator = 'C' OR realized_pnl != 0) THEN (realized_pnl - ib_commission) ELSE NULL END), 0.0) as largest_loss
-            FROM trades
-            WHERE trade_date BETWEEN ? AND ?
-        """,
-            (start_date, end_date),
-        )
-        m_ext = cursor.fetchone()
-        largest_win = m_ext["largest_win"] if m_ext else 0.0
-        largest_loss = m_ext["largest_loss"] if m_ext else 0.0
+        grouped = group_executions_to_trades(day_trades)
+        trading_grouped = [
+            g
+            for g in grouped
+            if (g.get("asset_category") or "").upper() not in ("CASH", "FX") and g.get("direction") != "EXCHANGE"
+        ]
+        closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
+        day_wins = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) > 0)
+        day_losses = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) < 0)
+
+        for g in closed_grouped:
+            pnl_val = float(g.get("net_pnl") or 0.0)
+            if pnl_val > largest_win:
+                largest_win = pnl_val
+            if pnl_val < largest_loss:
+                largest_loss = pnl_val
+
+        daily_map[d_str] = {
+            "date": d_str,
+            "pnl": day_net,
+            "commissions": round(day_comm, 2),
+            "count": len(trading_grouped),
+            "wins": day_wins,
+            "losses": day_losses,
+        }
+        month_net_pnl += day_net
+        month_trades_count += len(trading_grouped)
+        month_wins += day_wins
 
     # Fill empty days for complete calendar mapping
     days_list = []
@@ -1558,8 +2092,21 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             raw_pnl = float(raw_pnl_val) if raw_pnl_val is not None else pnl
             fill_cat = fill.get("asset_category", "STK")
 
+            ind = (fill.get("open_close_indicator") or "").upper()
+            is_buy = bs == "BUY" or qty > 0
+            has_pnl = abs(pnl) > 1e-6 or abs(raw_pnl) > 1e-6
+
             if current_trade is None:
-                is_initial_buy = qty > 0 or bs == "BUY"
+                # Standalone close of a prior position (only if marked close with non-zero realized PnL)
+                if ind == "C" and has_pnl:
+                    is_initial_buy = (
+                        not is_buy
+                    )  # SELL with realized PnL closes an initial BUY; BUY with realized PnL closes a SHORT
+                    is_entry = False
+                else:
+                    is_initial_buy = is_buy
+                    is_entry = True
+
                 direction = get_trade_direction(fill_cat, symbol, is_initial_buy)
                 current_trade = {
                     "trade_id": f"tr_{date_str}_{symbol}_{trade_idx}",
@@ -1586,10 +2133,12 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                     "fills": [],
                 }
                 trade_idx += 1
+            else:
+                if current_trade["is_initial_buy"]:
+                    is_entry = is_buy
+                else:
+                    is_entry = not is_buy
 
-            is_entry = (current_trade["is_initial_buy"] and qty > 0) or (
-                not current_trade["is_initial_buy"] and qty < 0
-            )
             fill_abs_qty = abs(qty)
 
             current_trade["fills"].append(fill)
@@ -1601,12 +2150,15 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             if is_entry:
                 current_trade["entry_qty"] += fill_abs_qty
                 current_trade["entry_val"] += fill_abs_qty * price
+                pos += fill_abs_qty
             else:
                 current_trade["exit_qty"] += fill_abs_qty
                 current_trade["exit_val"] += fill_abs_qty * price
                 current_trade["close_time"] = time_str
-
-            pos += qty
+                if pos <= 0:
+                    pos = 0.0
+                else:
+                    pos -= fill_abs_qty
 
             if abs(pos) < 1e-6:
                 # Closed round-trip
@@ -1615,7 +2167,9 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                     current_trade["open_time"], current_trade["close_time"]
                 )
                 multiplier = 100.0 if current_trade["asset_category"] == "OPT" else 1.0
-                if abs(current_trade["gross_pnl"]) < 1e-6 and (current_trade["entry_val"] > 0 or current_trade["exit_val"] > 0):
+                if abs(current_trade["gross_pnl"]) < 1e-6 and (
+                    current_trade["entry_val"] > 0 or current_trade["exit_val"] > 0
+                ):
                     if current_trade["is_initial_buy"]:
                         raw_calc_pnl = (current_trade["exit_val"] - current_trade["entry_val"]) * multiplier
                     else:
@@ -1655,32 +2209,74 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                 pos = 0.0
 
         if current_trade is not None:
-            # Partially open position
-            current_trade["status"] = "OPEN"
-            current_trade["duration"] = (
-                format_trade_duration(current_trade["open_time"], current_trade["close_time"])
-                if current_trade["close_time"]
-                else None
+            # Check if this trade is a closed trade from indicator/pnl
+            has_realized_pnl = abs(current_trade["gross_pnl"]) > 1e-6
+            is_close_indicator = any(
+                (f.get("open_close_indicator") or "").upper() == "C" for f in current_trade["fills"]
             )
-            current_trade["net_pnl"] = round(current_trade["gross_pnl"] - current_trade["commission"], 2)
-            current_trade["gross_pnl"] = round(current_trade["gross_pnl"], 2)
-            current_trade["commission"] = round(current_trade["commission"], 2)
-            current_trade["raw_gross_pnl"] = round(current_trade["raw_gross_pnl"], 2)
-            current_trade["raw_commission"] = round(current_trade["raw_commission"], 2)
-            current_trade["raw_net_pnl"] = round(current_trade["raw_gross_pnl"] - current_trade["raw_commission"], 2)
-            current_trade["avg_entry_price"] = (
-                round(current_trade["entry_val"] / current_trade["entry_qty"], 4)
-                if current_trade["entry_qty"] > 0
-                else 0.0
-            )
-            current_trade["avg_exit_price"] = (
-                round(current_trade["exit_val"] / current_trade["exit_qty"], 4)
-                if current_trade["exit_qty"] > 0
-                else 0.0
-            )
-            current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
-            current_trade["result"] = "OPEN"
-            all_grouped.append(current_trade)
+
+            if is_close_indicator or has_realized_pnl:
+                current_trade["status"] = "CLOSED"
+                current_trade["duration"] = (
+                    format_trade_duration(current_trade["open_time"], current_trade["close_time"])
+                    if current_trade["close_time"]
+                    else None
+                )
+                current_trade["net_pnl"] = round(current_trade["gross_pnl"] - current_trade["commission"], 2)
+                current_trade["gross_pnl"] = round(current_trade["gross_pnl"], 2)
+                current_trade["commission"] = round(current_trade["commission"], 2)
+                current_trade["raw_gross_pnl"] = round(current_trade["raw_gross_pnl"], 2)
+                current_trade["raw_commission"] = round(current_trade["raw_commission"], 2)
+                current_trade["raw_net_pnl"] = round(
+                    current_trade["raw_gross_pnl"] - current_trade["raw_commission"], 2
+                )
+                current_trade["avg_entry_price"] = (
+                    round(current_trade["entry_val"] / current_trade["entry_qty"], 4)
+                    if current_trade["entry_qty"] > 0
+                    else 0.0
+                )
+                current_trade["avg_exit_price"] = (
+                    round(current_trade["exit_val"] / current_trade["exit_qty"], 4)
+                    if current_trade["exit_qty"] > 0
+                    else 0.0
+                )
+                current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
+                if current_trade["net_pnl"] > 0.005:
+                    current_trade["result"] = "WIN"
+                elif current_trade["net_pnl"] < -0.005:
+                    current_trade["result"] = "LOSS"
+                else:
+                    current_trade["result"] = "BREAKEVEN"
+                all_grouped.append(current_trade)
+            else:
+                # Partially open position
+                current_trade["status"] = "OPEN"
+                current_trade["duration"] = (
+                    format_trade_duration(current_trade["open_time"], current_trade["close_time"])
+                    if current_trade["close_time"]
+                    else None
+                )
+                current_trade["net_pnl"] = round(current_trade["gross_pnl"] - current_trade["commission"], 2)
+                current_trade["gross_pnl"] = round(current_trade["gross_pnl"], 2)
+                current_trade["commission"] = round(current_trade["commission"], 2)
+                current_trade["raw_gross_pnl"] = round(current_trade["raw_gross_pnl"], 2)
+                current_trade["raw_commission"] = round(current_trade["raw_commission"], 2)
+                current_trade["raw_net_pnl"] = round(
+                    current_trade["raw_gross_pnl"] - current_trade["raw_commission"], 2
+                )
+                current_trade["avg_entry_price"] = (
+                    round(current_trade["entry_val"] / current_trade["entry_qty"], 4)
+                    if current_trade["entry_qty"] > 0
+                    else 0.0
+                )
+                current_trade["avg_exit_price"] = (
+                    round(current_trade["exit_val"] / current_trade["exit_qty"], 4)
+                    if current_trade["exit_qty"] > 0
+                    else 0.0
+                )
+                current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
+                current_trade["result"] = "OPEN"
+                all_grouped.append(current_trade)
 
     # Sort child fills inside each grouped trade descending (most recent first)
     for trade in all_grouped:

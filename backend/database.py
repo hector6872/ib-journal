@@ -238,6 +238,57 @@ def init_db():
         # Reconcile FIFO PnL on any unassigned executions
         reconcile_fifo_pnl(cursor)
 
+        # Reconcile any existing cash transactions with incorrect positive signs or types for fees/taxes/subscriptions
+        cursor.execute("""
+            UPDATE cash_transactions
+            SET amount = -ABS(amount),
+                raw_amount = -ABS(COALESCE(raw_amount, amount)),
+                type = CASE 
+                    WHEN UPPER(description) LIKE '%OPRA%' 
+                         OR UPPER(description) LIKE '%SUBSCRIPTION%' 
+                         OR UPPER(description) LIKE '%SUSCRIPCI%' 
+                         OR UPPER(description) LIKE '%MARKET DATA%' 
+                         OR UPPER(description) LIKE '%NP L1%' 
+                         OR UPPER(description) LIKE '%L1 FOR%' 
+                         OR UPPER(description) LIKE '%L2 FOR%' 
+                         THEN 'SUBSCRIPTION'
+                    WHEN UPPER(description) LIKE '%TAX%' 
+                         OR UPPER(description) LIKE '%RETENCI%' 
+                         OR UPPER(description) LIKE '%WITHHOLDING%' 
+                         OR UPPER(description) LIKE '%IMPUESTO%' 
+                         THEN 'WITHHOLDING TAX'
+                    WHEN UPPER(description) LIKE '%FEE%' 
+                         OR UPPER(description) LIKE '%COMISI%' 
+                         THEN 'FEE'
+                    ELSE 'WITHDRAWAL'
+                END
+            WHERE (
+                UPPER(description) LIKE '%OPRA%' 
+                OR UPPER(description) LIKE '%SUBSCRIPTION%' 
+                OR UPPER(description) LIKE '%SUSCRIPCI%' 
+                OR UPPER(description) LIKE '%MARKET DATA%' 
+                OR UPPER(description) LIKE '%NP L1%' 
+                OR UPPER(description) LIKE '%L1 FOR%' 
+                OR UPPER(description) LIKE '%L2 FOR%' 
+                OR UPPER(description) LIKE '%FEE%' 
+                OR UPPER(description) LIKE '%- US TAX%' 
+                OR UPPER(description) LIKE '%WITHHOLDING%'
+                OR UPPER(description) LIKE '%RETENCI%'
+                OR UPPER(description) LIKE '%IMPUESTO%'
+            );
+        """)
+
+        cursor.execute("""
+            UPDATE cash_transactions
+            SET type = 'DIVIDEND'
+            WHERE (UPPER(description) LIKE '%DIVIDEND%' OR UPPER(description) LIKE '%DIVIDENDO%')
+              AND UPPER(description) NOT LIKE '%TAX%' 
+              AND UPPER(description) NOT LIKE '%RETENCI%' 
+              AND UPPER(description) NOT LIKE '%WITHHOLDING%'
+              AND UPPER(description) NOT LIKE '%IMPUESTO%'
+              AND amount > 0;
+        """)
+
         logger.info("Database initialized successfully with WAL mode.")
 
 
@@ -493,7 +544,7 @@ def reconcile_fifo_pnl(conn_or_cursor=None):
 
 def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
     """
-    Inserts or updates cash transactions (deposits, withdrawals, transfers).
+    Inserts or updates cash transactions (deposits, withdrawals, transfers, fees, taxes).
     Returns count of upserted records.
     """
     if not transactions:
@@ -510,6 +561,7 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
         :transaction_date, :transaction_time, :description, :is_manual
     )
     ON CONFLICT(transaction_id) DO UPDATE SET
+        type = excluded.type,
         amount = excluded.amount,
         raw_amount = excluded.raw_amount,
         currency = excluded.currency,
@@ -523,12 +575,66 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
 
     sanitized = []
     for tx in transactions:
-        tx_type = (tx.get("type") or "DEPOSIT").upper()
-        amt_val = tx.get("amount")
+        raw_type = (tx.get("type") or tx.get("transaction_type") or "DEPOSIT").upper()
+        amt_val = tx.get("amount") if tx.get("amount") is not None else tx.get("amount_in_base")
         raw_amt_val = tx.get("raw_amount")
         raw_val = float(amt_val) if amt_val is not None else float(raw_amt_val or 0.0)
-        amount = abs(raw_val) if tx_type in ("DEPOSIT", "DIVIDEND") else -abs(raw_val)
-        raw_amount = float(raw_amt_val) if raw_amt_val is not None else amount
+        desc = str(tx.get("description") or "")
+        desc_upper = desc.upper()
+
+        is_negative = (
+            raw_val < 0
+            or (raw_amt_val is not None and float(raw_amt_val) < 0)
+            or "WITHDRAW" in raw_type
+            or "FEE" in raw_type
+            or "TAX" in raw_type
+            or "WITHHOLDING" in raw_type
+            or "SUBSCRIPTION" in raw_type
+            or "TAX" in desc_upper
+            or "RETENCI" in desc_upper
+            or "IMPUESTO" in desc_upper
+            or "OPRA" in desc_upper
+            or "SUBSCRIPTION" in desc_upper
+            or "SUSCRIPCI" in desc_upper
+            or "MARKET DATA" in desc_upper
+        )
+
+        if is_negative:
+            amount = -abs(raw_val)
+            raw_amount = -abs(float(raw_amt_val)) if raw_amt_val is not None else amount
+            if (
+                "SUBSCRIPTION" in raw_type
+                or "SUBSCRIPTION" in desc_upper
+                or "SUSCRIPCI" in desc_upper
+                or "OPRA" in desc_upper
+                or "MARKET DATA" in desc_upper
+                or "NP L1" in desc_upper
+                or "L1 FOR" in desc_upper
+                or "L2 FOR" in desc_upper
+                or "LEVEL 1" in desc_upper
+                or "LEVEL 2" in desc_upper
+                or "QUOTE" in desc_upper
+            ):
+                tx_type = "SUBSCRIPTION"
+            elif (
+                "TAX" in raw_type
+                or "WITHHOLDING" in raw_type
+                or "TAX" in desc_upper
+                or "RETENCI" in desc_upper
+                or "IMPUESTO" in desc_upper
+            ):
+                tx_type = "WITHHOLDING TAX"
+            elif "FEE" in raw_type or "FEE" in desc_upper or "COMISI" in desc_upper:
+                tx_type = "FEE"
+            elif raw_type in ("WITHDRAWAL", "TRANSFER"):
+                tx_type = raw_type
+            else:
+                tx_type = "WITHDRAWAL"
+        else:
+            amount = abs(raw_val)
+            raw_amount = abs(float(raw_amt_val)) if raw_amt_val is not None else amount
+            tx_type = raw_type if raw_type in ("DEPOSIT", "DIVIDEND", "TRANSFER", "INTEREST") else "DEPOSIT"
+
         fx = float(tx.get("fx_rate_to_base") or 1.0)
         sanitized.append(
             {
@@ -543,7 +649,7 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
                 "fx_rate_to_base": fx,
                 "transaction_date": tx.get("transaction_date", date.today().isoformat()),
                 "transaction_time": tx.get("transaction_time", ""),
-                "description": tx.get("description", ""),
+                "description": desc,
                 "is_manual": 1 if tx.get("is_manual") else 0,
             }
         )
@@ -555,7 +661,7 @@ def upsert_cash_transactions(transactions: List[Dict[str, Any]]) -> int:
 
 
 def get_cash_summary() -> Dict[str, Any]:
-    """Returns cash summary metrics and list of transactions."""
+    """Returns cash summary metrics and list of transactions with itemized category stats."""
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -568,13 +674,36 @@ def get_cash_summary() -> Dict[str, Any]:
         """)
         rows = [dict(r) for r in cursor.fetchall()]
 
-        total_deposits = sum(r["amount"] for r in rows if r["amount"] > 0)
-        total_withdrawals = sum(abs(r["amount"]) for r in rows if r["amount"] < 0)
-        net_cash_flow = total_deposits - total_withdrawals
+        total_deposits = sum(r["amount"] for r in rows if r["amount"] > 0 and r["type"] == "DEPOSIT")
+        total_withdrawals = sum(
+            abs(r["amount"]) for r in rows if r["amount"] < 0 and r["type"] in ("WITHDRAWAL", "TRANSFER")
+        )
+        total_dividends = sum(r["amount"] for r in rows if r["type"] == "DIVIDEND" and r["amount"] > 0)
+        total_withholding_tax = sum(
+            abs(r["amount"])
+            for r in rows
+            if r["type"] == "WITHHOLDING TAX" or ("TAX" in (r["type"] or "") and r["amount"] < 0)
+        )
+        total_subscriptions = sum(
+            abs(r["amount"])
+            for r in rows
+            if r["type"] == "SUBSCRIPTION" or ("OPRA" in (r["description"] or "").upper() and r["amount"] < 0)
+        )
+        total_fees = sum(abs(r["amount"]) for r in rows if r["type"] == "FEE")
+
+        all_inflows = sum(r["amount"] for r in rows if r["amount"] > 0)
+        all_outflows = sum(abs(r["amount"]) for r in rows if r["amount"] < 0)
+        net_cash_flow = sum(r["amount"] for r in rows)
 
         return {
             "total_deposits": round(total_deposits, 2),
             "total_withdrawals": round(total_withdrawals, 2),
+            "total_dividends": round(total_dividends, 2),
+            "total_withholding_tax": round(total_withholding_tax, 2),
+            "total_subscriptions": round(total_subscriptions, 2),
+            "total_fees": round(total_fees, 2),
+            "all_inflows": round(all_inflows, 2),
+            "all_outflows": round(all_outflows, 2),
             "net_cash_flow": round(net_cash_flow, 2),
             "transactions_count": len(rows),
             "transactions": rows,
@@ -614,13 +743,13 @@ def add_manual_cash_transaction(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def delete_cash_transaction(tx_id_or_id: Any) -> bool:
-    """Deletes a cash transaction by id or transaction_id."""
+    """Deletes a manual cash transaction by id or transaction_id (only manual records can be deleted)."""
     with db_session() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
             DELETE FROM cash_transactions
-            WHERE id = ? OR transaction_id = ?
+            WHERE (id = ? OR transaction_id = ?) AND is_manual = 1
         """,
             (str(tx_id_or_id), str(tx_id_or_id)),
         )

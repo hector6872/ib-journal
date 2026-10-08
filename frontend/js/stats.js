@@ -32,9 +32,15 @@ const StatsController = {
             elNetPnl.textContent = State.formatCurrency(data.net_pnl);
             elNetPnl.className = `kpi-banner-value mono ${State.getPnlClass(data.net_pnl)}`;
         }
-        if (elWr) elWr.textContent = `${data.win_rate.toFixed(1)}%`;
+        if (elWr) {
+            elWr.textContent = `${data.win_rate.toFixed(1)}%`;
+            elWr.className = `kpi-banner-value mono ${State.getWinRateClass(data.win_rate, data.total_trades)}`;
+        }
         if (elOps) elOps.textContent = State.formatNumber(data.total_trades);
-        if (elPf) elPf.textContent = data.profit_factor.toFixed(2);
+        if (elPf) {
+            elPf.textContent = data.profit_factor.toFixed(2);
+            elPf.className = `kpi-banner-value mono ${State.getRatioClass(data.profit_factor, data.total_trades)}`;
+        }
         if (elExp) {
             elExp.textContent = State.formatCurrency(data.expectancy);
             elExp.className = `kpi-banner-value mono ${State.getPnlClass(data.expectancy)}`;
@@ -51,9 +57,15 @@ const StatsController = {
             miniNetPnl.textContent = State.formatCurrency(data.net_pnl);
             miniNetPnl.className = `mini-kpi-value mono ${State.getPnlClass(data.net_pnl)}`;
         }
-        if (miniWr) miniWr.textContent = `${data.win_rate.toFixed(1)}%`;
+        if (miniWr) {
+            miniWr.textContent = `${data.win_rate.toFixed(1)}%`;
+            miniWr.className = `mini-kpi-value mono ${State.getWinRateClass(data.win_rate, data.total_trades)}`;
+        }
         if (miniOps) miniOps.textContent = State.formatNumber(data.total_trades);
-        if (miniPf) miniPf.textContent = data.profit_factor.toFixed(2);
+        if (miniPf) {
+            miniPf.textContent = data.profit_factor.toFixed(2);
+            miniPf.className = `mini-kpi-value mono ${State.getRatioClass(data.profit_factor, data.total_trades)}`;
+        }
         if (miniExp) {
             miniExp.textContent = State.formatCurrency(data.expectancy);
             miniExp.className = `mini-kpi-value mono ${State.getPnlClass(data.expectancy)}`;

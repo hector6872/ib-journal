@@ -118,14 +118,6 @@ const CashModal = {
                     </div>
 
                     <div class="cash-card">
-                        <span class="cash-card-label">${sc.startingCapital || 'STARTING CAPITAL'}</span>
-                        <span class="cash-card-value mono pnl-neutral">
-                            ${State.formatCurrency(startingCapital)}
-                        </span>
-                        <span class="cash-card-sub">${sc.startingCapitalSub || 'Initial configured balance'}</span>
-                    </div>
-
-                    <div class="cash-card">
                         <span class="cash-card-label">${sc.netTransfers || 'NET TRANSFERS IN/OUT'}</span>
                         <span class="cash-card-value mono ${State.getPnlClass(netTransfers)}">
                             ${State.formatCurrency(netTransfers)}

@@ -649,13 +649,6 @@ const StatsPage = {
                             <span class="cash-card-sub">${STRINGS.cash?.unrealizedPnlSub || 'Open positions valuation / MTM'}</span>
                         </div>
                         <div class="cash-card is-clickable" data-cash-modal="true">
-                            <span class="cash-card-label">${STRINGS.cash?.startingCapital || 'STARTING CAPITAL'}</span>
-                            <span class="cash-card-value mono pnl-neutral">
-                                ${State.formatCurrency(ov.starting_capital || 0)}
-                            </span>
-                            <span class="cash-card-sub">${STRINGS.cash?.startingCapitalStatsSub || 'Configured baseline capital'}</span>
-                        </div>
-                        <div class="cash-card is-clickable" data-cash-modal="true">
                             <span class="cash-card-label">${STRINGS.cash?.netTransfersStats || 'NET CASH TRANSFERS'}</span>
                             <span class="cash-card-value mono ${this.getPnlClass(ov.net_transfers !== undefined ? ov.net_transfers : (ov.total_deposits - ov.total_withdrawals))}">
                                 ${State.formatCurrency(ov.net_transfers !== undefined ? ov.net_transfers : (ov.total_deposits - ov.total_withdrawals))}

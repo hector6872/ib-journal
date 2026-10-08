@@ -1213,11 +1213,11 @@ const StatsPage = {
                                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
                                             <div style="display: flex; gap: 6px; align-items: baseline;">
                                                 <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
-                                                <span class="mono pnl-positive" style="font-weight: 700;">${sizingSummary.stk_win_avg_shares} ${sp.sharesUnit || 'shares'} (${State.formatCurrency(sizingSummary.stk_win_avg_capital)})</span>
+                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.stk_win_avg_shares > 0 ? `${sizingSummary.stk_win_avg_shares} ${sp.sharesUnit || 'shares'} (${State.currency}${sizingSummary.stk_win_avg_capital.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
                                             </div>
                                             <div style="display: flex; gap: 6px; align-items: baseline;">
                                                 <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
-                                                <span class="mono pnl-negative" style="font-weight: 700;">${sizingSummary.stk_loss_avg_shares} ${sp.sharesUnit || 'shares'} (${State.formatCurrency(sizingSummary.stk_loss_avg_capital)})</span>
+                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.stk_loss_avg_shares > 0 ? `${sizingSummary.stk_loss_avg_shares} ${sp.sharesUnit || 'shares'} (${State.currency}${sizingSummary.stk_loss_avg_capital.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1298,11 +1298,11 @@ const StatsPage = {
                                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px;">
                                             <div style="display: flex; gap: 6px; align-items: baseline;">
                                                 <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingWinAvgLabel || 'Avg Winner'}:</span>
-                                                <span class="mono pnl-positive" style="font-weight: 700;">${sizingSummary.opt_win_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.formatCurrency(sizingSummary.opt_win_avg_premium)})</span>
+                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.opt_win_avg_contracts > 0 ? `${sizingSummary.opt_win_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.currency}${sizingSummary.opt_win_avg_premium.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
                                             </div>
                                             <div style="display: flex; gap: 6px; align-items: baseline;">
                                                 <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">${sp.sizingLossAvgLabel || 'Avg Loser'}:</span>
-                                                <span class="mono pnl-negative" style="font-weight: 700;">${sizingSummary.opt_loss_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.formatCurrency(sizingSummary.opt_loss_avg_premium)})</span>
+                                                <span class="mono" style="font-weight: 700; color: var(--text-main);">${sizingSummary.opt_loss_avg_contracts > 0 ? `${sizingSummary.opt_loss_avg_contracts} ${sp.contractsUnit || 'contracts'} (${State.currency}${sizingSummary.opt_loss_avg_premium.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})})` : '--'}</span>
                                             </div>
                                         </div>
                                     </div>

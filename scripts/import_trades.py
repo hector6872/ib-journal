@@ -2069,8 +2069,9 @@ def process_file_or_dir(target_path: Path, dry_run: bool = False, verbose: bool 
                 cash_parsed = parse_csv_cash_transactions(csv_lines)
                 open_pos_parsed = parse_csv_open_positions(csv_lines)
 
+            open_pos_count = len(open_pos_parsed) if open_pos_parsed is not None else 0
             logger.info(
-                f"  -> Extracted {len(parsed)} trade executions, {len(cash_parsed)} cash transactions, {len(open_pos_parsed)} open positions."
+                f"  -> Extracted {len(parsed)} trade executions, {len(cash_parsed)} cash transactions, {open_pos_count} open positions."
             )
             if verbose:
                 for t in parsed[:5]:

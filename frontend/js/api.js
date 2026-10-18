@@ -151,6 +151,30 @@ const API = {
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Failed to delete cash transaction");
         return data;
+    },
+
+    async fetchOpenPositions() {
+        const res = await fetch('/api/positions/open');
+        if (!res.ok) throw new Error("Failed to fetch open positions");
+        return await res.json();
+    },
+
+    async clearOpenPositions() {
+        const res = await fetch('/api/positions/open', {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to clear open positions");
+        return data;
+    },
+
+    async reconcileOpenPositions() {
+        const res = await fetch('/api/positions/open/reconcile', {
+            method: 'POST'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to reconcile open positions");
+        return data;
     }
 };
 

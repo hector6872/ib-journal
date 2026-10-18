@@ -443,7 +443,14 @@ const STRINGS = {
         saveErrorTitle: "Save Capital Error",
         recordErrorTitle: "Record Transfer Error",
         deleteErrorTitle: "Delete Transfer Error",
-        loadErrorMsg: "Failed to load cash management details."
+        loadErrorMsg: "Failed to load cash management details.",
+        openPositionsTitle: "Current Open Positions (Mark-to-Market)",
+        openPositionsSubtitle: "Positions snapshot contributing to Unrealized P&L and NAV.",
+        clearPositionsBtn: "Clear Open Positions",
+        reconcilePositionsBtn: "Recalculate FX & Trades",
+        emptyOpenPositions: "No open positions currently recorded. Unrealized P&L is 0.00.",
+        confirmClearPositionsTitle: "Clear Open Positions",
+        confirmClearPositionsMsg: "Are you sure you want to clear all open positions? This will reset Unrealized P&L to 0.00 until the next statement import or sync."
     },
 
     // Dialogs & Modals

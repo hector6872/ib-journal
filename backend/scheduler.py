@@ -17,7 +17,13 @@ from backend.config import (
     is_ibkr_configured,
     is_production,
 )
-from backend.database import db_session, upsert_cash_transactions, upsert_open_positions, upsert_trades
+from backend.database import (
+    db_session,
+    reconcile_open_positions_with_trades,
+    upsert_cash_transactions,
+    upsert_open_positions,
+    upsert_trades,
+)
 from backend.flex_client import IBKRFlexClient
 
 logger = logging.getLogger("ib-journal.scheduler")
@@ -279,8 +285,10 @@ class SyncScheduler:
 
                     t_count = upsert_trades(trades) if trades else 0
                     c_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
-                    if open_pos:
-                        upsert_open_positions(open_pos)
+                    if open_pos is not None:
+                        upsert_open_positions(open_pos, clear_existing=True)
+                    else:
+                        reconcile_open_positions_with_trades()
 
                     total_trades_count += t_count
                     total_cash_count += c_count
@@ -296,6 +304,9 @@ class SyncScheduler:
                 sync_type == "scheduled_daily"
                 or (sync_type == "manual" and activity_query and activity_query != trade_query)
             ) and activity_query:
+                # Brief pause between sequential API calls to respect IBKR rate limits
+                if "Intraday" in queries_run:
+                    await asyncio.sleep(2)
                 try:
                     logger.info(f"Connecting to IBKR Flex Web Service (Activity query: {activity_query})...")
                     xml_data_act = await client.fetch_statement_xml(query_id=activity_query)
@@ -305,8 +316,10 @@ class SyncScheduler:
 
                     t_count_act = upsert_trades(trades_act) if trades_act else 0
                     c_count_act = upsert_cash_transactions(cash_act) if cash_act else 0
-                    if open_pos_act:
-                        upsert_open_positions(open_pos_act)
+                    if open_pos_act is not None:
+                        upsert_open_positions(open_pos_act, clear_existing=True)
+                    else:
+                        reconcile_open_positions_with_trades()
 
                     total_trades_count += t_count_act
                     total_cash_count += c_count_act

@@ -22,13 +22,17 @@ from backend.config import BASE_DIR, HOST, PORT, is_ibkr_configured
 
 from backend.database import (
     add_manual_cash_transaction,
+    clear_all_open_positions,
     db_session,
     delete_cash_transaction,
     get_active_base_currency,
     get_cash_summary,
     get_currency_symbol,
+    get_latest_unrealized_pnl,
     get_open_positions,
     init_db,
+    recalculate_open_positions_fx,
+    reconcile_open_positions_with_trades,
     upsert_cash_transactions,
     upsert_open_positions,
     upsert_trades,
@@ -191,7 +195,7 @@ async def api_trades_import(request: Request):
         text = content_bytes.decode("utf-8-sig", errors="replace")
         trades = []
         cash_txs = []
-        open_positions = []
+        open_positions = None
 
         # 1. Check XML
         trimmed = text.strip()
@@ -232,7 +236,7 @@ async def api_trades_import(request: Request):
             except Exception:
                 pass
         # 3. Check CSV
-        if not trades and not cash_txs:
+        if not trades and not cash_txs and open_positions is None:
             from scripts.import_trades import (
                 ACCOUNT_SECTIONS,
                 CASH_SECTIONS,
@@ -277,7 +281,7 @@ async def api_trades_import(request: Request):
 
             open_positions = parse_csv_open_positions(lines)
 
-        if not trades and not cash_txs and not open_positions:
+        if not trades and not cash_txs and open_positions is None:
             raise HTTPException(
                 status_code=400,
                 detail="No trade executions, cash transactions, or open positions found in statement. Please ensure it is an IBKR Activity Statement CSV/XML, Flex Query export, or Trade Confirmation report.",
@@ -288,7 +292,11 @@ async def api_trades_import(request: Request):
         prev_currency = get_active_base_currency()
         count = upsert_trades(trades) if trades else 0
         cash_count = upsert_cash_transactions(cash_txs) if cash_txs else 0
-        open_count = upsert_open_positions(open_positions) if open_positions else 0
+        if open_positions is not None:
+            open_count = upsert_open_positions(open_positions, clear_existing=True)
+        else:
+            reconcile_open_positions_with_trades()
+            open_count = 0
         new_currency = get_active_base_currency()
         new_symbol = get_currency_symbol(new_currency)
         currency_changed = prev_currency != new_currency
@@ -371,11 +379,35 @@ async def api_delete_cash_transaction(tx_id: str):
 async def api_open_positions():
     """Returns all current open positions and total unrealized PnL from SQLite database."""
     positions = get_open_positions()
-    total_unrealized = round(sum(p.get("unrealized_pnl", 0.0) for p in positions), 2)
+    total_unrealized = get_latest_unrealized_pnl()
     return {
         "positions": positions,
         "count": len(positions),
         "total_unrealized_pnl": total_unrealized,
+    }
+
+
+@app.delete("/api/positions/open")
+async def api_clear_open_positions():
+    """Clears all open positions from database."""
+    count = clear_all_open_positions()
+    return {"status": "success", "message": f"Cleared {count} open positions.", "cleared_count": count}
+
+
+@app.post("/api/positions/open/reconcile")
+async def api_reconcile_open_positions():
+    """Recalculates FX rates for open positions and reconciles with subsequent trades."""
+    fx_count = recalculate_open_positions_fx()
+    trade_count = reconcile_open_positions_with_trades()
+    positions = get_open_positions()
+    total_unrealized = get_latest_unrealized_pnl()
+    return {
+        "status": "success",
+        "positions": positions,
+        "count": len(positions),
+        "total_unrealized_pnl": total_unrealized,
+        "fx_updated": fx_count,
+        "trades_reconciled": trade_count,
     }
 
 

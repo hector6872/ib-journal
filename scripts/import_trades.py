@@ -25,8 +25,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from backend.config import DB_PATH  # noqa: E402
 from backend.database import (  # noqa: E402
     db_session,
+    get_latest_fx_rate_to_base,
     init_db,
     normalize_symbol,
+    reconcile_open_positions_with_trades,
     upsert_cash_transactions,
     upsert_open_positions,
     upsert_trades,
@@ -677,11 +679,27 @@ def parse_xml_cash_transactions(filepath: Path) -> List[Dict[str, Any]]:
     return txs
 
 
-def parse_xml_open_positions(filepath: Path) -> List[Dict[str, Any]]:
-    """Parses open positions from IBKR Flex XML."""
+def parse_xml_open_positions(filepath: Path) -> Optional[List[Dict[str, Any]]]:
+    """
+    Parses open positions from IBKR Flex XML.
+    Returns None if statement contains no Open Positions section, or a List[Dict] (which may be empty)
+    if the section is present.
+    """
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except Exception:
+        return None
+
+    if "<OpenPosition" not in content and "<OpenPositions" not in content:
+        return None
+
     positions: List[Dict[str, Any]] = []
-    tree = ET.parse(filepath)
-    root = tree.getroot()
+    try:
+        root = ET.fromstring(content)
+    except Exception as e:
+        logger.error(f"Failed to parse XML for open positions: {e}")
+        return []
 
     base_currency = "EUR"
     for node in root.iter("AccountInformation"):
@@ -704,6 +722,9 @@ def parse_xml_open_positions(filepath: Path) -> List[Dict[str, Any]]:
         norm_sym = normalize_symbol(raw_sym, desc, cat)
         curr = (attrs.get("currency") or base_currency).upper()
         fx_rate = clean_num(attrs.get("fxRateToBase") or attrs.get("fxRate"), 1.0)
+        if fx_rate <= 0 or (curr != base_currency and fx_rate == 1.0):
+            fx_rate = get_latest_fx_rate_to_base(curr, base_currency)
+
         raw_unrealized = clean_num(
             attrs.get("fifoPnlUnrealized")
             or attrs.get("unrealizedPnL")
@@ -1815,31 +1836,84 @@ def parse_generic_ibkr_csv(lines: List[str]) -> List[Dict[str, Any]]:
     return trades
 
 
-def parse_csv_open_positions(lines: List[str]) -> List[Dict[str, Any]]:
+def parse_csv_open_positions(lines: List[str]) -> Optional[List[Dict[str, Any]]]:
     """
     Parses Open Positions section from IBKR Activity Statement CSV into structured position dicts.
+    Returns None if CSV contains no Open Positions section, or a List[Dict] (which may be empty)
+    if the section is present.
     """
     delimiter = detect_csv_delimiter(lines)
     positions: List[Dict[str, Any]] = []
 
+    has_open_pos_sec = False
     report_date = date.today().isoformat()
     base_currency = "EUR"
+    fx_rates_to_base: Dict[str, float] = {}
 
-    for line in lines[:60]:
+    for line in lines:
         row = parse_csv_line_tokens(line, delimiter)
-        if len(row) >= 4:
-            sec = row[0].strip().lower().strip('"')
-            if sec in ("account information", "información de la cuenta", "información sobre la cuenta"):
-                f_name = row[2].strip().lower().strip('"')
-                if "base currency" in f_name or "moneda base" in f_name or "divisa base" in f_name:
+        if not row or len(row) < 3:
+            continue
+        sec = row[0].strip().lower().strip('"')
+        rec_type = row[1].strip().lower().strip('"')
+
+        if sec in ("open positions", "posiciones abiertas", "posiciones vivas"):
+            has_open_pos_sec = True
+
+        if sec in ("account information", "información de la cuenta", "información sobre la cuenta"):
+            f_name = row[2].strip().lower().strip('"')
+            if "base currency" in f_name or "moneda base" in f_name or "divisa base" in f_name:
+                if len(row) >= 4:
                     base_currency = row[3].strip().upper().strip('"')
-            elif sec in ("statement", "extracto", "informe", "estado"):
-                f_name = row[2].strip().lower().strip('"')
-                if "period" in f_name or "período" in f_name:
+                    fx_rates_to_base[base_currency] = 1.0
+        elif sec in ("statement", "extracto", "informe", "estado"):
+            f_name = row[2].strip().lower().strip('"')
+            if "period" in f_name or "período" in f_name:
+                if len(row) >= 4:
                     p_val = row[3].strip()
                     m = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", p_val)
                     if m:
                         report_date = m[-1]
+        elif sec in FOREX_SECTIONS and rec_type in DATA_RECORD_TYPES:
+            if len(row) >= 9:
+                curr = row[4].strip().upper()
+                close_price = clean_num(row[8])
+                if curr and close_price > 0:
+                    fx_rates_to_base[curr] = close_price
+            elif len(row) >= 8 and any(
+                term in row[2].strip().lower()
+                for term in ("forex", "divisas", "moneda", "devises", "valuta", "währung", "外汇", "為替")
+            ):
+                curr = row[3].strip().upper()
+                curr_price = clean_num(row[7])
+                if curr and curr_price > 0:
+                    fx_rates_to_base[curr] = curr_price
+        elif (
+            any(
+                term in sec
+                for term in (
+                    "exchange rate",
+                    "tipo de cambio",
+                    "tipos de cambio",
+                    "wechselkurs",
+                    "taux de change",
+                    "tassi di cambio",
+                    "汇率",
+                    "為替レート",
+                )
+            )
+            and rec_type in DATA_RECORD_TYPES
+        ):
+            for val in row[2:]:
+                num_val = clean_num(val)
+                if num_val > 0 and num_val != 1.0:
+                    for curr_token in row[2:]:
+                        c_str = curr_token.strip().upper()
+                        if len(c_str) == 3 and c_str.isalpha() and c_str != base_currency:
+                            fx_rates_to_base[c_str] = num_val
+
+    if not has_open_pos_sec:
+        return None
 
     header_map: Dict[str, int] = {}
     in_open_pos = False
@@ -1901,7 +1975,11 @@ def parse_csv_open_positions(lines: List[str]) -> List[Dict[str, Any]]:
                 cat = "OPT"
 
             norm_sym = normalize_symbol(raw_sym, raw_sym, cat)
-            fx_rate = 1.0
+            fx_rate = 1.0 if curr == base_currency else fx_rates_to_base.get(curr, 0.0)
+            if fx_rate <= 0:
+                fx_rate = get_latest_fx_rate_to_base(curr, base_currency)
+
+            unrealized = round(raw_unrealized * fx_rate, 4) if fx_rate > 0 else raw_unrealized
 
             positions.append(
                 {
@@ -1918,7 +1996,7 @@ def parse_csv_open_positions(lines: List[str]) -> List[Dict[str, Any]]:
                     "cost_basis": cost_basis,
                     "close_price": close_price,
                     "position_value": pos_val,
-                    "unrealized_pnl": raw_unrealized,
+                    "unrealized_pnl": unrealized,
                     "raw_unrealized_pnl": raw_unrealized,
                     "report_date": report_date,
                 }
@@ -1930,7 +2008,7 @@ def parse_csv_open_positions(lines: List[str]) -> List[Dict[str, Any]]:
 def parse_csv_unrealized_pnl(lines: List[str]) -> Optional[float]:
     """Extracts total Unrealized P&L from an IBKR Activity Statement CSV if available."""
     open_pos = parse_csv_open_positions(lines)
-    if open_pos:
+    if open_pos is not None and len(open_pos) > 0:
         return round(sum(p["unrealized_pnl"] for p in open_pos), 2)
 
     delimiter = detect_csv_delimiter(lines)

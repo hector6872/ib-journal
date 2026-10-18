@@ -18,9 +18,9 @@ unset PYTHONHOME
 VENV_DIR="$SCRIPT_DIR/.venv"
 VENV_PYTHON="$VENV_DIR/bin/python3"
 
-if [ ! -f "$VENV_PYTHON" ]; then
-    echo "📦 Virtual environment (.venv) not found. Creating one..."
-    python3 -m venv "$VENV_DIR"
+if [ ! -f "$VENV_PYTHON" ] || ! "$VENV_PYTHON" -c "import uvicorn" >/dev/null 2>&1; then
+    echo "📦 Virtual environment (.venv) incomplete or broken. Setting up..."
+    python3 -m venv --clear "$VENV_DIR"
     "$VENV_PYTHON" -m pip install --upgrade pip
     "$VENV_PYTHON" -m pip install -r requirements.txt
 fi

@@ -1,11 +1,12 @@
 # 📓 IBKR Trading Journal
 
 [![CI](https://github.com/hector6872/ib-journal/actions/workflows/ci.yml/badge.svg)](https://github.com/hector6872/ib-journal/actions/workflows/ci.yml)
-[![Sync Repository to GitLab](https://github.com/hector6872/ib-journal/actions/workflows/sync-to-gitlab.yml/badge.svg)](https://github.com/hector6872/ib-journal/actions/workflows/sync-to-gitlab.yml)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-orange.svg)](LICENSE.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Type Checked: mypy](https://img.shields.io/badge/type_checker-mypy-blue.svg)](https://mypy-lang.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal & Analytics Suite** designed to run 24/7 on a **Raspberry Pi** or any Linux/macOS/Windows server.
 
@@ -14,8 +15,9 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 ## ✨ Key Features
 
 - **⚡ Pure Vanilla Web Stack**: 100% pure HTML5, modern CSS, and vanilla ES6+ JavaScript. No React, no Node.js, no npm dependencies, no build step.
-- **💰 Capital & Cash Management**:
-  - **Account Equity (NAV)** tracking: `Starting Capital + Net Cash Flow + Realized P&L`.
+- **💰 Capital, Open Positions & Cash Management**:
+  - **Account Equity (NAV)** tracking: `Starting Capital + Net Cash Flow + Realized P&L + Unrealized P&L`.
+  - **Open Positions & Mark-to-Market Valuation**: Multi-currency position tracking with live market prices, currency conversion to base portfolio currency (`EUR`, `USD`, etc.), and automatic trade reconciliation.
   - **Starting Capital**: Set your baseline portfolio capital with cross-device SQLite synchronization.
   - **Automatic & Manual Cash Transfers**: Auto-imports deposits and withdrawals from IBKR activity statements and allows manual cash entries.
   - **Account Expenses & Broker Costs**: Automatic parsing and classification of market data subscriptions (e.g. OPRA), broker fees, and withholding taxes.
@@ -254,6 +256,8 @@ To change any wording, customize labels, or translate the entire interface into 
 | `/api/settings` | `GET` / `POST` | User settings (e.g. Starting Capital) persisted in SQLite for cross-device synchronization. |
 | `/api/cash/transactions` | `GET` / `POST` | Retrieve cash summary / records, or record manual deposit/withdrawal. |
 | `/api/cash/transactions/{id}` | `DELETE` | Remove a manual cash transaction (broker-imported records are protected). |
+| `/api/positions/open` | `GET` / `DELETE` | Retrieve open positions with mark-to-market prices and unrealized P&L, or clear positions. |
+| `/api/positions/open/reconcile` | `POST` | Recalculate FX rates for open positions and reconcile against subsequent trades. |
 | `/api/stats/overview` | `GET` | Global KPIs: Win Rate %, Profit Factor, Expectancy, Total Round-Trip Trades, Net Realized P&L, NAV Equity, ROI %. |
 | `/api/stats/detailed` | `GET` | Comprehensive trading analytics (drawdowns, rolling win rates, position sizing, metric evolution, breakdowns). |
 | `/api/calendar/year?year=2026` | `GET` | 12-month calendar matrix and monthly summary array. |

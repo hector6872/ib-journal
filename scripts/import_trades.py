@@ -28,7 +28,6 @@ from backend.database import (  # noqa: E402
     get_latest_fx_rate_to_base,
     init_db,
     normalize_symbol,
-    reconcile_open_positions_with_trades,
     upsert_cash_transactions,
     upsert_open_positions,
     upsert_trades,

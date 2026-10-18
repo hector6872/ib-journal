@@ -65,6 +65,18 @@ def classify_ibkr_error(err: Any) -> Dict[str, Any]:
             "error_params": {},
             "message": "IBKR request timed out",
         }
+    if "503" in s or "Service Unavailable" in s:
+        return {
+            "error_code": "ERR_IBKR_SERVICE_UNAVAILABLE",
+            "error_params": {"code": 503},
+            "message": "IBKR Error 503: Servers temporarily unavailable (maintenance)",
+        }
+    if "502" in s or "Bad Gateway" in s:
+        return {
+            "error_code": "ERR_IBKR_BAD_GATEWAY",
+            "error_params": {"code": 502},
+            "message": "IBKR Error 502: Bad gateway",
+        }
     if "HTTP error:" in s:
         clean_msg = s.split("HTTP error:")[-1].strip()
         return {

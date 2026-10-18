@@ -1437,6 +1437,15 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         self.assertEqual(len(get_open_positions()), 0)
         self.assertEqual(get_latest_unrealized_pnl(), 0.0)
 
+    def test_classify_ibkr_error_503(self):
+        from backend.scheduler import classify_ibkr_error
+        res_503 = classify_ibkr_error("RuntimeError: IBKR SendRequest HTTP error: 503 - Service Unavailable")
+        self.assertEqual(res_503["error_code"], "ERR_IBKR_SERVICE_UNAVAILABLE")
+        self.assertIn("503", res_503["message"])
+
+        res_502 = classify_ibkr_error("RuntimeError: IBKR SendRequest HTTP error: 502 - Bad Gateway")
+        self.assertEqual(res_502["error_code"], "ERR_IBKR_BAD_GATEWAY")
+
 
 if __name__ == "__main__":
     unittest.main()

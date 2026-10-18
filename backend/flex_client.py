@@ -100,6 +100,8 @@ class IBKRFlexClient:
                     # Valid response format from IBKR but error status
                     last_network_error = None
                     break
+                elif status_code == 503:
+                    logger.warning(f"IBKR endpoint {send_url} returned HTTP 503 Service Unavailable (servers under maintenance).")
             except Exception as e:
                 logger.warning(f"Could not connect to IBKR endpoint {send_url}: {e}")
                 last_network_error = e
@@ -111,6 +113,8 @@ class IBKRFlexClient:
             )
 
         if status_code != 200:
+            if status_code == 503:
+                logger.warning("IBKR servers returned HTTP 503 Service Unavailable (maintenance / temporary overload).")
             raise RuntimeError(f"IBKR SendRequest HTTP error: {status_code} - {resp_text}")
 
         root = ET.fromstring(resp_text)
@@ -141,6 +145,8 @@ class IBKRFlexClient:
             s_code, stmt_text = await self._http_get(get_url, {"t": self.token, "q": ref_code, "v": "3"})
 
             if s_code != 200:
+                if s_code == 503:
+                    logger.warning(f"Attempt {attempt}: IBKR statement polling returned HTTP 503 Service Unavailable (servers under maintenance).")
                 continue
 
             stmt_text = stmt_text.strip()

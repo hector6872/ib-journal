@@ -139,7 +139,7 @@ The web journal is now live at `http://localhost:8000` (or `http://raspberrypi.l
 ## 🔄 Automated Synchronization (Dual-Sync Architecture)
 
 The journal implements a **Dual-Sync pipeline** to overcome IBKR's API batch limitations:
-* **Core Foundation (Essential — `IBKR_ACTIVITY_QUERY_ID`)**: Runs once daily at `DAILY_ACTIVITY_SYNC_HOUR` UTC to consolidate official settled trades, realized P&L, commissions, and automatically sync bank deposits/withdrawals.
+* **Core Foundation (Essential — `IBKR_ACTIVITY_QUERY_ID`)**: Runs once daily at `DAILY_ACTIVITY_SYNC_HOUR` UTC to consolidate official settled trades, realized P&L, commissions, bank deposits/withdrawals, and **open positions with live mark-to-market valuations and FX rates** (ensuring accurate Unrealized P&L and Portfolio NAV).
 * **Intraday Companion (Optional — `IBKR_TRADE_QUERY_ID`)**: Runs every 15 minutes during market hours so that current-day fills and live performance appear without having to wait for overnight processing.
 * **Unified Manual Sync**: The *Sync Now* button triggers all configured queries seamlessly with a 5-minute safety cooldown.
 

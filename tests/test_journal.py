@@ -1395,9 +1395,56 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         total_unrealized = get_latest_unrealized_pnl()
         self.assertEqual(total_unrealized, 48.20)
 
-        # Verify overview stats includes unrealized PnL from SQLite
+        # Verify overview stats includes unrealized PnL from SQLite for current periods
         overview = get_overview_stats()
         self.assertEqual(overview["unrealized_pnl"], 48.20)
+
+        # Verify historical date filter excludes current open positions
+        overview_hist = get_overview_stats("2024-01-01", "2024-12-31")
+        self.assertEqual(overview_hist["unrealized_pnl"], 0.0)
+
+        # Test trade reconciliation removes closed position
+        closing_trades = [
+            {
+                "ib_exec_id": "EXEC_CLOSE_ELAB",
+                "trade_id": "T_CLOSE_1",
+                "symbol": "ELAB",
+                "description": "ELEVATION ONCOLOGY",
+                "asset_category": "STK",
+                "buy_sell": "SELL",
+                "quantity": -20.0,
+                "trade_price": 3.0,
+                "ib_commission": 1.0,
+                "realized_pnl": -40.0,
+                "trade_date": "2026-10-09",
+                "trade_time": "10:00:00",
+                "trade_date_time": "2026-10-09 10:00:00",
+                "open_close_indicator": "C",
+            }
+        ]
+        upsert_trades(closing_trades)
+        from backend.database import clear_all_open_positions, reconcile_open_positions_with_trades
+        reconciled = reconcile_open_positions_with_trades()
+        self.assertEqual(reconciled, 1)
+
+        remaining = get_open_positions()
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0]["symbol"], "RKLB")
+
+        # Test clear_all_open_positions
+        cleared = clear_all_open_positions()
+        self.assertEqual(cleared, 1)
+        self.assertEqual(len(get_open_positions()), 0)
+        self.assertEqual(get_latest_unrealized_pnl(), 0.0)
+
+    def test_classify_ibkr_error_503(self):
+        from backend.scheduler import classify_ibkr_error
+        res_503 = classify_ibkr_error("RuntimeError: IBKR SendRequest HTTP error: 503 - Service Unavailable")
+        self.assertEqual(res_503["error_code"], "ERR_IBKR_SERVICE_UNAVAILABLE")
+        self.assertIn("503", res_503["message"])
+
+        res_502 = classify_ibkr_error("RuntimeError: IBKR SendRequest HTTP error: 502 - Bad Gateway")
+        self.assertEqual(res_502["error_code"], "ERR_IBKR_BAD_GATEWAY")
 
 
 if __name__ == "__main__":

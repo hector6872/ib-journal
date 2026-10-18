@@ -57,6 +57,9 @@ const STRINGS = {
         ERR_IBKR_INVALID_TOKEN: "IBKR Error 1014: Invalid or expired token",
         ERR_IBKR_STATEMENT_GENERATING: "Statement is generating (Try again shortly)",
         ERR_IBKR_TIMEOUT: "IBKR request timed out",
+        ERR_IBKR_SERVICE_UNAVAILABLE: "IBKR Error 503: Servers temporarily unavailable (maintenance)",
+        ERR_IBKR_BAD_GATEWAY: "IBKR Error 502: Bad gateway",
+        ERR_BACKEND_UNAVAILABLE: "Service Unavailable (HTTP 503): Backend container or server is not running",
         ERR_COOLDOWN_ACTIVE: "Rate limit cooldown active. Please wait {seconds}s",
         ERR_UNCONFIGURED: "Configure IBKR credentials in .env",
         ERR_SYNC_IN_PROGRESS: "Synchronization is already in progress",
@@ -443,7 +446,14 @@ const STRINGS = {
         saveErrorTitle: "Save Capital Error",
         recordErrorTitle: "Record Transfer Error",
         deleteErrorTitle: "Delete Transfer Error",
-        loadErrorMsg: "Failed to load cash management details."
+        loadErrorMsg: "Failed to load cash management details.",
+        openPositionsTitle: "Current Open Positions (Mark-to-Market)",
+        openPositionsSubtitle: "Positions snapshot contributing to Unrealized P&L and NAV.",
+        clearPositionsBtn: "Clear Open Positions",
+        reconcilePositionsBtn: "Recalculate FX & Trades",
+        emptyOpenPositions: "No open positions currently recorded. Unrealized P&L is 0.00.",
+        confirmClearPositionsTitle: "Clear Open Positions",
+        confirmClearPositionsMsg: "Are you sure you want to clear all open positions? This will reset Unrealized P&L to 0.00 until the next statement import or sync."
     },
 
     // Dialogs & Modals

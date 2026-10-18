@@ -305,6 +305,9 @@ def init_db():
         cleanup_duplicate_trades(conn)
         cleanup_duplicate_cash_transactions(conn)
 
+        # Recalculate any legacy open positions missing base currency FX rates
+        recalculate_open_positions_fx(conn)
+
         # Reset BUY orders that were corrupted by old FIFO reconcile logic (BUY entries never have realized PnL)
         cursor.execute("""
             UPDATE trades
@@ -893,13 +896,192 @@ def get_currency_symbol(currency_code: Optional[str] = None) -> str:
     return CURRENCY_SYMBOLS.get(code, "$")
 
 
+def get_latest_fx_rate_to_base(
+    currency: str, base_currency: str = "EUR", conn: Optional[sqlite3.Connection] = None
+) -> float:
+    """Returns the most recent exchange rate to base currency from trades or cash transactions."""
+    curr = (currency or "").strip().upper()
+    base = (base_currency or "EUR").strip().upper()
+    if not curr or curr == base:
+        return 1.0
+
+    def query_fx(connection: sqlite3.Connection) -> Optional[float]:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT fx_rate_to_base FROM trades
+            WHERE (raw_currency = ? OR currency = ?)
+              AND fx_rate_to_base > 0
+              AND fx_rate_to_base != 1.0
+            ORDER BY trade_date DESC, id DESC
+            LIMIT 1;
+        """,
+            (curr, curr),
+        )
+        row = cursor.fetchone()
+        if row and row[0] is not None and float(row[0]) > 0:
+            return float(row[0])
+
+        cursor.execute(
+            """
+            SELECT fx_rate_to_base FROM cash_transactions
+            WHERE (raw_currency = ? OR currency = ?)
+              AND fx_rate_to_base > 0
+              AND fx_rate_to_base != 1.0
+            ORDER BY transaction_date DESC, id DESC
+            LIMIT 1;
+        """,
+            (curr, curr),
+        )
+        row = cursor.fetchone()
+        if row and row[0] is not None and float(row[0]) > 0:
+            return float(row[0])
+        return None
+
+    try:
+        if conn:
+            fx = query_fx(conn)
+            if fx is not None:
+                return fx
+        else:
+            with db_session() as connection:
+                fx = query_fx(connection)
+                if fx is not None:
+                    return fx
+    except Exception as e:
+        logger.warning(f"Failed to lookup FX rate for {curr}->{base}: {e}")
+
+    return 1.0
+
+
+def recalculate_open_positions_fx(conn: Optional[sqlite3.Connection] = None) -> int:
+    """
+    Recalculates unrealized_pnl for open positions missing accurate FX rates.
+    Ensures that foreign currency open positions are accurately converted to base currency.
+    """
+    base_curr = get_active_base_currency()
+
+    def do_recalc(connection: sqlite3.Connection) -> int:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT id, symbol, currency, raw_currency, base_currency, fx_rate_to_base, raw_unrealized_pnl, cost_basis, position_value FROM open_positions;"
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        updated = 0
+        for r in rows:
+            curr = (r.get("currency") or r.get("raw_currency") or base_curr).upper()
+            pos_base = (r.get("base_currency") or base_curr).upper()
+            fx = float(r.get("fx_rate_to_base") or 1.0)
+            if curr != pos_base and fx == 1.0:
+                fx = get_latest_fx_rate_to_base(curr, pos_base, conn=connection)
+
+            raw_pnl = float(r.get("raw_unrealized_pnl") or 0.0)
+            converted = round(raw_pnl * fx, 4) if fx > 0 else raw_pnl
+            cursor.execute(
+                "UPDATE open_positions SET fx_rate_to_base = ?, unrealized_pnl = ?, base_currency = ? WHERE id = ?;",
+                (fx, converted, pos_base, r["id"]),
+            )
+            updated += 1
+        return updated
+
+    try:
+        if conn:
+            return do_recalc(conn)
+        else:
+            with db_session() as connection:
+                return do_recalc(connection)
+    except Exception as e:
+        logger.warning(f"Failed to recalculate open positions FX: {e}")
+        return 0
+
+
+def reconcile_open_positions_with_trades(conn: Optional[sqlite3.Connection] = None) -> int:
+    """
+    Reconciles open positions snapshot with trades that occurred on or after the position's report_date.
+    If subsequent closing trades reduce or close a position to zero, updates or removes it.
+    """
+
+    def do_reconcile(connection: sqlite3.Connection) -> int:
+        cursor = connection.cursor()
+        cursor.execute("SELECT id, symbol, quantity, report_date FROM open_positions;")
+        positions = [dict(r) for r in cursor.fetchall()]
+        if not positions:
+            return 0
+
+        modified = 0
+        for pos in positions:
+            sym = pos["symbol"]
+            rd = pos["report_date"] or "1970-01-01"
+            cursor.execute(
+                """
+                SELECT buy_sell, quantity, realized_pnl
+                FROM trades
+                WHERE symbol = ? AND trade_date >= ?
+                ORDER BY trade_date ASC, id ASC;
+            """,
+                (sym, rd),
+            )
+            trades = [dict(r) for r in cursor.fetchall()]
+            if not trades:
+                continue
+
+            orig_qty = float(pos["quantity"])
+            net_delta = sum(float(t["quantity"]) for t in trades)
+            new_qty = orig_qty + net_delta
+            if abs(new_qty) < 1e-5:
+                cursor.execute("DELETE FROM open_positions WHERE id = ?;", (pos["id"],))
+                logger.info(f"Removed closed position {sym} from open_positions (closed by subsequent trades).")
+                modified += 1
+            elif abs(new_qty - orig_qty) > 1e-5:
+                ratio = new_qty / orig_qty if abs(orig_qty) > 1e-6 else 1.0
+                cursor.execute(
+                    """
+                    UPDATE open_positions
+                    SET quantity = ?,
+                        cost_basis = round(cost_basis * ?, 4),
+                        position_value = round(position_value * ?, 4),
+                        unrealized_pnl = round(unrealized_pnl * ?, 4),
+                        raw_unrealized_pnl = round(raw_unrealized_pnl * ?, 4)
+                    WHERE id = ?;
+                """,
+                    (new_qty, ratio, ratio, ratio, ratio, pos["id"]),
+                )
+                logger.info(f"Updated position {sym} quantity from {orig_qty} to {new_qty}.")
+                modified += 1
+        return modified
+
+    try:
+        if conn:
+            return do_reconcile(conn)
+        else:
+            with db_session() as connection:
+                return do_reconcile(connection)
+    except Exception as e:
+        logger.warning(f"Failed to reconcile open positions with trades: {e}")
+        return 0
+
+
+def clear_all_open_positions() -> int:
+    """Removes all open positions from database and returns number of cleared records."""
+    with db_session() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM open_positions;")
+        count = int(cursor.fetchone()[0] or 0)
+        cursor.execute("DELETE FROM open_positions;")
+        logger.info(f"Cleared {count} open positions from database.")
+        return count
+
+
 def upsert_open_positions(positions: List[Dict[str, Any]], clear_existing: bool = True) -> int:
     """
     Saves current open positions snapshot in SQLite database.
     If clear_existing is True (default), removes old snapshot positions and inserts the new state.
+    Converts unrealized P&L, cost basis, and position value into base currency using accurate FX rates.
     """
     if not positions and not clear_existing:
         return 0
+
+    base_curr = get_active_base_currency()
 
     with db_session() as conn:
         cursor = conn.cursor()
@@ -907,11 +1089,30 @@ def upsert_open_positions(positions: List[Dict[str, Any]], clear_existing: bool 
             cursor.execute("DELETE FROM open_positions;")
 
         if not positions:
+            logger.info("Cleared open positions table (snapshot reported 0 open positions).")
             return 0
 
         inserted = 0
         for p in positions:
             sym = normalize_symbol(p.get("symbol", ""), p.get("description", ""), p.get("asset_category", "STK"))
+            curr = (p.get("currency") or p.get("raw_currency") or base_curr).upper()
+            pos_base = (p.get("base_currency") or base_curr).upper()
+            fx_rate = float(p.get("fx_rate_to_base") or 0.0)
+            if fx_rate <= 0 or (curr != pos_base and fx_rate == 1.0):
+                fx_rate = get_latest_fx_rate_to_base(curr, pos_base, conn=conn)
+
+            raw_unrealized = float(p.get("raw_unrealized_pnl", p.get("unrealized_pnl", 0.0)) or 0.0)
+            unrealized = float(p.get("unrealized_pnl", 0.0) or 0.0)
+            if (abs(unrealized - raw_unrealized) < 1e-6 or unrealized == 0.0) and fx_rate > 0 and fx_rate != 1.0:
+                unrealized = round(raw_unrealized * fx_rate, 4)
+            elif unrealized == 0.0 and raw_unrealized != 0.0:
+                unrealized = round(raw_unrealized * fx_rate, 4) if fx_rate > 0 else raw_unrealized
+
+            cost_price = float(p.get("cost_price", 0.0) or 0.0)
+            cost_basis = float(p.get("cost_basis", 0.0) or 0.0)
+            close_price = float(p.get("close_price", 0.0) or 0.0)
+            position_value = float(p.get("position_value", 0.0) or 0.0)
+
             cursor.execute(
                 """
                 INSERT INTO open_positions (
@@ -926,17 +1127,17 @@ def upsert_open_positions(positions: List[Dict[str, Any]], clear_existing: bool 
                     sym,
                     p.get("description", sym),
                     p.get("asset_category", "STK"),
-                    p.get("currency", "EUR"),
-                    p.get("raw_currency", p.get("currency", "EUR")),
-                    p.get("base_currency", "EUR"),
-                    float(p.get("fx_rate_to_base", 1.0) or 1.0),
+                    curr,
+                    p.get("raw_currency", curr),
+                    pos_base,
+                    fx_rate,
                     float(p.get("quantity", 0.0) or 0.0),
-                    float(p.get("cost_price", 0.0) or 0.0),
-                    float(p.get("cost_basis", 0.0) or 0.0),
-                    float(p.get("close_price", 0.0) or 0.0),
-                    float(p.get("position_value", 0.0) or 0.0),
-                    float(p.get("unrealized_pnl", 0.0) or 0.0),
-                    float(p.get("raw_unrealized_pnl", 0.0) or 0.0),
+                    cost_price,
+                    cost_basis,
+                    close_price,
+                    position_value,
+                    unrealized,
+                    raw_unrealized,
                     p.get("report_date", date.today().isoformat()),
                 ),
             )
@@ -954,11 +1155,22 @@ def get_open_positions() -> List[Dict[str, Any]]:
         return [dict(r) for r in cursor.fetchall()]
 
 
-def get_latest_unrealized_pnl() -> float:
-    """Calculates total unrealized P&L from SQLite open positions table."""
+def get_latest_unrealized_pnl(as_of_date: Optional[str] = None) -> float:
+    """
+    Calculates total unrealized P&L in base currency from SQLite open positions table.
+    If as_of_date is provided and is earlier than the open positions report date, returns 0.0
+    because current open positions do not apply to past historical periods.
+    """
     try:
         with db_session() as conn:
             cursor = conn.cursor()
+            if as_of_date:
+                cursor.execute("SELECT MAX(report_date) FROM open_positions;")
+                row = cursor.fetchone()
+                max_rd = row[0] if row and row[0] else None
+                if max_rd and as_of_date < max_rd:
+                    return 0.0
+
             cursor.execute("SELECT COALESCE(SUM(unrealized_pnl), 0.0) FROM open_positions;")
             row = cursor.fetchone()
             if row and row[0] is not None:

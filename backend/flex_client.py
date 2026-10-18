@@ -13,7 +13,7 @@ except ImportError:
     httpx = None  # type: ignore[assignment]
 
 from backend.config import IBKR_QUERY_ID, IBKR_TOKEN
-from backend.database import normalize_symbol
+from backend.database import get_latest_fx_rate_to_base, normalize_symbol
 
 logger = logging.getLogger("ib-journal.flex")
 
@@ -100,6 +100,8 @@ class IBKRFlexClient:
                     # Valid response format from IBKR but error status
                     last_network_error = None
                     break
+                elif status_code == 503:
+                    logger.warning(f"IBKR endpoint {send_url} returned HTTP 503 Service Unavailable (servers under maintenance).")
             except Exception as e:
                 logger.warning(f"Could not connect to IBKR endpoint {send_url}: {e}")
                 last_network_error = e
@@ -111,6 +113,8 @@ class IBKRFlexClient:
             )
 
         if status_code != 200:
+            if status_code == 503:
+                logger.warning("IBKR servers returned HTTP 503 Service Unavailable (maintenance / temporary overload).")
             raise RuntimeError(f"IBKR SendRequest HTTP error: {status_code} - {resp_text}")
 
         root = ET.fromstring(resp_text)
@@ -141,6 +145,8 @@ class IBKRFlexClient:
             s_code, stmt_text = await self._http_get(get_url, {"t": self.token, "q": ref_code, "v": "3"})
 
             if s_code != 200:
+                if s_code == 503:
+                    logger.warning(f"Attempt {attempt}: IBKR statement polling returned HTTP 503 Service Unavailable (servers under maintenance).")
                 continue
 
             stmt_text = stmt_text.strip()
@@ -478,8 +484,15 @@ class IBKRFlexClient:
             logger.info(f"Parsed {len(txs)} cash transactions from XML statement.")
         return txs
 
-    def parse_open_positions_xml(self, xml_content: str) -> List[Dict[str, Any]]:
-        """Parses XML statement extracting structured open positions."""
+    def parse_open_positions_xml(self, xml_content: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Parses XML statement extracting structured open positions.
+        Returns None if statement contains no Open Positions section, or a List[Dict] (which may be empty)
+        if the section is present.
+        """
+        if "<OpenPosition" not in xml_content and "<OpenPositions" not in xml_content:
+            return None
+
         positions: List[Dict[str, Any]] = []
         try:
             root = ET.fromstring(xml_content)
@@ -508,6 +521,8 @@ class IBKRFlexClient:
             norm_sym = normalize_symbol(raw_sym, desc, cat)
             curr = (attrs.get("currency") or base_currency).upper()
             fx_rate = float(attrs.get("fxRateToBase") or attrs.get("fxRate") or 1.0)
+            if fx_rate <= 0 or (curr != base_currency and fx_rate == 1.0):
+                fx_rate = get_latest_fx_rate_to_base(curr, base_currency)
 
             raw_unrealized = float(
                 attrs.get("fifoPnlUnrealized")
@@ -550,7 +565,7 @@ class IBKRFlexClient:
     def parse_unrealized_pnl_xml(self, xml_content: str) -> Optional[float]:
         """Extracts total Unrealized P&L from XML statement or Flex Query."""
         positions = self.parse_open_positions_xml(xml_content)
-        if positions:
+        if positions is not None and len(positions) > 0:
             return round(sum(p["unrealized_pnl"] for p in positions), 2)
 
         try:

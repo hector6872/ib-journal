@@ -60,24 +60,29 @@ const CashModal = {
         body.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted);">${STRINGS.common?.loading || 'Loading...'}</div>`;
 
         try {
-            const [cashSummary, settings, overview] = await Promise.all([
+            const [cashSummary, settings, overview, openPositionsData] = await Promise.all([
                 API.fetchCashTransactions(),
                 API.fetchSettings(),
-                API.fetchOverviewStats()
+                API.fetchOverviewStats(),
+                API.fetchOpenPositions()
             ]);
 
             this.cashData = cashSummary;
-            this.render(body, cashSummary, settings, overview);
+            this.render(body, cashSummary, settings, overview, openPositionsData);
         } catch (err) {
             console.error("Error loading cash management data:", err);
             body.innerHTML = `<div style="color: var(--color-loss); padding: 30px; text-align:center;">${STRINGS.cash?.loadErrorMsg || 'Failed to load cash management details.'}</div>`;
         }
     },
 
-    render(container, cashSummary, settings, overview) {
+    render(container, cashSummary, settings, overview, openPositionsData) {
         const sc = STRINGS.cash || {};
+        const openPositions = openPositionsData?.positions || [];
+        const totalOpenPnl = openPositionsData?.total_unrealized_pnl !== undefined
+            ? Number(openPositionsData.total_unrealized_pnl)
+            : Number(overview?.unrealized_pnl || 0.0);
         const startingCapital = Number(settings?.starting_capital !== undefined ? settings.starting_capital : (overview?.starting_capital || 0.0));
-        const unrealizedPnl = Number(overview?.unrealized_pnl || 0.0);
+        const unrealizedPnl = totalOpenPnl;
         const totalDeposits = Number(cashSummary?.total_deposits || 0.0);
         const totalWithdrawals = Number(cashSummary?.total_withdrawals || 0.0);
         const totalDividends = Number(cashSummary?.total_dividends || 0.0);
@@ -217,6 +222,77 @@ const CashModal = {
                         </div>
                         <button type="submit" class="btn-pill btn-accent" style="margin-top: 18px; white-space: nowrap;">${sc.addTransferBtn || 'Add Transfer'}</button>
                     </form>
+                </div>
+
+                <!-- 3b. Open Positions & Mark-to-Market Valuation -->
+                <div class="cash-section-box" id="sec-open-positions-manager">
+                    <div class="cash-section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <strong>${sc.openPositionsTitle || 'Current Open Positions (Mark-to-Market)'} (${openPositions.length})</strong>
+                            <span style="font-size: 11px; color: var(--text-muted); display: block;">${sc.openPositionsSubtitle || 'Positions snapshot contributing to Unrealized P&L and NAV.'} Total: <span class="mono ${State.getPnlClass(unrealizedPnl)}">${State.formatCurrency(unrealizedPnl)}</span></span>
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <button type="button" class="btn-pill" id="btn-reconcile-open-pos" style="padding: 4px 10px; font-size: 11px;">
+                                ${sc.reconcilePositionsBtn || 'Recalculate FX & Trades'}
+                            </button>
+                            ${openPositions.length > 0 ? `
+                                <button type="button" class="btn-pill btn-danger" id="btn-clear-open-pos" style="padding: 4px 10px; font-size: 11px;">
+                                    ${sc.clearPositionsBtn || 'Clear Open Positions'}
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    ${openPositions.length === 0 ? `
+                        <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
+                            ${sc.emptyOpenPositions || 'No open positions currently recorded. Unrealized P&L is 0.00.'}
+                        </div>
+                    ` : `
+                        <div class="cash-table-wrap">
+                            <table class="cash-table">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th style="white-space: nowrap;">SecType</th>
+                                        <th style="text-align: right; white-space: nowrap;">Qty</th>
+                                        <th style="text-align: right; white-space: nowrap;">Cost Price</th>
+                                        <th style="text-align: right; white-space: nowrap;">Mark Price</th>
+                                        <th style="text-align: right; white-space: nowrap;">Raw P&L</th>
+                                        <th style="text-align: right; white-space: nowrap;">FX Rate</th>
+                                        <th style="text-align: right; white-space: nowrap;">Unrealized P&L (${State.currency})</th>
+                                        <th style="text-align: center; white-space: nowrap;">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${openPositions.map(p => {
+                                        const pnlClass = State.getPnlClass(p.unrealized_pnl || 0);
+                                        const rawCurrSym = p.currency === 'USD' ? '$' : (p.currency === 'GBP' ? '£' : (p.currency === 'CAD' ? 'C$' : ''));
+                                        return `
+                                            <tr>
+                                                <td class="mono" style="font-weight: 700; white-space: nowrap;">${p.symbol}</td>
+                                                <td style="white-space: nowrap;"><span class="cash-badge">${p.asset_category || 'STK'}</span></td>
+                                                <td class="mono" style="text-align: right; white-space: nowrap;">${p.quantity}</td>
+                                                <td class="mono" style="text-align: right; white-space: nowrap;">${rawCurrSym}${Number(p.cost_price || 0).toFixed(2)}</td>
+                                                <td class="mono" style="text-align: right; white-space: nowrap;">${rawCurrSym}${Number(p.close_price || 0).toFixed(2)}</td>
+                                                <td class="mono ${pnlClass}" style="text-align: right; white-space: nowrap;">
+                                                    ${rawCurrSym}${Number(p.raw_unrealized_pnl || 0).toFixed(2)}
+                                                </td>
+                                                <td class="mono" style="text-align: right; white-space: nowrap; color: var(--text-muted); font-size: 11px;">
+                                                    ${Number(p.fx_rate_to_base || 1.0).toFixed(4)}
+                                                </td>
+                                                <td class="mono ${pnlClass}" style="text-align: right; font-weight: 700; white-space: nowrap;">
+                                                    ${State.formatCurrency(p.unrealized_pnl || 0)}
+                                                </td>
+                                                <td class="mono" style="text-align: center; white-space: nowrap; font-size: 11px; color: var(--text-muted);">
+                                                    ${p.report_date || '--'}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}
                 </div>
 
                 <!-- 4. Transactions List Table -->
@@ -396,6 +472,63 @@ const CashModal = {
                 }
             });
         });
+
+        // Bind Reconcile Open Positions button
+        const btnReconcilePos = container.querySelector('#btn-reconcile-open-pos');
+        if (btnReconcilePos) {
+            btnReconcilePos.addEventListener('click', async () => {
+                try {
+                    btnReconcilePos.disabled = true;
+                    btnReconcilePos.textContent = STRINGS.common?.loading || 'Working...';
+                    await API.reconcileOpenPositions();
+                    await this.loadAndRender();
+                    StatsController.updateOverview();
+                    if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
+                } catch (err) {
+                    if (typeof App !== 'undefined' && App.showErrorModal) {
+                        App.showErrorModal("Reconcile Error", err.message);
+                    } else {
+                        console.error("Failed to reconcile open positions:", err);
+                    }
+                }
+            });
+        }
+
+        // Bind Clear Open Positions button
+        const btnClearPos = container.querySelector('#btn-clear-open-pos');
+        if (btnClearPos) {
+            btnClearPos.addEventListener('click', async () => {
+                let confirmed = false;
+                if (typeof App !== 'undefined' && App.showConfirmModal) {
+                    confirmed = await App.showConfirmModal({
+                        title: sc.confirmClearPositionsTitle || "Clear Open Positions",
+                        message: sc.confirmClearPositionsMsg || "Are you sure you want to clear all open positions? This will reset Unrealized P&L to 0.00 until the next statement import or sync.",
+                        confirmText: sc.clearPositionsBtn || "Clear Open Positions",
+                        cancelText: STRINGS.dialog?.cancel || "Cancel",
+                        isDanger: true
+                    });
+                } else {
+                    confirmed = window.confirm("Are you sure you want to clear all open positions?");
+                }
+
+                if (!confirmed) return;
+
+                try {
+                    btnClearPos.disabled = true;
+                    btnClearPos.textContent = STRINGS.common?.loading || 'Clearing...';
+                    await API.clearOpenPositions();
+                    await this.loadAndRender();
+                    StatsController.updateOverview();
+                    if (typeof StatsPage !== 'undefined' && StatsPage.load) StatsPage.load();
+                } catch (err) {
+                    if (typeof App !== 'undefined' && App.showErrorModal) {
+                        App.showErrorModal("Clear Error", err.message);
+                    } else {
+                        console.error("Failed to clear open positions:", err);
+                    }
+                }
+            });
+        }
     }
 };
 

@@ -187,6 +187,7 @@ In Interactive Brokers, there is a fundamental reporting distinction between **T
    - **Sections**:
      - **Trades**: Select **Execution**, **Order**, and check **Select All** on columns (includes `FIFO P/L Realized`, commissions, etc.).
      - **Cash Transactions**: Select **Deposits & Withdrawals** and check **Select All** on columns.
+     - **Open Positions** (*Crucial for Unrealized P&L & Portfolio NAV*): Check **Open Positions** and click **Select All** on columns (includes `Symbol`, `Quantity/Position`, `Cost Basis`, `Mark-to-Market Price`, `FIFO P/L Unrealized`, `FX Rate to Base`). Without this section, open position valuations and unrealized P&L will not update automatically from the API.
 3. Save the query and copy the numeric Query ID to `.env`:
    ```ini
    IBKR_ACTIVITY_QUERY_ID=789012
@@ -211,6 +212,10 @@ In Interactive Brokers, there is a fundamental reporting distinction between **T
 
 ---
 
+### ❓ Flex Query FAQ & Troubleshooting:
+
+* **Why does Unrealized P&L or Portfolio NAV differ from IBKR?**:
+  Make sure **Open Positions** is checked in your Activity Flex Query (`IBKR_ACTIVITY_QUERY_ID`). If omitted, IBKR only sends executed trades and cash transfers, leaving open positions and mark-to-market prices frozen at the last manual statement import. Once enabled, the API automatically updates open position quantities, current market prices, and live currency exchange rates (`fxRateToBase`).
 * **Why don't trades I just placed appear immediately? (Intraday Delay)**:
   IBKR Flex Web Service is a batch-based reporting engine, not a live tick-by-tick websocket feed. Interactive Brokers consolidates and updates executions in their Flex reporting database periodically throughout the trading session (typically with a **10 to 30 minute delay** after order execution). Once IBKR flushes the batch, the next sync (or clicking *Sync Now*) will ingest them automatically.
 * **Where is Realized P&L in the Trades modal?**

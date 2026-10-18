@@ -70,7 +70,7 @@ ib-journal/
 ├── backend/                  # FastAPI Application & Business Logic
 │   ├── analytics.py          # Trade statistics, KPI calculations & calendar aggregations
 │   ├── config.py             # Environment variables & runtime settings
-│   ├── database.py           # SQLite connection with WAL mode & trade queries
+│   ├── database.py           # SQLite connection with WAL mode, trades & open positions
 │   ├── flex_client.py        # IBKR Flex Web Service XML client & parser
 │   ├── main.py               # API routes & static file mounting
 │   ├── scheduler.py          # Market-hours cron scheduler & rate limiter
@@ -84,7 +84,7 @@ ib-journal/
 │   │   ├── calendar_page.js  # Top-level calendar controller (Week/Month/Year)
 │   │   ├── calendar_week.js  # Weekly breakdown cards
 │   │   ├── calendar_year.js  # 12-month annual heatmap & ribbons
-│   │   ├── cash_modal.js     # Capital & cash management modal
+│   │   ├── cash_modal.js     # Capital, cash transfers & open positions modal
 │   │   ├── day_modal.js      # Trade executions breakdown modal
 │   │   ├── import_modal.js   # Drag & drop historical importer modal
 │   │   ├── state.js          # Shared reactive client state

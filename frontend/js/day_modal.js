@@ -810,15 +810,16 @@ const DayModal = {
 
                                 <!-- Row 2: Metadata Sub-bar (Volume/fills prioritized, prices, time, fees) -->
                                 <div class="trade-card-bottom">
-                                    <div class="meta-item-vol">
-                                        <span class="meta-vol-qty mono">${Math.abs(t.quantity || 0)} qty</span>
-                                        <span class="meta-vol-fills">(${fillsLabel})</span>
+                                    <div class="trade-card-bottom-left">
+                                        <div class="meta-item-vol">
+                                            <span class="meta-vol-qty mono">${Math.abs(t.quantity || 0)} qty</span>
+                                            <span class="meta-vol-fills">(${fillsLabel})</span>
+                                        </div>
+                                        <span class="meta-sep">·</span>
+                                        <div class="meta-item-price mono">${priceFlowHtml}</div>
+                                        <span class="meta-sep">·</span>
+                                        <div class="meta-item-time mono" ${timeTooltip ? `title="${timeTooltip}"` : ''}>${timeLineStr}</div>
                                     </div>
-                                    <span class="meta-sep">·</span>
-                                    <div class="meta-item-price mono">${priceFlowHtml}</div>
-                                    <span class="meta-sep">·</span>
-                                    <div class="meta-item-time mono" ${timeTooltip ? `title="${timeTooltip}"` : ''}>${timeLineStr}</div>
-                                    <span class="meta-sep">·</span>
                                     <div class="meta-item-fees mono">Gross ${State.formatCurrency(t.gross_pnl || 0)} · Comm ${State.currency}${(t.commission || 0).toFixed(2)}${feeDragText}</div>
                                 </div>
                             </div>

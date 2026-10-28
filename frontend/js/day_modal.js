@@ -71,6 +71,31 @@ const DayModal = {
         }
     },
 
+    calculateDuration(openTime, closeTime) {
+        if (!openTime || !closeTime || openTime === '--:--' || closeTime === '--:--') return null;
+        try {
+            const parseSecs = (t) => {
+                const parts = t.trim().split(':').map(Number);
+                if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+                if (parts.length === 2) return parts[0] * 60 + parts[1];
+                return null;
+            };
+            const s1 = parseSecs(openTime);
+            const s2 = parseSecs(closeTime);
+            if (s1 === null || s2 === null) return null;
+            let diff = s2 - s1;
+            if (diff < 0) diff += 86400;
+            const hrs = Math.floor(diff / 3600);
+            const mins = Math.floor((diff % 3600) / 60);
+            const secs = diff % 60;
+            if (hrs > 0) return `${hrs}h ${mins}m`;
+            if (mins > 0) return `${mins}m ${secs}s`;
+            return `${secs}s`;
+        } catch (e) {
+            return null;
+        }
+    },
+
     init() {
         this.loadSettings();
         this.backdrop = document.getElementById('day-modal-backdrop');
@@ -210,6 +235,54 @@ const DayModal = {
         let grouped = [];
         if (data && Array.isArray(data.grouped_trades) && data.grouped_trades.length > 0) {
             grouped = [...data.grouped_trades];
+            // Enrich backend grouped trades with duration, roi_pct (Net ROI), and fill annotations if not set
+            grouped.forEach(t => {
+                if (!t.duration && t.open_time && t.close_time) {
+                    t.duration = this.calculateDuration(t.open_time, t.close_time);
+                }
+                const mult = (t.asset_category || '').toUpperCase() === 'OPT' ? 100 : 1;
+                const fx = parseFloat(t.fx_rate_to_base || 1);
+                const investedCap = (t.entry_val ? t.entry_val * mult * fx : (parseFloat(t.avg_entry_price || 0) * (t.entry_qty || t.quantity || 0) * mult * fx));
+                if (t.avg_entry_price > 0 && t.avg_exit_price > 0) {
+                    const pDiff = t.is_initial_buy 
+                        ? (t.avg_exit_price - t.avg_entry_price) 
+                        : (t.avg_entry_price - t.avg_exit_price);
+                    t.gross_roi_pct = (pDiff / t.avg_entry_price) * 100;
+                } else {
+                    t.gross_roi_pct = 0.0;
+                }
+                if (t.roi_pct === undefined || t.net_roi_pct === undefined) {
+                    t.roi_pct = investedCap > 0 ? (t.net_pnl / investedCap) * 100 : t.gross_roi_pct;
+                    t.net_roi_pct = t.roi_pct;
+                }
+                if (Array.isArray(t.fills)) {
+                    t.fills.forEach(f => {
+                        if (f._gross_pnl === undefined || f._gross_roi_pct === undefined) {
+                            const pnl = parseFloat(f.realized_pnl || 0);
+                            const comm = parseFloat(f.ib_commission || 0);
+                            const ind = (f.open_close_indicator || '').toUpperCase();
+                            const isCash = (f.asset_category || '').toUpperCase() === 'CASH' || (f.asset_category || '').toUpperCase() === 'FX';
+                            const isOpen = !isCash && (ind === 'O' || ind.startsWith('O;') || ind.includes('O')) && (pnl === 0);
+                            if (isOpen) {
+                                f._is_entry = true;
+                                f._gross_pnl = 0.0;
+                                f._gross_roi_pct = null;
+                                f._roi_pct = null;
+                            } else {
+                                f._is_entry = false;
+                                f._gross_pnl = pnl + comm;
+                                const entryP = t.avg_entry_price || parseFloat(f.trade_price || 0);
+                                const fillPrice = parseFloat(f.trade_price || 0);
+                                const pDiff = t.is_initial_buy ? (fillPrice - entryP) : (entryP - fillPrice);
+                                f._gross_roi_pct = entryP > 0 ? (pDiff / entryP) * 100 : 0.0;
+                                const fillNotional = entryP * Math.abs(f.quantity || 0) * mult * fx;
+                                f._roi_pct = fillNotional > 0 ? (pnl / fillNotional) * 100 : f._gross_roi_pct;
+                                f._net_roi_pct = f._roi_pct;
+                            }
+                        }
+                    });
+                }
+            });
         } else {
             const rawTrades = (data && data.trades) ? data.trades : [];
             grouped = this.clientGroupTrades(rawTrades);
@@ -312,10 +385,29 @@ const DayModal = {
                     current.entry_qty += absQty;
                     current.entry_val += absQty * price;
                     pos += absQty;
+                    fill._is_entry = true;
+                    fill._gross_pnl = 0.0;
+                    fill._roi_pct = null;
                 } else {
                     current.exit_qty += absQty;
                     current.exit_val += absQty * price;
                     current.close_time = timeStr;
+                    fill._is_entry = false;
+                    const prevEntryPrice = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : price;
+                    fill._entry_price = prevEntryPrice;
+                    const mult = current.asset_category === 'OPT' ? 100 : 1;
+                    const fx = fill.fx_rate_to_base || current.fx_rate_to_base || 1;
+                    const priceDiff = current.is_initial_buy ? (price - prevEntryPrice) : (prevEntryPrice - price);
+                    fill._gross_roi_pct = prevEntryPrice > 0 ? (priceDiff / prevEntryPrice) * 100 : 0.0;
+                    fill._gross_pnl = (fill.realized_pnl !== 0 && fill.realized_pnl !== null && fill.realized_pnl !== undefined)
+                        ? (fill.realized_pnl + (fill.ib_commission || 0))
+                        : (priceDiff * absQty * mult * fx);
+                    const fillNotional = prevEntryPrice * absQty * mult * fx;
+                    const fillNetPnl = (fill.realized_pnl !== 0 && fill.realized_pnl !== null && fill.realized_pnl !== undefined)
+                        ? fill.realized_pnl
+                        : (fill._gross_pnl - comm);
+                    fill._roi_pct = fillNotional > 0 ? (fillNetPnl / fillNotional) * 100 : fill._gross_roi_pct;
+                    fill._net_roi_pct = fill._roi_pct;
                     if (pos <= 0) {
                         pos = 0.0;
                     } else {
@@ -340,6 +432,18 @@ const DayModal = {
                     current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
                     current.quantity = Math.max(current.entry_qty, current.exit_qty);
                     current.result = current.net_pnl > 0.005 ? 'WIN' : (current.net_pnl < -0.005 ? 'LOSS' : 'BREAKEVEN');
+                    current.duration = this.calculateDuration(current.open_time, current.close_time);
+                    const investedCap = current.entry_val * multiplier * (current.fx_rate_to_base || 1);
+                    if (current.avg_entry_price > 0 && current.avg_exit_price > 0) {
+                        const pDiff = current.is_initial_buy 
+                            ? (current.avg_exit_price - current.avg_entry_price) 
+                            : (current.avg_entry_price - current.avg_exit_price);
+                        current.gross_roi_pct = (pDiff / current.avg_entry_price) * 100;
+                    } else {
+                        current.gross_roi_pct = 0.0;
+                    }
+                    current.roi_pct = investedCap > 0 ? (current.net_pnl / investedCap) * 100 : current.gross_roi_pct;
+                    current.net_roi_pct = current.roi_pct;
                     allGrouped.push(current);
                     current = null;
                     pos = 0.0;
@@ -349,20 +453,30 @@ const DayModal = {
             if (current) {
                 const hasRealizedPnl = Math.abs(current.net_pnl) > 1e-6;
                 const isCloseIndicator = (current.fills || []).some(f => (f.open_close_indicator || '').toUpperCase() === 'C');
+                current.avg_entry_price = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : 0;
+                current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
+                current.quantity = Math.max(current.entry_qty, current.exit_qty);
+                current.duration = this.calculateDuration(current.open_time, current.close_time);
+                const multiplier = current.asset_category === 'OPT' ? 100 : 1;
+                const investedCap = current.entry_val * multiplier * (current.fx_rate_to_base || 1);
+                if (current.avg_entry_price > 0 && current.avg_exit_price > 0) {
+                    const pDiff = current.is_initial_buy 
+                        ? (current.avg_exit_price - current.avg_entry_price) 
+                        : (current.avg_entry_price - current.avg_exit_price);
+                    current.gross_roi_pct = (pDiff / current.avg_entry_price) * 100;
+                } else {
+                    current.gross_roi_pct = 0.0;
+                }
+                current.roi_pct = investedCap > 0 ? (current.net_pnl / investedCap) * 100 : current.gross_roi_pct;
+                current.net_roi_pct = current.roi_pct;
                 if (isCloseIndicator || hasRealizedPnl) {
                     current.status = 'CLOSED';
                     current.gross_pnl = current.net_pnl + current.commission;
-                    current.avg_entry_price = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : 0;
-                    current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
-                    current.quantity = Math.max(current.entry_qty, current.exit_qty);
                     current.result = current.net_pnl > 0.005 ? 'WIN' : (current.net_pnl < -0.005 ? 'LOSS' : 'BREAKEVEN');
                     allGrouped.push(current);
                 } else {
                     current.status = 'OPEN';
                     current.gross_pnl = current.net_pnl + current.commission;
-                    current.avg_entry_price = current.entry_qty > 0 ? (current.entry_val / current.entry_qty) : 0;
-                    current.avg_exit_price = current.exit_qty > 0 ? (current.exit_val / current.exit_qty) : 0;
-                    current.quantity = Math.max(current.entry_qty, current.exit_qty);
                     current.result = 'OPEN';
                     allGrouped.push(current);
                 }
@@ -533,8 +647,18 @@ const DayModal = {
                     const isOpen = !isCash && (t.status === 'OPEN' || t.result === 'OPEN');
                     const tradeNumber = isCash ? 'FX' : `#${tradingIndex--}`;
 
+                    let roiStr = '';
+                    let roiTitle = '';
+                    if (!isCash && !isOpen && t.roi_pct !== undefined && t.roi_pct !== null) {
+                        const sign = t.roi_pct > 0 ? '+' : '';
+                        const grossSign = (t.gross_roi_pct || 0) > 0 ? '+' : '';
+                        roiStr = ` <span class="badge-roi-sub">${sign}${t.roi_pct.toFixed(1)}%</span>`;
+                        roiTitle = `Net ROI: ${sign}${t.roi_pct.toFixed(2)}% | Gross Price Return: ${grossSign}${(t.gross_roi_pct || 0).toFixed(2)}%`;
+                    }
+
                     const resultBadgeClass = isCash ? 'badge-res-be' : (isOpen ? 'badge-res-open' : (isWin ? 'badge-res-win' : (isLoss ? 'badge-res-loss' : 'badge-res-be')));
-                    const resultLabel = isCash ? (STRINGS.modal?.converted || 'CONVERTED') : (isOpen ? (STRINGS.modal?.open || 'OPEN') : (isWin ? (STRINGS.modal?.win || 'WIN') : (isLoss ? (STRINGS.modal?.loss || 'LOSS') : (STRINGS.modal?.breakeven || 'BE'))));
+                    const baseLabel = isCash ? (STRINGS.modal?.converted || 'CONVERTED') : (isOpen ? (STRINGS.modal?.open || 'OPEN') : (isWin ? (STRINGS.modal?.win || 'WIN') : (isLoss ? (STRINGS.modal?.loss || 'LOSS') : (STRINGS.modal?.breakeven || 'BE'))));
+                    const resultLabel = `${baseLabel}${roiStr}`;
 
                     const pnlVal = t.net_pnl || 0;
                     const pnlClass = isCash ? (pnlVal !== 0 ? State.getPnlClass(pnlVal) : 'pnl-neutral') : (isOpen ? 'pnl-neutral' : State.getPnlClass(pnlVal));
@@ -551,9 +675,18 @@ const DayModal = {
                     const openTime = this.formatTime(t.open_time, this.currentDate);
                     const closeTime = t.close_time ? this.formatTime(t.close_time, this.currentDate) : null;
                     const tzSuffix = this.timezoneMode === 'local' ? 'CET' : 'EST';
-                    const durationStr = isCash ? `${openTime} (${STRINGS.modal?.instant || 'Instant'})` : (t.duration || (closeTime ? `${openTime} → ${closeTime} (${tzSuffix})` : `${openTime} (Open)`));
+                    const durationPill = t.duration ? `<span class="duration-pill">⏱ ${t.duration}</span>` : '';
+                    const durationStr = isCash ? `${openTime} (${STRINGS.modal?.instant || 'Instant'})` : (closeTime ? `${openTime} → ${closeTime} (${tzSuffix})` : `${openTime} (Open)`);
                     const fillsCount = (t.fills || []).length;
                     const fillsLabel = fillsCount === 1 ? `1 ${STRINGS.modal?.fillSingle || 'fill'}` : `${fillsCount} ${STRINGS.modal?.fills || 'fills'}`;
+
+                    let feeDragText = '';
+                    if (Math.abs(t.gross_pnl || 0) > 0.01 && (t.commission || 0) > 0) {
+                        const dragPct = ((t.commission || 0) / Math.abs(t.gross_pnl)) * 100;
+                        if (dragPct >= 10) {
+                            feeDragText = ` (${dragPct.toFixed(0)}% drag)`;
+                        }
+                    }
 
                     // Sub-table of fills (numbered from bottom to top)
                     const fillsRowsHtml = (t.fills || []).map((f, fIdx) => {
@@ -566,6 +699,25 @@ const DayModal = {
                         const fPnlDisplay = isCashFill
                             ? (fPnl !== 0 ? State.formatCurrency(fPnl) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>')
                             : (fIsOpen ? '<span style="color: var(--text-muted); font-size: 11px;">(Entry)</span>' : State.formatCurrency(fPnl));
+
+                        let fGrossPnl = f._gross_pnl;
+                        if (fGrossPnl === undefined) {
+                            fGrossPnl = (!fIsOpen && f.realized_pnl) ? (f.realized_pnl + (f.ib_commission || 0)) : 0;
+                        }
+                        const fGrossClass = fIsOpen ? 'pnl-neutral' : State.getPnlClass(fGrossPnl);
+                        const fGrossDisplay = isCashFill
+                            ? (fGrossPnl !== 0 ? State.formatCurrency(fGrossPnl) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>')
+                            : (fIsOpen ? '<span style="color: var(--text-muted); font-size: 11px;">--</span>' : State.formatCurrency(fGrossPnl));
+
+                        let fRoiDisplay = '<span style="color: var(--text-muted); font-size: 11px;">--</span>';
+                        if (!fIsOpen && !isCashFill && f._roi_pct !== undefined && f._roi_pct !== null) {
+                            const sign = f._roi_pct > 0 ? '+' : '';
+                            const grossSign = (f._gross_roi_pct || 0) > 0 ? '+' : '';
+                            const rClass = State.getPnlClass(f._roi_pct);
+                            const fillRoiTooltip = `Net ROI: ${sign}${f._roi_pct.toFixed(2)}% (Gross Price Return: ${grossSign}${(f._gross_roi_pct || 0).toFixed(2)}%)`;
+                            fRoiDisplay = `<span class="badge-roi ${rClass}" title="${fillRoiTooltip}">${sign}${f._roi_pct.toFixed(1)}%</span>`;
+                        }
+
                         const fPrice = currSym ? `${currSym}${parseFloat(f.trade_price).toFixed(2)}` : parseFloat(f.trade_price).toFixed(2);
                         const fillNumber = fillsCount - fIdx;
                         const fillTimeStr = this.formatTime(f.trade_time, f.trade_date);
@@ -577,14 +729,16 @@ const DayModal = {
 
                         return `
                             <tr>
-                                <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${fillNumber}</td>
+                                <td class="mono col-hide-mobile" style="font-size: 11px; color: var(--text-muted); width: 28px;">#${fillNumber}</td>
                                 <td class="mono" ${fillTimeTooltip ? `title="${fillTimeTooltip}"` : ''}>${fillTimeStr}</td>
                                 <td>${sideBadgeHtml}</td>
                                 <td class="mono">${Math.abs(f.quantity)}</td>
                                 <td class="mono">${fPrice}</td>
+                                <td class="mono ${fGrossClass}" style="font-weight: 600;">${fGrossDisplay}</td>
                                 <td class="mono" style="color: var(--text-muted);">${State.currency}${parseFloat(f.ib_commission || 0).toFixed(2)}</td>
                                 <td class="mono ${fPnlClass}" style="font-weight: 700;">${fPnlDisplay}</td>
-                                <td style="text-align: center;"><span class="badge-indicator">${f.open_close_indicator || 'C'}</span></td>
+                                <td class="mono" style="text-align: right;">${fRoiDisplay}</td>
+                                <td class="col-hide-mobile" style="text-align: center;"><span class="badge-indicator">${f.open_close_indicator || 'C'}</span></td>
                             </tr>
                         `;
                     }).join('');
@@ -600,10 +754,11 @@ const DayModal = {
                                         <div class="trade-symbol-line">
                                             <span class="trade-symbol-text">${t.symbol}</span>
                                             <span class="badge-category">${t.asset_category || 'STK'}</span>
-                                            <span class="badge-result ${resultBadgeClass}">${resultLabel}</span>
+                                            <span class="badge-result ${resultBadgeClass}" ${roiTitle ? `title="${roiTitle}"` : ''}>${resultLabel}</span>
                                         </div>
                                         <div class="trade-meta-sub">
                                             <span class="trade-time-chip">${durationStr}</span>
+                                            ${durationPill}
                                             <span class="meta-dot">·</span>
                                             <span>${t.quantity} qty (${fillsLabel})</span>
                                         </div>
@@ -632,7 +787,7 @@ const DayModal = {
                                         <div class="trade-pnl-breakdown mono">
                                             <span>${STRINGS.modal?.summaryGross || 'Gross'}: ${State.formatCurrency(t.gross_pnl || 0)}</span>
                                             <span class="meta-dot">·</span>
-                                            <span>${STRINGS.modal?.summaryCommissions || 'Comm'}: ${State.currency}${(t.commission || 0).toFixed(2)}</span>
+                                            <span>${STRINGS.modal?.summaryCommissions || 'Comm'}: ${State.currency}${(t.commission || 0).toFixed(2)}${feeDragText}</span>
                                         </div>
                                     </div>
                                     <div class="chevron-icon ${isExpanded ? 'rotated' : ''}">
@@ -651,14 +806,16 @@ const DayModal = {
                                         <table class="trade-fills-table">
                                             <thead>
                                                 <tr>
-                                                    <th>#</th>
+                                                    <th class="col-hide-mobile">#</th>
                                                     <th>${this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)')}</th>
                                                     <th>${STRINGS.modal?.tableSide || 'Side'}</th>
                                                     <th>${STRINGS.modal?.tableQty || 'Volume'}</th>
                                                     <th>${STRINGS.modal?.tablePrice || 'Price'}</th>
-                                                    <th>${STRINGS.modal?.tableCommission || 'Commission'}</th>
+                                                    <th>${STRINGS.modal?.tableGrossPnl || 'Gross P&L'}</th>
+                                                    <th>${STRINGS.modal?.tableCommission || 'Comm'}</th>
                                                     <th>${STRINGS.modal?.tablePnl || 'Net P&L'}</th>
-                                                    <th style="text-align: center;">Code</th>
+                                                    <th style="text-align: right;" title="Net Return on Investment after commissions (hover value to view gross price return)">${STRINGS.modal?.tableRoi || '% Net ROI'}</th>
+                                                    <th class="col-hide-mobile" style="text-align: center;">Code</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -711,9 +868,43 @@ const DayModal = {
                 ? `<span class="badge-side badge-exchange">${STRINGS.modal?.exchange || 'EXCHANGE'}</span>`
                 : `<span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${t.buy_sell}</span>`;
 
+            // Gross P&L & Net ROI calculation for this raw execution
+            const grossPnl = t._gross_pnl !== undefined ? t._gross_pnl : (pnl + (parseFloat(t.ib_commission) || 0));
+            const grossClass = isOpen ? 'pnl-neutral' : State.getPnlClass(grossPnl);
+            const grossDisplay = isCash
+                ? (pnl !== 0 ? State.formatCurrency(pnl) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>')
+                : (isOpen
+                    ? `<span style="color: var(--text-muted); font-size: 11px;">(Open)</span>`
+                    : State.formatCurrency(grossPnl));
+
+            let roiBadgeHtml = '<span style="color: var(--text-muted); font-size: 11px;">--</span>';
+            if (!isOpen && !isCash) {
+                let netRoiVal = t._roi_pct;
+                let grossRoiVal = t._gross_roi_pct;
+                const price = parseFloat(t.trade_price || 0);
+                const qty = Math.abs(parseFloat(t.quantity || 0));
+                const mult = (t.asset_category || '').toUpperCase() === 'OPT' ? 100 : 1;
+                const fx = parseFloat(t.fx_rate_to_base || 1);
+                const notional = price * qty * mult * fx;
+
+                if (grossRoiVal === undefined || grossRoiVal === null) {
+                    grossRoiVal = (notional > 0 && Math.abs(grossPnl) > 0) ? ((grossPnl / notional) * 100) : 0.0;
+                }
+                if (netRoiVal === undefined || netRoiVal === null) {
+                    netRoiVal = (notional > 0 && Math.abs(pnl) > 0) ? ((pnl / notional) * 100) : grossRoiVal;
+                }
+                if (netRoiVal !== undefined && netRoiVal !== null && !isNaN(netRoiVal)) {
+                    const roiClass = State.getPnlClass(netRoiVal);
+                    const netSign = netRoiVal > 0 ? '+' : '';
+                    const grossSign = (grossRoiVal || 0) > 0 ? '+' : '';
+                    const roiTooltip = `Net ROI: ${netSign}${netRoiVal.toFixed(2)}% (Gross Price Return: ${grossSign}${(grossRoiVal || 0).toFixed(2)}%)`;
+                    roiBadgeHtml = `<span class="badge-roi ${roiClass}" title="${roiTooltip}">${netSign}${netRoiVal.toFixed(2)}%</span>`;
+                }
+            }
+
             return `
                 <tr>
-                    <td class="mono" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${rawTrades.length - idx}</td>
+                    <td class="mono col-hide-mobile" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${rawTrades.length - idx}</td>
                     <td class="mono" ${timeTooltip ? `title="${timeTooltip}"` : ''}>${timeStr}</td>
                     <td>
                         <strong>${t.symbol}</strong>
@@ -722,9 +913,11 @@ const DayModal = {
                     <td>${sideBadgeHtml}</td>
                     <td class="mono">${Math.abs(t.quantity)}</td>
                     <td class="mono" title="${curr ? `Currency: ${curr}` : ''}">${priceDisplay}</td>
+                    <td class="mono ${grossClass}" style="font-weight: 600;">${grossDisplay}</td>
                     <td class="mono" ${commTitle ? `title="${commTitle}"` : ''} style="color: var(--text-muted);">${State.currency}${parseFloat(t.ib_commission || 0).toFixed(2)}</td>
                     <td class="mono ${pnlClass}" style="font-weight: 700;" ${pnlTitle ? `title="${pnlTitle}"` : ''}>${pnlDisplay}</td>
-                    <td style="text-align: center;"><span class="badge-indicator">${t.open_close_indicator || 'C'}</span></td>
+                    <td class="mono" style="text-align: right;">${roiBadgeHtml}</td>
+                    <td class="col-hide-mobile" style="text-align: center;"><span class="badge-indicator">${t.open_close_indicator || 'C'}</span></td>
                 </tr>
             `;
         }).join('');
@@ -734,15 +927,17 @@ const DayModal = {
                 <table class="trades-table">
                     <thead>
                         <tr>
-                            <th>#</th>
+                            <th class="col-hide-mobile">#</th>
                             <th>${timeHeader}</th>
                             <th>${STRINGS.modal?.tableSymbol || 'Symbol'}</th>
                             <th>${STRINGS.modal?.tableSide || 'Side'}</th>
                             <th>${STRINGS.modal?.tableQty || 'Volume'}</th>
                             <th>${STRINGS.modal?.tablePrice || 'Price'}</th>
-                            <th>${STRINGS.modal?.tableCommission || 'Commission'}</th>
+                            <th>${STRINGS.modal?.tableGrossPnl || 'Gross P&L'}</th>
+                            <th>${STRINGS.modal?.tableCommission || 'Comm'}</th>
                             <th>${STRINGS.modal?.tablePnl || 'Net P&L'}</th>
-                            <th style="text-align: center;">Code</th>
+                            <th style="text-align: right;" title="Net Return on Investment after commissions (hover value to view gross price return)">${STRINGS.modal?.tableRoi || '% Net ROI'}</th>
+                            <th class="col-hide-mobile" style="text-align: center;">Code</th>
                         </tr>
                     </thead>
                     <tbody>

@@ -2212,10 +2212,27 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
             current_trade["raw_gross_pnl"] += raw_pnl
 
             if is_entry:
+                fill["_is_entry"] = True
+                fill["_gross_pnl"] = 0.0
+                fill["_roi_pct"] = None
                 current_trade["entry_qty"] += fill_abs_qty
                 current_trade["entry_val"] += fill_abs_qty * price
                 pos += fill_abs_qty
             else:
+                fill["_is_entry"] = False
+                prev_entry_price = (
+                    current_trade["entry_val"] / current_trade["entry_qty"]
+                    if current_trade["entry_qty"] > 0
+                    else price
+                )
+                fill["_entry_price"] = round(prev_entry_price, 4)
+                mult = 100.0 if current_trade.get("asset_category") == "OPT" else 1.0
+                pdiff = (price - prev_entry_price) if current_trade["is_initial_buy"] else (prev_entry_price - price)
+                fill["_gross_roi_pct"] = round((pdiff / prev_entry_price) * 100.0, 2) if prev_entry_price > 0 else 0.0
+                fill["_gross_pnl"] = round(pnl + comm, 2) if abs(pnl) > 1e-6 else round(pdiff * fill_abs_qty * mult * fx_rate, 2)
+                fill_notional = prev_entry_price * fill_abs_qty * mult * fx_rate
+                fill_net_pnl = pnl if abs(pnl) > 1e-6 else (fill["_gross_pnl"] - comm)
+                fill["_roi_pct"] = round((fill_net_pnl / fill_notional) * 100.0, 2) if fill_notional > 0 else fill["_gross_roi_pct"]
                 current_trade["exit_qty"] += fill_abs_qty
                 current_trade["exit_val"] += fill_abs_qty * price
                 current_trade["close_date"] = date_str
@@ -2244,6 +2261,23 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                     else 0.0
                 )
                 current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
+                mult = 100.0 if current_trade.get("asset_category") == "OPT" else 1.0
+                invested_cap = current_trade["entry_val"] * mult * current_trade.get("fx_rate_to_base", 1.0)
+                if current_trade["avg_entry_price"] > 0 and current_trade["avg_exit_price"] > 0:
+                    pdiff = (
+                        (current_trade["avg_exit_price"] - current_trade["avg_entry_price"])
+                        if current_trade["is_initial_buy"]
+                        else (current_trade["avg_entry_price"] - current_trade["avg_exit_price"])
+                    )
+                    current_trade["gross_roi_pct"] = round((pdiff / current_trade["avg_entry_price"]) * 100.0, 2)
+                else:
+                    current_trade["gross_roi_pct"] = 0.0
+                current_trade["roi_pct"] = (
+                    round((current_trade["net_pnl"] / invested_cap) * 100.0, 2)
+                    if invested_cap > 0
+                    else current_trade["gross_roi_pct"]
+                )
+                current_trade["net_roi_pct"] = current_trade["roi_pct"]
 
                 if current_trade["net_pnl"] > 0.005:
                     current_trade["result"] = "WIN"
@@ -2282,6 +2316,23 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                     else 0.0
                 )
                 current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
+                mult = 100.0 if current_trade.get("asset_category") == "OPT" else 1.0
+                invested_cap = current_trade["entry_val"] * mult * current_trade.get("fx_rate_to_base", 1.0)
+                if current_trade["avg_entry_price"] > 0 and current_trade["avg_exit_price"] > 0:
+                    pdiff = (
+                        (current_trade["avg_exit_price"] - current_trade["avg_entry_price"])
+                        if current_trade["is_initial_buy"]
+                        else (current_trade["avg_entry_price"] - current_trade["avg_exit_price"])
+                    )
+                    current_trade["gross_roi_pct"] = round((pdiff / current_trade["avg_entry_price"]) * 100.0, 2)
+                else:
+                    current_trade["gross_roi_pct"] = 0.0
+                current_trade["roi_pct"] = (
+                    round((current_trade["net_pnl"] / invested_cap) * 100.0, 2)
+                    if invested_cap > 0
+                    else current_trade["gross_roi_pct"]
+                )
+                current_trade["net_roi_pct"] = current_trade["roi_pct"]
                 if current_trade["net_pnl"] > 0.005:
                     current_trade["result"] = "WIN"
                 elif current_trade["net_pnl"] < -0.005:
@@ -2309,6 +2360,23 @@ def group_executions_to_trades(executions: List[Dict[str, Any]]) -> List[Dict[st
                     else 0.0
                 )
                 current_trade["quantity"] = max(current_trade["entry_qty"], current_trade["exit_qty"])
+                mult = 100.0 if current_trade.get("asset_category") == "OPT" else 1.0
+                invested_cap = current_trade["entry_val"] * mult * current_trade.get("fx_rate_to_base", 1.0)
+                if current_trade["avg_entry_price"] > 0 and current_trade["avg_exit_price"] > 0:
+                    pdiff = (
+                        (current_trade["avg_exit_price"] - current_trade["avg_entry_price"])
+                        if current_trade["is_initial_buy"]
+                        else (current_trade["avg_entry_price"] - current_trade["avg_exit_price"])
+                    )
+                    current_trade["gross_roi_pct"] = round((pdiff / current_trade["avg_entry_price"]) * 100.0, 2)
+                else:
+                    current_trade["gross_roi_pct"] = 0.0
+                current_trade["roi_pct"] = (
+                    round((current_trade["net_pnl"] / invested_cap) * 100.0, 2)
+                    if invested_cap > 0
+                    else current_trade["gross_roi_pct"]
+                )
+                current_trade["net_roi_pct"] = current_trade["roi_pct"]
                 current_trade["result"] = "OPEN"
                 all_grouped.append(current_trade)
 

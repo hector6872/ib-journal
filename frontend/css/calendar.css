@@ -2021,6 +2021,56 @@
     background-color: var(--bg-hover);
 }
 
+.trades-table th,
+.trades-table td,
+.trade-fills-table th,
+.trade-fills-table td {
+    white-space: nowrap;
+}
+
+.badge-roi {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+.badge-roi.pnl-positive {
+    background: var(--color-profit-bg);
+    color: var(--color-profit);
+}
+.badge-roi.pnl-negative {
+    background: var(--color-loss-bg);
+    color: var(--color-loss);
+}
+.badge-roi.pnl-neutral {
+    color: var(--text-muted);
+}
+
+.duration-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+}
+[data-theme="dark"] .duration-pill {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+}
+
+.badge-roi-sub {
+    font-family: var(--font-mono);
+    margin-left: 4px;
+    font-weight: 800;
+}
+
 /* Badges */
 .badge-direction {
     display: inline-flex;
@@ -2249,6 +2299,29 @@
     .day-modal-toolbar .segmented-btn {
         flex: 1;
         justify-content: center;
+    }
+}
+
+@media (max-width: 640px) {
+    .col-hide-mobile {
+        display: none !important;
+    }
+    .trades-table th,
+    .trades-table td,
+    .trade-fills-table th,
+    .trade-fills-table td {
+        padding: 6px 5px !important;
+        font-size: 11px !important;
+    }
+    .trade-card-header {
+        padding: 8px 10px;
+    }
+    .trade-card-left {
+        flex-wrap: wrap;
+    }
+    .trade-symbol-line {
+        flex-wrap: wrap;
+        gap: 4px;
     }
 }
 

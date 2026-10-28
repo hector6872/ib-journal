@@ -356,6 +356,7 @@ const STRINGS = {
         tableCommission: "Commission",
         tableGrossPnl: "Gross P&L",
         tablePnl: "Net P&L",
+        tableRoi: "% Net ROI",
         tableAction: "Action",
         closeBtn: "Close",
         noTradesFound: "No trade executions recorded on this date."

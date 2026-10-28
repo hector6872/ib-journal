@@ -49,7 +49,10 @@ def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
     """
     Cleans up duplicate trades:
     1. Normalizes symbol names in trades table.
-    2. Deletes placeholder GEN_% trades if an official execution (real ib_exec_id) exists for the same trade.
+    2. Identifies duplicate executions (same trade_date, trade_time, symbol, buy_sell, quantity, trade_price)
+       arising from differing sources (e.g. Trade Confirmation Flex Query vs Activity Flex Query vs CSV statements).
+       Retains the most complete/settled record (preferring records with settled realized_pnl, official activity codes, etc.).
+    3. Deletes ghost trades with zero quantity.
     """
     cursor = conn.cursor()
     # 1. Normalize all symbols
@@ -60,28 +63,99 @@ def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
         if norm != r["symbol"]:
             cursor.execute("UPDATE trades SET symbol = ? WHERE id = ?;", (norm, r["id"]))
 
-    # 2. Delete GEN_% trades when matching real ib_exec_id trades exist
+    # 2. Find and resolve duplicates grouped by execution characteristics
     cursor.execute("""
-        DELETE FROM trades
-        WHERE ib_exec_id LIKE 'GEN_%'
-        AND EXISTS (
-            SELECT 1 FROM trades t_real
-            WHERE t_real.ib_exec_id NOT LIKE 'GEN_%'
-              AND t_real.trade_date = trades.trade_date
-              AND t_real.trade_time = trades.trade_time
-              AND (t_real.symbol = trades.symbol OR t_real.description = trades.symbol)
-              AND t_real.buy_sell = trades.buy_sell
-              AND ABS(t_real.trade_price - trades.trade_price) < 0.0001
-        );
+        SELECT trade_date, trade_time, symbol, buy_sell, ROUND(quantity, 4) as r_qty, ROUND(trade_price, 4) as r_price, COUNT(*) as cnt
+        FROM trades
+        GROUP BY trade_date, trade_time, symbol, buy_sell, ROUND(quantity, 4), ROUND(trade_price, 4)
+        HAVING cnt > 1;
     """)
+    dup_groups = cursor.fetchall()
+    deleted_count = 0
+
+    def is_duplicate_pair(r1: Dict[str, Any], r2: Dict[str, Any]) -> bool:
+        t1 = str(r1.get("trade_id") or "")
+        t2 = str(r2.get("trade_id") or "")
+        e1 = str(r1.get("ib_exec_id") or "")
+        e2 = str(r2.get("ib_exec_id") or "")
+        if (t1 and t2 and t1 == t2) or (e1 and e2 and e1 == e2) or (e1 and e1 in (t2, e2)) or (e2 and e2 in (t1, e1)):
+            return True
+        if e1.startswith(("GEN_", "IB_")) or e2.startswith(("GEN_", "IB_")):
+            return True
+        p1 = abs(float(r1.get("realized_pnl") or 0.0))
+        p2 = abs(float(r2.get("realized_pnl") or 0.0))
+        if (p1 > 1e-6 and p2 < 1e-6) or (p2 > 1e-6 and p1 < 1e-6):
+            return True
+        ind1 = (r1.get("open_close_indicator") or "").upper()
+        ind2 = (r2.get("open_close_indicator") or "").upper()
+        if (";" in ind1 and ";" not in ind2) or (";" in ind2 and ";" not in ind1):
+            return True
+        return False
+
+    def score_rec(rec: Dict[str, Any]) -> float:
+        score = 0.0
+        pnl = abs(float(rec.get("realized_pnl") or 0.0))
+        ind = (rec.get("open_close_indicator") or "").upper()
+        exec_id = str(rec.get("ib_exec_id") or "")
+        if pnl > 1e-6:
+            score += 1000.0
+        if ";" in ind:
+            score += 50.0
+        if ind == "C":
+            score += 20.0
+        if not exec_id.startswith("GEN_"):
+            score += 10.0
+        if not exec_id.startswith("IB_"):
+            score += 5.0
+        score += float(rec["id"]) / 1000000.0
+        return score
+
+    for dg in dup_groups:
+        cursor.execute("""
+            SELECT id, ib_exec_id, trade_id, open_close_indicator, realized_pnl, raw_realized_pnl, ib_commission
+            FROM trades
+            WHERE trade_date = ? AND trade_time = ? AND symbol = ? AND buy_sell = ?
+              AND ABS(quantity - ?) < 1e-4 AND ABS(trade_price - ?) < 0.0001
+            ORDER BY id ASC;
+        """, (dg["trade_date"], dg["trade_time"], dg["symbol"], dg["buy_sell"], dg["r_qty"], dg["r_price"]))
+        records = [dict(r) for r in cursor.fetchall()]
+        if len(records) <= 1:
+            continue
+
+        to_delete_in_group = []
+        for i in range(len(records)):
+            r1 = records[i]
+            if r1["id"] in to_delete_in_group:
+                continue
+            for j in range(i + 1, len(records)):
+                r2 = records[j]
+                if r2["id"] in to_delete_in_group:
+                    continue
+                if is_duplicate_pair(r1, r2):
+                    s1 = score_rec(r1)
+                    s2 = score_rec(r2)
+                    winner, loser = (r1, r2) if s1 >= s2 else (r2, r1)
+                    if abs(float(winner.get("realized_pnl") or 0.0)) < 1e-6 and abs(float(loser.get("realized_pnl") or 0.0)) > 1e-6:
+                        cursor.execute("""
+                            UPDATE trades
+                            SET realized_pnl = ?, raw_realized_pnl = ?, open_close_indicator = ?
+                            WHERE id = ?;
+                        """, (loser["realized_pnl"], loser["raw_realized_pnl"], loser["open_close_indicator"], winner["id"]))
+                    to_delete_in_group.append(loser["id"])
+
+        if to_delete_in_group:
+            placeholders = ",".join("?" for _ in to_delete_in_group)
+            cursor.execute(f"DELETE FROM trades WHERE id IN ({placeholders});", to_delete_in_group)
+            deleted_count += len(to_delete_in_group)
+
     # 3. Delete ghost trades with zero quantity
     cursor.execute("""
         DELETE FROM trades
         WHERE ABS(quantity) < 1e-5;
     """)
-    deleted_count = cursor.rowcount
+    deleted_count += cursor.rowcount
     if deleted_count > 0:
-        logger.info(f"Cleaned up {deleted_count} duplicate placeholder trades superseded by official executions.")
+        logger.info(f"Cleaned up {deleted_count} duplicate/ghost trades.")
     return deleted_count
 
 
@@ -483,56 +557,100 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
     with db_session() as conn:
         cursor = conn.cursor()
 
-        # Step 1: For any official (non-GEN_) trade coming in, remove placeholder GEN_ trades matching same execution
-        official_trades = [t for t in sanitized_trades if not t["ib_exec_id"].startswith("GEN_")]
-        for ot in official_trades:
+        trades_to_insert = []
+        for st in sanitized_trades:
+            # Check by physical execution match (same date, time, symbol, side, qty, price)
             cursor.execute(
                 """
-                DELETE FROM trades
-                WHERE ib_exec_id LIKE 'GEN_%'
-                  AND trade_date = ?
+                SELECT id, ib_exec_id, trade_id, realized_pnl, open_close_indicator
+                FROM trades
+                WHERE trade_date = ?
                   AND trade_time = ?
                   AND (symbol = ? OR description = ?)
                   AND buy_sell = ?
+                  AND ABS(quantity - ?) < 1e-4
                   AND ABS(trade_price - ?) < 0.0001;
-            """,
-                (ot["trade_date"], ot["trade_time"], ot["symbol"], ot["symbol"], ot["buy_sell"], ot["trade_price"]),
-            )
-
-        # Step 2: For any GEN_ trade coming in, skip if an official trade or identical trade already exists
-        trades_to_insert = []
-        for t in sanitized_trades:
-            if t["ib_exec_id"].startswith("GEN_"):
-                cursor.execute(
-                    """
-                    SELECT id FROM trades
-                    WHERE trade_date = ?
-                      AND trade_time = ?
-                      AND (symbol = ? OR description = ?)
-                      AND buy_sell = ?
-                      AND ABS(trade_price - ?) < 0.0001
-                      AND (ib_exec_id NOT LIKE 'GEN_%' OR ib_exec_id = ?);
                 """,
-                    (
-                        t["trade_date"],
-                        t["trade_time"],
-                        t["symbol"],
-                        t["symbol"],
-                        t["buy_sell"],
-                        t["trade_price"],
-                        t["ib_exec_id"],
-                    ),
-                )
-                existing = cursor.fetchone()
-                if existing:
-                    # An official or existing trade already exists for this exact fill, skip inserting duplicate
+                (
+                    st["trade_date"],
+                    st["trade_time"],
+                    st["symbol"],
+                    st["symbol"],
+                    st["buy_sell"],
+                    st["quantity"],
+                    st["trade_price"],
+                ),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                # If exact ib_exec_id matches, let ON CONFLICT handle it
+                if existing["ib_exec_id"] == st["ib_exec_id"]:
+                    trades_to_insert.append(st)
                     continue
-            trades_to_insert.append(t)
+
+                t_in = str(st.get("trade_id") or "")
+                t_ex = str(existing["trade_id"] or "")
+                e_in = str(st.get("ib_exec_id") or "")
+                e_ex = str(existing["ib_exec_id"] or "")
+
+                is_dup = (
+                    (t_in and t_ex and t_in == t_ex)
+                    or (e_in in (t_ex, e_ex))
+                    or (e_ex in (t_in, e_in))
+                    or e_in.startswith(("GEN_", "IB_"))
+                    or e_ex.startswith(("GEN_", "IB_"))
+                    or (abs(float(existing["realized_pnl"] or 0.0)) > 1e-6 and abs(float(st.get("realized_pnl") or 0.0)) < 1e-6)
+                    or (abs(float(st.get("realized_pnl") or 0.0)) > 1e-6 and abs(float(existing["realized_pnl"] or 0.0)) < 1e-6)
+                    or (";" in (st.get("open_close_indicator") or "") and ";" not in (existing["open_close_indicator"] or ""))
+                    or (";" in (existing["open_close_indicator"] or "") and ";" not in (st.get("open_close_indicator") or ""))
+                )
+
+                if not is_dup:
+                    trades_to_insert.append(st)
+                    continue
+
+                # If incoming is placeholder GEN_ and existing is official, skip incoming
+                if e_in.startswith("GEN_") and not e_ex.startswith("GEN_"):
+                    continue
+
+                existing_pnl = abs(float(existing["realized_pnl"] or 0.0))
+                incoming_pnl = abs(float(st.get("realized_pnl") or 0.0))
+                existing_ind = (existing["open_close_indicator"] or "").upper()
+                incoming_ind = (st.get("open_close_indicator") or "").upper()
+
+                # If existing has settled PnL and incoming has 0 PnL, skip incoming
+                if existing_pnl > 1e-6 and incoming_pnl < 1e-6:
+                    continue
+
+                # If incoming has settled PnL or official composite code (e.g. O;P), replace existing
+                if (
+                    incoming_pnl > 1e-6
+                    or (";" in incoming_ind and ";" not in existing_ind)
+                    or e_ex.startswith("GEN_")
+                ):
+                    cursor.execute("DELETE FROM trades WHERE id = ?", (existing["id"],))
+                    trades_to_insert.append(st)
+                    continue
+
+                # If incoming is official and existing is placeholder
+                if not e_in.startswith(("GEN_", "IB_")) and e_ex.startswith(("GEN_", "IB_")):
+                    cursor.execute("DELETE FROM trades WHERE id = ?", (existing["id"],))
+                    trades_to_insert.append(st)
+                    continue
+
+                # If both have 0 PnL, replace existing with incoming to keep latest
+                cursor.execute("DELETE FROM trades WHERE id = ?", (existing["id"],))
+                trades_to_insert.append(st)
+            else:
+                trades_to_insert.append(st)
 
         if trades_to_insert:
             cursor.executemany(sql, trades_to_insert)
 
-        return len(sanitized_trades)
+        cleanup_duplicate_trades(conn)
+        reconcile_fifo_pnl(cursor)
+
+        return len(trades_to_insert)
 
 
 def reconcile_fifo_pnl(conn_or_cursor=None):
@@ -546,7 +664,7 @@ def reconcile_fifo_pnl(conn_or_cursor=None):
         rows = cursor.execute(
             """
             SELECT id, symbol, asset_category, buy_sell, quantity, trade_price, 
-                   proceeds, fx_rate_to_base, realized_pnl, raw_realized_pnl, open_close_indicator
+                   proceeds, fx_rate_to_base, realized_pnl, raw_realized_pnl, open_close_indicator, ib_commission
             FROM trades
             ORDER BY trade_date ASC, COALESCE(trade_time, '00:00:00') ASC, id ASC
             """
@@ -570,14 +688,21 @@ def reconcile_fifo_pnl(conn_or_cursor=None):
 
                 if len(open_lots) == 0 or (current_open_qty > 0 and qty > 0) or (current_open_qty < 0 and qty < 0):
                     # Opening lot
-                    open_lots.append({"qty": qty, "price": price, "fx_rate": fx_rate, "id": fill["id"]})
-                    if (fill.get("open_close_indicator") or "") not in ("O", "C;P"):
+                    open_lots.append({
+                        "qty": qty,
+                        "price": price,
+                        "fx_rate": fx_rate,
+                        "id": fill["id"],
+                        "comm": float(fill.get("ib_commission") or 0.0),
+                    })
+                    if (fill.get("open_close_indicator") or "") not in ("O", "O;P", "C;P"):
                         cursor.execute("UPDATE trades SET open_close_indicator = 'O' WHERE id = ?", (fill["id"],))
                 else:
                     # Closing lot
                     rem_close_qty = abs(qty)
                     is_closing_long = current_open_qty > 0
                     calc_raw_pnl = 0.0
+                    calc_match_comm = 0.0
 
                     while rem_close_qty > 1e-6 and len(open_lots) > 0:
                         lot = open_lots[0]
@@ -589,6 +714,10 @@ def reconcile_fifo_pnl(conn_or_cursor=None):
                             lot_pnl = (lot["price"] - price) * match_qty * mult
 
                         calc_raw_pnl += lot_pnl
+                        lot_comm_part = (match_qty / abs(lot["qty"])) * lot.get("comm", 0.0) if abs(lot["qty"]) > 1e-6 else 0.0
+                        calc_match_comm += lot_comm_part
+                        lot["comm"] = max(0.0, lot.get("comm", 0.0) - lot_comm_part)
+
                         rem_close_qty -= match_qty
 
                         if abs(lot["qty"]) <= match_qty + 1e-6:
@@ -601,11 +730,18 @@ def reconcile_fifo_pnl(conn_or_cursor=None):
 
                     if rem_close_qty > 1e-6:
                         new_open_qty = rem_close_qty if qty > 0 else -rem_close_qty
-                        open_lots.append({"qty": new_open_qty, "price": price, "fx_rate": fx_rate, "id": fill["id"]})
+                        open_lots.append({
+                            "qty": new_open_qty,
+                            "price": price,
+                            "fx_rate": fx_rate,
+                            "id": fill["id"],
+                            "comm": 0.0,
+                        })
 
                     # If existing_pnl is 0 (or not set) and we calculated a non-zero PnL, update database record
                     if abs(existing_pnl) < 1e-6 and abs(calc_raw_pnl) > 1e-6:
-                        calc_base_pnl = round(calc_raw_pnl * fx_rate, 4)
+                        total_trade_comm = float(fill.get("ib_commission") or 0.0) + calc_match_comm
+                        calc_base_pnl = round(calc_raw_pnl * fx_rate - total_trade_comm, 4)
                         cursor.execute(
                             """
                             UPDATE trades 

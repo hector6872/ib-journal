@@ -1814,10 +1814,9 @@
 
 .trade-card-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 14px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
     cursor: pointer;
     user-select: none;
     background-color: var(--bg-card);
@@ -1833,110 +1832,146 @@
 }
 
 .trade-card-header:hover {
-    background-color: var(--bg-card-secondary);
+    background-color: var(--bg-hover);
 }
 
-.trade-card-left {
+/* Row 1: Ticker, Badges, Net ROI & P&L Hero */
+.trade-card-top {
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-width: 220px;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
 }
 
-.trade-symbol-block {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.trade-symbol-line {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.trade-symbol-text {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text-main);
-    letter-spacing: -0.2px;
-}
-
-.trade-meta-sub {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--text-muted);
-}
-
-.trade-time-chip {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-secondary);
-}
-
-.meta-dot {
-    color: var(--border-default);
-    font-weight: bold;
-}
-
-/* Center Progress */
-.trade-card-center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-}
-
-.price-flow {
+.trade-card-top-left {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 3px 10px;
-    background: var(--bg-card-secondary);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-xs);
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.card-idx-text {
     font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    min-width: 22px;
 }
 
-.price-label {
-    font-size: 9px;
-    color: var(--text-muted);
-    text-transform: uppercase;
+.card-ticker-text {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+}
+
+.trade-card-top-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.card-pnl-hero {
+    font-family: var(--font-mono);
+    font-size: 15.5px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.roi-sub-line {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
     font-weight: 700;
-    margin-right: 2px;
+    white-space: nowrap;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+}
+.roi-sub-line.pnl-positive {
+    color: var(--color-profit);
+    background: rgba(16, 185, 129, 0.1);
+}
+.roi-sub-line.pnl-negative {
+    color: var(--color-loss);
+    background: rgba(239, 68, 68, 0.1);
+}
+.roi-sub-line.pnl-neutral {
+    color: var(--text-muted);
 }
 
-.price-arrow {
+/* Row 2: Metadata Sub-bar */
+.trade-card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    font-size: 11.5px;
     color: var(--text-muted);
+    width: 100%;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.trade-card-bottom-left {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    min-width: 0;
+}
+
+.meta-item-vol {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.meta-vol-qty {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.meta-vol-fills {
+    color: var(--text-muted);
+    font-size: 11.5px;
+}
+
+.meta-sep {
+    color: var(--border-default);
+    user-select: none;
     font-weight: bold;
 }
 
-/* Right Financials */
-.trade-card-right {
-    display: flex;
-    align-items: center;
-    gap: 14px;
+.meta-item-price {
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+}
+
+.meta-item-time {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.meta-item-fees {
+    color: var(--text-muted);
+    white-space: nowrap;
+    margin-left: auto;
     text-align: right;
 }
 
-.trade-pnl-block {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-}
-
-.trade-pnl-val {
-    font-size: 14px;
-    font-weight: 800;
-}
-
-.trade-pnl-breakdown {
-    font-size: 10px;
+.card-pnl-breakdown {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
     color: var(--text-muted);
+    white-space: nowrap;
 }
 
 .chevron-icon {
@@ -1945,6 +1980,7 @@
     justify-content: center;
     color: var(--text-muted);
     transition: transform 0.2s ease;
+    flex-shrink: 0;
 }
 
 .chevron-icon.rotated {
@@ -1979,14 +2015,17 @@
 .trade-fills-table-wrap,
 .trades-table-wrapper {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: var(--radius-xs);
     border: 1px solid var(--border-default);
     background: var(--bg-card);
+    width: 100%;
 }
 
 .trade-fills-table,
 .trades-table {
     width: 100%;
+    min-width: 820px;
     border-collapse: collapse;
     font-size: 12px;
     text-align: left;
@@ -2002,6 +2041,7 @@
     letter-spacing: 0.5px;
     padding: 8px 10px;
     border-bottom: 1px solid var(--border-default);
+    white-space: nowrap !important;
 }
 
 .trade-fills-table td,
@@ -2009,6 +2049,8 @@
     padding: 7px 10px;
     border-bottom: 1px solid var(--border-subtle);
     color: var(--text-main);
+    white-space: nowrap !important;
+    vertical-align: middle;
 }
 
 .trade-fills-table tr:last-child td,
@@ -2019,6 +2061,60 @@
 .trade-fills-table tr:hover td,
 .trades-table tr:hover td {
     background-color: var(--bg-hover);
+}
+
+.trades-table th,
+.trades-table td,
+.trades-table strong,
+.trades-table span,
+.trade-fills-table th,
+.trade-fills-table td,
+.trade-fills-table strong,
+.trade-fills-table span {
+    white-space: nowrap !important;
+}
+
+.badge-roi {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+.badge-roi.pnl-positive {
+    background: var(--color-profit-bg);
+    color: var(--color-profit);
+}
+.badge-roi.pnl-negative {
+    background: var(--color-loss-bg);
+    color: var(--color-loss);
+}
+.badge-roi.pnl-neutral {
+    color: var(--text-muted);
+}
+
+.duration-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+}
+[data-theme="dark"] .duration-pill {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+}
+
+.badge-roi-sub {
+    font-family: var(--font-mono);
+    margin-left: 4px;
+    font-weight: 800;
 }
 
 /* Badges */
@@ -2219,23 +2315,31 @@
         font-size: 14px;
     }
     .trade-card-header {
-        flex-direction: column;
-        align-items: stretch;
+        padding: 10px 12px;
+        gap: 6px;
+    }
+    .trade-card-top {
+        flex-wrap: wrap;
         gap: 8px;
-        padding: 8px 10px;
     }
-    .trade-card-left {
-        min-width: 0;
-        width: 100%;
-        justify-content: space-between;
+    .trade-card-top-left {
+        gap: 6px;
     }
-    .trade-card-center {
-        justify-content: flex-start;
+    .card-ticker-text {
+        font-size: 13.5px;
     }
-    .trade-card-right {
-        width: 100%;
-        justify-content: space-between;
-        align-items: center;
+    .trade-card-top-right {
+        gap: 8px;
+    }
+    .card-pnl-hero {
+        font-size: 14.5px;
+    }
+    .trade-card-bottom {
+        gap: 4px 8px;
+        font-size: 11px;
+    }
+    .chevron-icon {
+        display: none;
     }
     .day-modal-toolbar {
         flex-direction: column;
@@ -2249,6 +2353,27 @@
     .day-modal-toolbar .segmented-btn {
         flex: 1;
         justify-content: center;
+    }
+}
+
+@media (max-width: 640px) {
+    .col-hide-mobile {
+        display: none !important;
+    }
+    .trade-fills-table,
+    .trades-table {
+        min-width: 680px;
+    }
+    .trades-table th,
+    .trades-table td,
+    .trade-fills-table th,
+    .trade-fills-table td {
+        padding: 6px 6px !important;
+        font-size: 11px !important;
+        white-space: nowrap !important;
+    }
+    .trade-card-header {
+        padding: 10px 12px;
     }
 }
 

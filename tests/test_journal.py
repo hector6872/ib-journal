@@ -1446,6 +1446,208 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         res_502 = classify_ibkr_error("RuntimeError: IBKR SendRequest HTTP error: 502 - Bad Gateway")
         self.assertEqual(res_502["error_code"], "ERR_IBKR_BAD_GATEWAY")
 
+    def test_trade_confirmation_and_activity_statement_deduplication(self):
+        """
+        Tests that when Trade Confirmation Flex Query and Activity Statement
+        import the same executions (differing in ib_exec_id, codes O vs O;P, and 0 PnL vs settled PnL),
+        duplicates are deduplicated and the settled record is preserved.
+        """
+        # 1. Intraday Trade Confirmation import (4 fills: 2 buys, 2 sells)
+        trade_confirm_fills = [
+            {
+                "ib_exec_id": "CONFIRM_TC_1",
+                "trade_id": "TX_SPY_1",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.43,
+                "ib_commission": 0.94,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:11:41",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "CONFIRM_TC_2",
+                "trade_id": "TX_SPY_2",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.43,
+                "ib_commission": 0.30,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:11:44",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "CONFIRM_TC_3",
+                "trade_id": "TX_SPY_3",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.47,
+                "ib_commission": 0.77,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:12:37",
+                "open_close_indicator": "C",
+            },
+            {
+                "ib_exec_id": "CONFIRM_TC_4",
+                "trade_id": "TX_SPY_4",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.45,
+                "ib_commission": 0.94,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:13:26",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(trade_confirm_fills)
+
+        from backend.analytics import get_day_trades
+        day_trades = get_day_trades("2026-10-27")
+        self.assertEqual(len(day_trades), 4)
+
+        # 2. Activity Statement arrives (has official exec_id, code O;P, and settled realized_pnl)
+        activity_fills = [
+            {
+                "ib_exec_id": "0001a4e2.66fd1e00.01.01",
+                "trade_id": "TX_SPY_1",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.43,
+                "ib_commission": 1.05,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:11:41",
+                "open_close_indicator": "O;P",
+            },
+            {
+                "ib_exec_id": "0001a4e2.66fd1e00.01.02",
+                "trade_id": "TX_SPY_2",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.43,
+                "ib_commission": 0.33,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:11:44",
+                "open_close_indicator": "O;P",
+            },
+            {
+                "ib_exec_id": "0001a4e2.66fd1e00.01.03",
+                "trade_id": "TX_SPY_3",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.47,
+                "ib_commission": 0.86,
+                "realized_pnl": 1.88,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:12:37",
+                "open_close_indicator": "C",
+            },
+            {
+                "ib_exec_id": "0001a4e2.66fd1e00.01.04",
+                "trade_id": "TX_SPY_4",
+                "symbol": "SPY 27OCT26 770 C",
+                "description": "SPY 27OCT26 770 C",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.45,
+                "ib_commission": 1.05,
+                "realized_pnl": 0.56,
+                "trade_date": "2026-10-27",
+                "trade_time": "18:13:26",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(activity_fills)
+
+        # Verified: Count remains exactly 4 (NOT duplicated to 8)
+        day_trades_after = get_day_trades("2026-10-27")
+        self.assertEqual(len(day_trades_after), 4)
+
+        # Verified: Settled records with official codes and PnL are preserved
+        exec_ids = [t["ib_exec_id"] for t in day_trades_after]
+        self.assertIn("0001a4e2.66fd1e00.01.01", exec_ids)
+        self.assertIn("0001a4e2.66fd1e00.01.03", exec_ids)
+
+        # Re-running trade confirm sync does NOT re-duplicate
+        upsert_trades(trade_confirm_fills)
+        day_trades_final = get_day_trades("2026-10-27")
+        self.assertEqual(len(day_trades_final), 4)
+
+    def test_calendar_net_pnl_with_unsettled_intraday_trades(self):
+        """
+        Tests that month and year calendars calculate Net P&L even when trades
+        were imported via intraday Trade Confirmation and have realized_pnl == 0.0.
+        """
+        intraday_trades = [
+            {
+                "ib_exec_id": "TC_QQQ_B",
+                "trade_id": "TC_QQQ_B",
+                "symbol": "QQQ 26OCT26 712 P",
+                "description": "QQQ 26OCT26 712 P",
+                "asset_category": "OPT",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.30,
+                "ib_commission": 0.92,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-26",
+                "trade_time": "19:28:01",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "TC_QQQ_S",
+                "trade_id": "TC_QQQ_S",
+                "symbol": "QQQ 26OCT26 712 P",
+                "description": "QQQ 26OCT26 712 P",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.21,
+                "ib_commission": 0.77,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-10-26",
+                "trade_time": "19:30:40",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(intraday_trades)
+
+        month_cal = get_month_calendar(2026, 10)
+        day_26 = month_cal["daily_map"].get("2026-10-26")
+        self.assertIsNotNone(day_26)
+        self.assertEqual(day_26["count"], 1)
+        # Entry: 0.30 * 100 = 30. Exit: 0.21 * 100 = 21. Raw Gross = -9.00
+        # Commissions: 0.92 + 0.77 = 1.69. Net PnL = -9.00 - 1.69 = -10.69
+        self.assertAlmostEqual(day_26["pnl"], -10.69, places=2)
+        self.assertAlmostEqual(month_cal["total_net_pnl"], -10.69, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

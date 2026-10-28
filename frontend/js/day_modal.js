@@ -675,8 +675,29 @@ const DayModal = {
                     const openTime = this.formatTime(t.open_time, this.currentDate);
                     const closeTime = t.close_time ? this.formatTime(t.close_time, this.currentDate) : null;
                     const tzSuffix = this.timezoneMode === 'local' ? 'CET' : 'EST';
-                    const durationPill = t.duration ? `<span class="duration-pill">⏱ ${t.duration}</span>` : '';
-                    const durationStr = isCash ? `${openTime} (${STRINGS.modal?.instant || 'Instant'})` : (closeTime ? `${openTime} → ${closeTime} (${tzSuffix})` : `${openTime} (Open)`);
+
+                    const toShortTime = (timeStr) => {
+                        if (!timeStr || timeStr === '--:--') return timeStr;
+                        const p = timeStr.split(':');
+                        return p.length >= 2 ? `${p[0]}:${p[1]}` : timeStr;
+                    };
+                    const openShort = toShortTime(openTime);
+                    const closeShort = closeTime ? toShortTime(closeTime) : null;
+
+                    let timeLineStr = '';
+                    let timeTooltip = '';
+                    if (isCash) {
+                        timeLineStr = `${openShort} · ${STRINGS.modal?.instant || 'Instant'}`;
+                        timeTooltip = `${openTime} (${tzSuffix})`;
+                    } else if (closeShort) {
+                        const durText = t.duration ? ` · ${t.duration}` : '';
+                        timeLineStr = `${openShort} → ${closeShort}${durText}`;
+                        timeTooltip = `${openTime} → ${closeTime} (${tzSuffix})`;
+                    } else {
+                        timeLineStr = `${openShort} · ${STRINGS.modal?.open || 'Active'}`;
+                        timeTooltip = `${openTime} (${tzSuffix})`;
+                    }
+
                     const fillsCount = (t.fills || []).length;
                     const fillsLabel = fillsCount === 1 ? `1 ${STRINGS.modal?.fillSingle || 'fill'}` : `${fillsCount} ${STRINGS.modal?.fills || 'fills'}`;
 
@@ -686,6 +707,30 @@ const DayModal = {
                         if (dragPct >= 10) {
                             feeDragText = ` (${dragPct.toFixed(0)}% drag)`;
                         }
+                    }
+
+                    // Price flow without boxes
+                    let priceFlowHtml = '';
+                    if (isCash) {
+                        priceFlowHtml = `<span class="price-flow-val mono">${entryPriceStr}</span>`;
+                    } else if (exitPriceStr !== '--' && exitPriceStr !== 'Active') {
+                        priceFlowHtml = `<span class="price-flow-val mono">${entryPriceStr} → ${exitPriceStr}</span>`;
+                    } else {
+                        priceFlowHtml = `<span class="price-flow-val mono">${entryPriceStr}</span>`;
+                    }
+
+                    // Net ROI subline
+                    let roiSubHtml = '';
+                    if (!isCash && !isOpen && t.roi_pct !== undefined && t.roi_pct !== null) {
+                        const sign = t.roi_pct > 0 ? '+' : '';
+                        const grossSign = (t.gross_roi_pct || 0) > 0 ? '+' : '';
+                        const rClass = State.getPnlClass(t.roi_pct);
+                        const roiTooltip = `Net ROI: ${sign}${t.roi_pct.toFixed(2)}% | Gross Price Return: ${grossSign}${(t.gross_roi_pct || 0).toFixed(2)}%`;
+                        roiSubHtml = `<span class="roi-sub-line ${rClass}" title="${roiTooltip}">${sign}${t.roi_pct.toFixed(2)}% Net ROI</span>`;
+                    } else if (isOpen) {
+                        roiSubHtml = `<span class="roi-sub-line pnl-neutral">${STRINGS.modal?.open || 'Active'}</span>`;
+                    } else {
+                        roiSubHtml = `<span class="roi-sub-line pnl-neutral">--</span>`;
                     }
 
                     // Sub-table of fills (numbered from bottom to top)
@@ -746,53 +791,35 @@ const DayModal = {
                     return `
                         <div class="trade-card ${isExpanded ? 'expanded' : ''}">
                             <div class="trade-card-header" data-trade-idx="${idx}">
-                                <!-- Left: Number, Direction, Symbol & Badges -->
-                                <div class="trade-card-left">
-                                    <span class="mono" style="font-size: 11px; font-weight: 800; color: var(--text-muted); min-width: 20px;">${tradeNumber}</span>
-                                    <span class="badge-direction ${dirInfo.badgeClass}">${dirInfo.label}</span>
-                                    <div class="trade-symbol-block">
-                                        <div class="trade-symbol-line">
-                                            <span class="trade-symbol-text">${t.symbol}</span>
-                                            <span class="badge-category">${t.asset_category || 'STK'}</span>
-                                            <span class="badge-result ${resultBadgeClass}" ${roiTitle ? `title="${roiTitle}"` : ''}>${resultLabel}</span>
-                                        </div>
-                                        <div class="trade-meta-sub">
-                                            <span class="trade-time-chip">${durationStr}</span>
-                                            ${durationPill}
-                                            <span class="meta-dot">·</span>
-                                            <span>${t.quantity} qty (${fillsLabel})</span>
+                                <!-- Row 1: Ticker, Badges, Net ROI & P&L Hero -->
+                                <div class="trade-card-top">
+                                    <div class="trade-card-top-left">
+                                        <span class="mono card-idx-text">${tradeNumber}</span>
+                                        <span class="badge-direction ${dirInfo.badgeClass}">${dirInfo.label}</span>
+                                        <span class="card-ticker-text">${t.symbol}</span>
+                                        <span class="badge-category">${t.asset_category || 'STK'}</span>
+                                    </div>
+                                    <div class="trade-card-top-right">
+                                        ${roiSubHtml}
+                                        <span class="card-pnl-hero mono ${pnlClass}">${pnlDisplay}</span>
+                                        <div class="chevron-icon ${isExpanded ? 'rotated' : ''}">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Center: Price Progression -->
-                                <div class="trade-card-center">
-                                    ${isCash ? `
-                                        <div class="price-flow">
-                                            <span class="price-step"><span class="price-label">${STRINGS.modal?.spotRate || 'Rate'}:</span> <strong class="mono">${entryPriceStr}</strong></span>
-                                        </div>
-                                    ` : `
-                                        <div class="price-flow">
-                                            <span class="price-step"><span class="price-label">${STRINGS.modal?.entry || 'In'}:</span> <strong class="mono">${entryPriceStr}</strong></span>
-                                            <span class="price-arrow">→</span>
-                                            <span class="price-step"><span class="price-label">${STRINGS.modal?.exit || 'Out'}:</span> <strong class="mono">${exitPriceStr}</strong></span>
-                                        </div>
-                                    `}
-                                </div>
-
-                                <!-- Right: Financials & Chevron -->
-                                <div class="trade-card-right">
-                                    <div class="trade-pnl-block">
-                                        <div class="trade-pnl-val mono ${pnlClass}">${pnlDisplay}</div>
-                                        <div class="trade-pnl-breakdown mono">
-                                            <span>${STRINGS.modal?.summaryGross || 'Gross'}: ${State.formatCurrency(t.gross_pnl || 0)}</span>
-                                            <span class="meta-dot">·</span>
-                                            <span>${STRINGS.modal?.summaryCommissions || 'Comm'}: ${State.currency}${(t.commission || 0).toFixed(2)}${feeDragText}</span>
-                                        </div>
+                                <!-- Row 2: Metadata Sub-bar (Volume/fills prioritized, prices, time, fees) -->
+                                <div class="trade-card-bottom">
+                                    <div class="meta-item-vol">
+                                        <span class="meta-vol-qty mono">${Math.abs(t.quantity || 0)} qty</span>
+                                        <span class="meta-vol-fills">(${fillsLabel})</span>
                                     </div>
-                                    <div class="chevron-icon ${isExpanded ? 'rotated' : ''}">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                                    </div>
+                                    <span class="meta-sep">·</span>
+                                    <div class="meta-item-price mono">${priceFlowHtml}</div>
+                                    <span class="meta-sep">·</span>
+                                    <div class="meta-item-time mono" ${timeTooltip ? `title="${timeTooltip}"` : ''}>${timeLineStr}</div>
+                                    <span class="meta-sep">·</span>
+                                    <div class="meta-item-fees mono">Gross ${State.formatCurrency(t.gross_pnl || 0)} · Comm ${State.currency}${(t.commission || 0).toFixed(2)}${feeDragText}</div>
                                 </div>
                             </div>
 

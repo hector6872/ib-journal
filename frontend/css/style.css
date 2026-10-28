@@ -158,6 +158,8 @@ body {
     display: flex;
     align-items: center;
     gap: 28px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .brand {
@@ -166,6 +168,7 @@ body {
     gap: 8px;
     cursor: pointer;
     user-select: none;
+    flex-shrink: 0;
 }
 
 .brand-badge {
@@ -191,6 +194,7 @@ body {
     display: flex;
     align-items: baseline;
     gap: 4px;
+    white-space: nowrap;
 }
 
 .brand-title span {
@@ -291,24 +295,13 @@ body {
     flex-shrink: 0;
 }
 
-@media (max-width: 1280px) {
-    .header-mini-kpi .mini-kpi-item:nth-child(n+7),
-    .header-mini-kpi .mini-kpi-divider:nth-child(n+6) {
-        display: none;
-    }
-}
-
-@media (max-width: 980px) {
-    .header-mini-kpi {
-        display: none !important;
-    }
-}
-
 /* Right: Sync Controls & Theme Switcher */
 .header-right {
     display: flex;
     align-items: center;
     gap: 16px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* Sync Controls */
@@ -316,6 +309,8 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .sync-status-text {
@@ -324,6 +319,7 @@ body {
     align-items: flex-end;
     font-size: 11px;
     line-height: 1.25;
+    white-space: nowrap;
 }
 
 .sync-updated {
@@ -369,35 +365,99 @@ body {
     border-color: var(--border-subtle) !important;
 }
 
-@media (max-width: 900px) {
+/* ============================================================
+   Header Responsive Compaction Breakpoints
+   ============================================================ */
+
+/* 1. Large screens / Narrow browser windows (<= 1380px) */
+@media (max-width: 1380px) {
+    .header-inner {
+        padding: 0 16px;
+        gap: 12px;
+    }
+    .header-left {
+        gap: 18px;
+    }
+    .header-right {
+        gap: 12px;
+    }
+    /* Hide EXP and PF from docked mini-KPI banner to free space */
+    .header-mini-kpi .mini-kpi-item:nth-child(n+7),
+    .header-mini-kpi .mini-kpi-divider:nth-child(n+6) {
+        display: none !important;
+    }
+    /* Hide secondary countdown subtitle (e.g. "Dev Mode (Manual only)") to relieve pressure */
+    .sync-countdown {
+        display: none !important;
+    }
+}
+
+/* 2. Medium laptops / Split screen (<= 1220px) */
+@media (max-width: 1220px) {
     .header-inner {
         padding: 0 12px;
         gap: 10px;
     }
     .header-left {
-        gap: 12px;
+        gap: 14px;
     }
-    .sync-status-text {
-        display: none !important;
+    .header-right {
+        gap: 8px;
     }
+    /* Hide "Sync Now" text label, leaving clean rotating icon button */
     .btn-sync-action .btn-sync-label {
         display: none !important;
     }
     .btn-sync-action {
         padding: 6px 9px;
     }
-    .sync-section {
-        gap: 6px;
+    /* Hide sync status text (time and state shown on hover tooltip) */
+    .sync-status-text {
+        display: none !important;
     }
-    .header-right {
-        gap: 8px;
+    /* In mini-KPI, also hide WR, keeping only core NAV and P&L */
+    .header-mini-kpi .mini-kpi-item:nth-child(n+5),
+    .header-mini-kpi .mini-kpi-divider:nth-child(n+4) {
+        display: none !important;
     }
 }
 
-@media (max-width: 600px) {
+/* 3. Small laptops / Tablets landscape (<= 1040px) */
+@media (max-width: 1040px) {
+    /* Hide mini KPI dock completely to prioritize navigation tabs and actions */
+    .header-mini-kpi {
+        display: none !important;
+    }
+    .header-left {
+        gap: 10px;
+    }
+    .brand-title span {
+        display: none;
+    }
+}
+
+/* 4. Tablets portrait / Small viewports (<= 768px) */
+@media (max-width: 768px) {
     .brand-title {
         display: none;
     }
+    .header-inner {
+        padding: 0 10px;
+        gap: 8px;
+    }
+    .main-tabs .tab-btn {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+    .theme-switch-group button {
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+    }
+}
+
+/* 5. Mobile phones (<= 520px) */
+@media (max-width: 520px) {
     .brand-badge {
         width: 24px;
         height: 24px;
@@ -405,18 +465,18 @@ body {
     }
     .main-tabs .tab-btn {
         padding: 5px 7px;
-        font-size: 11.5px;
+        font-size: 11px;
     }
     .app-header .header-inner {
         height: 48px;
-        padding: 0 8px;
-        gap: 6px;
+        padding: 0 6px;
+        gap: 4px;
     }
     .header-left {
         gap: 6px;
     }
     .header-right {
-        gap: 5px;
+        gap: 4px;
     }
     .sync-section {
         gap: 4px;

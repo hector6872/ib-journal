@@ -729,16 +729,16 @@ const DayModal = {
 
                         return `
                             <tr>
-                                <td class="mono col-hide-mobile" style="font-size: 11px; color: var(--text-muted); width: 28px;">#${fillNumber}</td>
-                                <td class="mono" ${fillTimeTooltip ? `title="${fillTimeTooltip}"` : ''}>${fillTimeStr}</td>
-                                <td>${sideBadgeHtml}</td>
-                                <td class="mono">${Math.abs(f.quantity)}</td>
-                                <td class="mono">${fPrice}</td>
-                                <td class="mono ${fGrossClass}" style="font-weight: 600;">${fGrossDisplay}</td>
-                                <td class="mono" style="color: var(--text-muted);">${State.currency}${parseFloat(f.ib_commission || 0).toFixed(2)}</td>
-                                <td class="mono ${fPnlClass}" style="font-weight: 700;">${fPnlDisplay}</td>
-                                <td class="mono" style="text-align: right;">${fRoiDisplay}</td>
-                                <td class="col-hide-mobile" style="text-align: center;"><span class="badge-indicator">${f.open_close_indicator || 'C'}</span></td>
+                                <td class="mono col-hide-mobile" style="font-size: 11px; color: var(--text-muted); width: 28px; white-space: nowrap;">#${fillNumber}</td>
+                                <td class="mono" style="white-space: nowrap;" ${fillTimeTooltip ? `title="${fillTimeTooltip}"` : ''}>${fillTimeStr}</td>
+                                <td style="white-space: nowrap;">${sideBadgeHtml}</td>
+                                <td class="mono" style="white-space: nowrap;">${Math.abs(f.quantity)}</td>
+                                <td class="mono" style="white-space: nowrap;">${fPrice}</td>
+                                <td class="mono ${fGrossClass}" style="font-weight: 600; white-space: nowrap;">${fGrossDisplay}</td>
+                                <td class="mono" style="color: var(--text-muted); white-space: nowrap;">${State.currency}${parseFloat(f.ib_commission || 0).toFixed(2)}</td>
+                                <td class="mono ${fPnlClass}" style="font-weight: 700; white-space: nowrap;">${fPnlDisplay}</td>
+                                <td class="mono" style="text-align: right; white-space: nowrap;">${fRoiDisplay}</td>
+                                <td class="col-hide-mobile" style="text-align: center; white-space: nowrap;"><span class="badge-indicator" style="white-space: nowrap;">${f.open_close_indicator || 'C'}</span></td>
                             </tr>
                         `;
                     }).join('');
@@ -806,16 +806,16 @@ const DayModal = {
                                         <table class="trade-fills-table">
                                             <thead>
                                                 <tr>
-                                                    <th class="col-hide-mobile">#</th>
-                                                    <th>${this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)')}</th>
-                                                    <th>${STRINGS.modal?.tableSide || 'Side'}</th>
-                                                    <th>${STRINGS.modal?.tableQty || 'Volume'}</th>
-                                                    <th>${STRINGS.modal?.tablePrice || 'Price'}</th>
-                                                    <th>${STRINGS.modal?.tableGrossPnl || 'Gross P&L'}</th>
-                                                    <th>${STRINGS.modal?.tableCommission || 'Comm'}</th>
-                                                    <th>${STRINGS.modal?.tablePnl || 'Net P&L'}</th>
-                                                    <th style="text-align: right;" title="Net Return on Investment after commissions (hover value to view gross price return)">${STRINGS.modal?.tableRoi || '% Net ROI'}</th>
-                                                    <th class="col-hide-mobile" style="text-align: center;">Code</th>
+                                                    <th class="col-hide-mobile" style="white-space: nowrap;">#</th>
+                                                    <th style="white-space: nowrap;">${this.timezoneMode === 'local' ? (STRINGS.modal?.tableTimeLocal || 'Time (CET)') : (STRINGS.modal?.tableTimeMarket || 'Time (EST)')}</th>
+                                                    <th style="white-space: nowrap;">${STRINGS.modal?.tableSide || 'Side'}</th>
+                                                    <th style="white-space: nowrap;">${STRINGS.modal?.tableQty || 'Volume'}</th>
+                                                    <th style="white-space: nowrap;">${STRINGS.modal?.tablePrice || 'Price'}</th>
+                                                    <th style="white-space: nowrap;">${STRINGS.modal?.tableGrossPnl || 'Gross P&L'}</th>
+                                                    <th style="white-space: nowrap;">${STRINGS.modal?.tableCommission || 'Comm'}</th>
+                                                    <th style="white-space: nowrap;">${STRINGS.modal?.tablePnl || 'Net P&L'}</th>
+                                                    <th style="text-align: right; white-space: nowrap;" title="Net Return on Investment after commissions (hover value to view gross price return)">${STRINGS.modal?.tableRoi || '% Net ROI'}</th>
+                                                    <th class="col-hide-mobile" style="text-align: center; white-space: nowrap;">Code</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -904,20 +904,22 @@ const DayModal = {
 
             return `
                 <tr>
-                    <td class="mono col-hide-mobile" style="font-size: 11px; color: var(--text-muted); width: 32px;">#${rawTrades.length - idx}</td>
-                    <td class="mono" ${timeTooltip ? `title="${timeTooltip}"` : ''}>${timeStr}</td>
-                    <td>
-                        <strong>${t.symbol}</strong>
-                        <span class="badge-category" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">${t.asset_category}</span>
+                    <td class="mono col-hide-mobile" style="font-size: 11px; color: var(--text-muted); width: 32px; white-space: nowrap;">#${rawTrades.length - idx}</td>
+                    <td class="mono" style="white-space: nowrap;" ${timeTooltip ? `title="${timeTooltip}"` : ''}>${timeStr}</td>
+                    <td style="white-space: nowrap;">
+                        <span style="display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;">
+                            <strong style="white-space: nowrap;">${t.symbol}</strong>
+                            <span class="badge-category" style="font-size: 9px; padding: 1px 4px; white-space: nowrap;">${t.asset_category}</span>
+                        </span>
                     </td>
-                    <td>${sideBadgeHtml}</td>
-                    <td class="mono">${Math.abs(t.quantity)}</td>
-                    <td class="mono" title="${curr ? `Currency: ${curr}` : ''}">${priceDisplay}</td>
-                    <td class="mono ${grossClass}" style="font-weight: 600;">${grossDisplay}</td>
-                    <td class="mono" ${commTitle ? `title="${commTitle}"` : ''} style="color: var(--text-muted);">${State.currency}${parseFloat(t.ib_commission || 0).toFixed(2)}</td>
-                    <td class="mono ${pnlClass}" style="font-weight: 700;" ${pnlTitle ? `title="${pnlTitle}"` : ''}>${pnlDisplay}</td>
-                    <td class="mono" style="text-align: right;">${roiBadgeHtml}</td>
-                    <td class="col-hide-mobile" style="text-align: center;"><span class="badge-indicator">${t.open_close_indicator || 'C'}</span></td>
+                    <td style="white-space: nowrap;">${sideBadgeHtml}</td>
+                    <td class="mono" style="white-space: nowrap;">${Math.abs(t.quantity)}</td>
+                    <td class="mono" style="white-space: nowrap;" title="${curr ? `Currency: ${curr}` : ''}">${priceDisplay}</td>
+                    <td class="mono ${grossClass}" style="font-weight: 600; white-space: nowrap;">${grossDisplay}</td>
+                    <td class="mono" ${commTitle ? `title="${commTitle}"` : ''} style="color: var(--text-muted); white-space: nowrap;">${State.currency}${parseFloat(t.ib_commission || 0).toFixed(2)}</td>
+                    <td class="mono ${pnlClass}" style="font-weight: 700; white-space: nowrap;" ${pnlTitle ? `title="${pnlTitle}"` : ''}>${pnlDisplay}</td>
+                    <td class="mono" style="text-align: right; white-space: nowrap;">${roiBadgeHtml}</td>
+                    <td class="col-hide-mobile" style="text-align: center; white-space: nowrap;"><span class="badge-indicator" style="white-space: nowrap;">${t.open_close_indicator || 'C'}</span></td>
                 </tr>
             `;
         }).join('');
@@ -927,17 +929,17 @@ const DayModal = {
                 <table class="trades-table">
                     <thead>
                         <tr>
-                            <th class="col-hide-mobile">#</th>
-                            <th>${timeHeader}</th>
-                            <th>${STRINGS.modal?.tableSymbol || 'Symbol'}</th>
-                            <th>${STRINGS.modal?.tableSide || 'Side'}</th>
-                            <th>${STRINGS.modal?.tableQty || 'Volume'}</th>
-                            <th>${STRINGS.modal?.tablePrice || 'Price'}</th>
-                            <th>${STRINGS.modal?.tableGrossPnl || 'Gross P&L'}</th>
-                            <th>${STRINGS.modal?.tableCommission || 'Comm'}</th>
-                            <th>${STRINGS.modal?.tablePnl || 'Net P&L'}</th>
-                            <th style="text-align: right;" title="Net Return on Investment after commissions (hover value to view gross price return)">${STRINGS.modal?.tableRoi || '% Net ROI'}</th>
-                            <th class="col-hide-mobile" style="text-align: center;">Code</th>
+                            <th class="col-hide-mobile" style="white-space: nowrap;">#</th>
+                            <th style="white-space: nowrap;">${timeHeader}</th>
+                            <th style="white-space: nowrap;">${STRINGS.modal?.tableSymbol || 'Symbol'}</th>
+                            <th style="white-space: nowrap;">${STRINGS.modal?.tableSide || 'Side'}</th>
+                            <th style="white-space: nowrap;">${STRINGS.modal?.tableQty || 'Volume'}</th>
+                            <th style="white-space: nowrap;">${STRINGS.modal?.tablePrice || 'Price'}</th>
+                            <th style="white-space: nowrap;">${STRINGS.modal?.tableGrossPnl || 'Gross P&L'}</th>
+                            <th style="white-space: nowrap;">${STRINGS.modal?.tableCommission || 'Comm'}</th>
+                            <th style="white-space: nowrap;">${STRINGS.modal?.tablePnl || 'Net P&L'}</th>
+                            <th style="text-align: right; white-space: nowrap;" title="Net Return on Investment after commissions (hover value to view gross price return)">${STRINGS.modal?.tableRoi || '% Net ROI'}</th>
+                            <th class="col-hide-mobile" style="text-align: center; white-space: nowrap;">Code</th>
                         </tr>
                     </thead>
                     <tbody>

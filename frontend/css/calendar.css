@@ -1979,14 +1979,17 @@
 .trade-fills-table-wrap,
 .trades-table-wrapper {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: var(--radius-xs);
     border: 1px solid var(--border-default);
     background: var(--bg-card);
+    width: 100%;
 }
 
 .trade-fills-table,
 .trades-table {
     width: 100%;
+    min-width: 820px;
     border-collapse: collapse;
     font-size: 12px;
     text-align: left;
@@ -2002,6 +2005,7 @@
     letter-spacing: 0.5px;
     padding: 8px 10px;
     border-bottom: 1px solid var(--border-default);
+    white-space: nowrap !important;
 }
 
 .trade-fills-table td,
@@ -2009,6 +2013,8 @@
     padding: 7px 10px;
     border-bottom: 1px solid var(--border-subtle);
     color: var(--text-main);
+    white-space: nowrap !important;
+    vertical-align: middle;
 }
 
 .trade-fills-table tr:last-child td,
@@ -2023,9 +2029,13 @@
 
 .trades-table th,
 .trades-table td,
+.trades-table strong,
+.trades-table span,
 .trade-fills-table th,
-.trade-fills-table td {
-    white-space: nowrap;
+.trade-fills-table td,
+.trade-fills-table strong,
+.trade-fills-table span {
+    white-space: nowrap !important;
 }
 
 .badge-roi {
@@ -2306,12 +2316,17 @@
     .col-hide-mobile {
         display: none !important;
     }
+    .trade-fills-table,
+    .trades-table {
+        min-width: 680px;
+    }
     .trades-table th,
     .trades-table td,
     .trade-fills-table th,
     .trade-fills-table td {
-        padding: 6px 5px !important;
+        padding: 6px 6px !important;
         font-size: 11px !important;
+        white-space: nowrap !important;
     }
     .trade-card-header {
         padding: 8px 10px;
@@ -2320,8 +2335,9 @@
         flex-wrap: wrap;
     }
     .trade-symbol-line {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 4px;
+        white-space: nowrap !important;
     }
 }
 

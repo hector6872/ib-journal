@@ -49,11 +49,6 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
         )
         trade_rows = [dict(r) for r in cursor.fetchall()]
 
-        # Total commissions and net pnl across all executions (IBKR realized_pnl is already net of commissions)
-        total_commissions = sum(float(r.get("ib_commission") or 0.0) for r in trade_rows)
-        net_pnl = round(sum(float(r.get("realized_pnl") or 0.0) for r in trade_rows), 2)
-        gross_pnl = round(net_pnl + total_commissions, 2)
-
         min_trade_date = trade_rows[0]["trade_date"] if trade_rows else None
         max_trade_date = trade_rows[-1]["trade_date"] if trade_rows else None
 
@@ -66,6 +61,13 @@ def get_overview_stats(start_date: Optional[str] = None, end_date: Optional[str]
 
         closed_trades = [g for g in all_grouped if g.get("status") == "CLOSED"]
         total_trades = len(closed_trades)
+
+        # Total commissions and net pnl across all executions (IBKR realized_pnl is already net of commissions)
+        total_commissions = sum(float(r.get("ib_commission") or 0.0) for r in trade_rows)
+        net_pnl = round(sum(float(r.get("realized_pnl") or 0.0) for r in trade_rows), 2)
+        if abs(net_pnl) < 1e-6 and closed_trades:
+            net_pnl = round(sum(float(g.get("net_pnl") or 0.0) for g in closed_trades), 2)
+        gross_pnl = round(net_pnl + total_commissions, 2)
 
         winning_trades = sum(1 for g in closed_trades if (g.get("net_pnl") or 0.0) > 0.005)
         losing_trades = sum(1 for g in closed_trades if (g.get("net_pnl") or 0.0) < -0.005)
@@ -415,14 +417,6 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
         # High watermark & Drawdown calculation
         for d in sorted_dates:
             day_trades = daily_trades_map[d]
-            day_net = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
-            day_comm = sum(float(t.get("ib_commission") or 0.0) for t in day_trades)
-            day_gross = round(day_net + day_comm, 2)
-            day_pnl = round(day_net, 2)
-            running_gross += day_gross
-            running_comm += day_comm
-            running_cumulative = round(running_gross - running_comm, 2)
-
             day_grouped = [
                 g
                 for g in group_executions_to_trades(day_trades)
@@ -431,6 +425,16 @@ def get_detailed_stats(start_date: Optional[str] = None, end_date: Optional[str]
             day_closed_trades = [g for g in day_grouped if g.get("status") == "CLOSED"]
             day_wins = sum(1 for g in day_closed_trades if (g.get("net_pnl") or 0.0) > 0.005)
             day_losses = sum(1 for g in day_closed_trades if (g.get("net_pnl") or 0.0) < -0.005)
+
+            day_net = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
+            if abs(day_net) < 1e-6 and day_closed_trades:
+                day_net = sum(float(g.get("net_pnl") or 0.0) for g in day_closed_trades)
+            day_comm = sum(float(t.get("ib_commission") or 0.0) for t in day_trades)
+            day_gross = round(day_net + day_comm, 2)
+            day_pnl = round(day_net, 2)
+            running_gross += day_gross
+            running_comm += day_comm
+            running_cumulative = round(running_gross - running_comm, 2)
 
             if running_cumulative > peak_equity:
                 peak_equity = running_cumulative
@@ -1744,8 +1748,6 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
 
     daily_map = {}
     for d_str, day_trades in trades_by_date.items():
-        day_net = round(sum(float(t.get("realized_pnl") or 0.0) for t in day_trades), 2)
-
         grouped = group_executions_to_trades(day_trades)
         trading_grouped = [
             g
@@ -1755,6 +1757,10 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
         closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
         day_wins = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) > 0.005)
         day_losses = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) < -0.005)
+
+        day_net = round(sum(float(t.get("realized_pnl") or 0.0) for t in day_trades), 2)
+        if abs(day_net) < 1e-6 and closed_grouped:
+            day_net = round(sum(float(g.get("net_pnl") or 0.0) for g in closed_grouped), 2)
 
         daily_map[d_str] = {
             "pnl": day_net,
@@ -1836,7 +1842,6 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
     largest_loss = 0.0
 
     for d_str, day_trades in trades_by_date.items():
-        day_net = round(sum(float(t.get("realized_pnl") or 0.0) for t in day_trades), 2)
         day_comm = sum(float(t.get("ib_commission") or 0.0) for t in day_trades)
 
         grouped = group_executions_to_trades(day_trades)
@@ -1848,6 +1853,10 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
         closed_grouped = [g for g in trading_grouped if g.get("status") == "CLOSED"]
         day_wins = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) > 0.005)
         day_losses = sum(1 for g in closed_grouped if (g.get("net_pnl") or 0.0) < -0.005)
+
+        day_net = round(sum(float(t.get("realized_pnl") or 0.0) for t in day_trades), 2)
+        if abs(day_net) < 1e-6 and closed_grouped:
+            day_net = round(sum(float(g.get("net_pnl") or 0.0) for g in closed_grouped), 2)
 
         for g in closed_grouped:
             pnl_val = float(g.get("net_pnl") or 0.0)
@@ -1946,9 +1955,6 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
         current_d = monday + timedelta(days=i)
         d_str = current_d.isoformat()
         day_trades = trades_by_date.get(d_str, [])
-        day_net = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
-        day_pnl = round(day_net, 2)
-
         day_grouped = [
             g
             for g in group_executions_to_trades(day_trades)
@@ -1956,6 +1962,11 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
         ]
         closed_day_trades = [g for g in day_grouped if g.get("status") == "CLOSED"]
         all_week_grouped.extend(closed_day_trades)
+
+        day_net = sum(float(t.get("realized_pnl") or 0.0) for t in day_trades)
+        if abs(day_net) < 1e-6 and closed_day_trades:
+            day_net = sum(float(g.get("net_pnl") or 0.0) for g in closed_day_trades)
+        day_pnl = round(day_net, 2)
 
         day_wins = sum(1 for t in closed_day_trades if (t.get("net_pnl") or 0.0) > 0.005)
         day_losses = sum(1 for t in closed_day_trades if (t.get("net_pnl") or 0.0) < -0.005)

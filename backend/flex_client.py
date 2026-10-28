@@ -192,9 +192,9 @@ class IBKRFlexClient:
                 exec_id = (
                     attrs.get("ibExecId")
                     or attrs.get("ibExecutionId")
+                    or attrs.get("executionID")
                     or attrs.get("transactionID")
                     or attrs.get("tradeID")
-                    or attrs.get("executionID")
                 )
                 if not exec_id or exec_id in seen_exec_ids:
                     continue
@@ -339,7 +339,7 @@ class IBKRFlexClient:
 
                 trade_record = {
                     "ib_exec_id": exec_id,
-                    "trade_id": attrs.get("tradeID") or exec_id,
+                    "trade_id": attrs.get("transactionID") or attrs.get("tradeID") or exec_id,
                     "account_id": attrs.get("accountId") or attrs.get("clientAccountId") or "",
                     "symbol": norm_symbol,
                     "description": desc or norm_symbol,

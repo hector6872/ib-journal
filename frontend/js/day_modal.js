@@ -559,8 +559,9 @@ const DayModal = {
                     const fillsRowsHtml = (t.fills || []).map((f, fIdx) => {
                         const isBuy = (f.buy_sell || '').toUpperCase() === 'BUY';
                         const isCashFill = (f.asset_category || t.asset_category || '').toUpperCase() === 'CASH' || (f.asset_category || t.asset_category || '').toUpperCase() === 'FX';
-                        const fPnl = (f.realized_pnl || 0) - (f.ib_commission || 0);
-                        const fIsOpen = !isCashFill && (f.open_close_indicator || '').toUpperCase() === 'O' && (!f.realized_pnl);
+                        const fInd = (f.open_close_indicator || '').toUpperCase();
+                        const fIsOpen = !isCashFill && (fInd === 'O' || fInd.startsWith('O;') || fInd.includes('O')) && (!f.realized_pnl);
+                        const fPnl = f.realized_pnl || 0;
                         const fPnlClass = fIsOpen ? 'pnl-neutral' : State.getPnlClass(fPnl);
                         const fPnlDisplay = isCashFill
                             ? (fPnl !== 0 ? State.formatCurrency(fPnl) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>')
@@ -679,8 +680,9 @@ const DayModal = {
         const rowsHtml = rawTrades.map((t, idx) => {
             const isBuy = (t.buy_sell || '').toUpperCase() === 'BUY';
             const isCash = (t.asset_category || '').toUpperCase() === 'CASH' || (t.asset_category || '').toUpperCase() === 'FX';
-            const isOpen = !isCash && (t.open_close_indicator || '').toUpperCase() === 'O' && (t.realized_pnl === 0 || t.realized_pnl === null);
-            const pnl = (t.realized_pnl || 0) - (t.ib_commission || 0);
+            const ind = (t.open_close_indicator || '').toUpperCase();
+            const isOpen = !isCash && (ind === 'O' || ind.startsWith('O;') || ind.includes('O')) && (t.realized_pnl === 0 || t.realized_pnl === null);
+            const pnl = t.realized_pnl || 0;
             const pnlClass = isOpen ? 'pnl-neutral' : State.getPnlClass(pnl);
             const pnlDisplay = isCash
                 ? (pnl !== 0 ? State.formatCurrency(pnl) : '<span style="color: var(--text-muted); font-size: 11px;">--</span>')

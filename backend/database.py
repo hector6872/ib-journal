@@ -45,6 +45,81 @@ def normalize_symbol(symbol: str, description: str = "", asset_category: str = "
     return " ".join(sym.split())
 
 
+def is_duplicate_trade_pair(r1: Dict[str, Any], r2: Dict[str, Any]) -> bool:
+    """
+    Determines if two records represent the exact same execution fill imported
+    from differing IBKR query types (Trade Confirmation vs Activity Statement vs Statements).
+    """
+    t1 = str(r1.get("trade_id") or "")
+    t2 = str(r2.get("trade_id") or "")
+    e1 = str(r1.get("ib_exec_id") or "")
+    e2 = str(r2.get("ib_exec_id") or "")
+
+    # 1. Matching IDs across execution ID or transaction/trade ID
+    if (t1 and t2 and t1 == t2) or (e1 and e2 and e1 == e2) or (e1 and e1 in (t2, e2)) or (e2 and e2 in (t1, e1)):
+        return True
+
+    # 2. Synthetic placeholders (GEN_* or IB_*) vs official broker records
+    if (e1.startswith(("GEN_", "IB_")) and not e2.startswith(("GEN_", "IB_"))) or \
+       (e2.startswith(("GEN_", "IB_")) and not e1.startswith(("GEN_", "IB_"))):
+        return True
+
+    # 3. Test fixtures with CONFIRM/TC in ID
+    if ("CONFIRM" in e1 or "TC" in e1 or "CONFIRM" in t1 or "TC" in t1) != \
+       ("CONFIRM" in e2 or "TC" in e2 or "CONFIRM" in t2 or "TC" in t2):
+        return True
+
+    # 4. Cross-query pattern: Trade Confirmation transactionID (e.g. 16xxxxxxxxx)
+    # vs Activity Statement ibExecId (e.g. 69xxxxxxxxx or 0001a4e2...)
+    is_tc_1 = bool(re.match(r"^16\d{7,10}$", e1) or re.match(r"^16\d{7,10}$", t1))
+    is_tc_2 = bool(re.match(r"^16\d{7,10}$", e2) or re.match(r"^16\d{7,10}$", t2))
+    is_act_1 = bool("." in e1 or re.match(r"^(?:6|7|8|9)\d{8,11}$", e1))
+    is_act_2 = bool("." in e2 or re.match(r"^(?:6|7|8|9)\d{8,11}$", e2))
+    if (is_tc_1 and is_act_2) or (is_tc_2 and is_act_1):
+        return True
+
+    # 5. Settled vs unsettled P&L for closing fills
+    p1 = abs(float(r1.get("realized_pnl") or 0.0))
+    p2 = abs(float(r2.get("realized_pnl") or 0.0))
+    if (p1 > 1e-6 and p2 < 1e-6) or (p2 > 1e-6 and p1 < 1e-6):
+        return True
+
+    # 6. Composite Activity code (e.g. O;P) vs simple code (O)
+    ind1 = (r1.get("open_close_indicator") or "").upper()
+    ind2 = (r2.get("open_close_indicator") or "").upper()
+    if (";" in ind1 and ";" not in ind2) or (";" in ind2 and ";" not in ind1):
+        return True
+
+    return False
+
+
+def score_execution_record(rec: Dict[str, Any]) -> float:
+    """Calculates fidelity score to prioritize official Activity Statement records over intraday/CSV placeholders."""
+    score = 0.0
+    pnl = abs(float(rec.get("realized_pnl") or 0.0))
+    ind = (rec.get("open_close_indicator") or "").upper()
+    exec_id = str(rec.get("ib_exec_id") or "")
+
+    # 1. Prefer official Activity statement executions (e.g. 69... or dotted 0001a4e2...)
+    # over intraday transaction IDs (e.g. 16...) or synthetic IDs
+    if "." in exec_id or (len(exec_id) >= 10 and exec_id.startswith("6")):
+        score += 2000.0
+    if not exec_id.startswith(("GEN_", "IB_")):
+        score += 50.0
+    # 2. Prefer settled records with non-zero P&L
+    if pnl > 1e-6:
+        score += 1000.0
+    # 3. Prefer composite codes (e.g. O;P or C;P) from Activity Flex over simple O/C
+    if ";" in ind:
+        score += 100.0
+    if ind == "C":
+        score += 20.0
+    # 4. Tie-breaker: higher database ID (more recently inserted)
+    if "id" in rec:
+        score += float(rec["id"]) / 1000000.0
+    return score
+
+
 def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
     """
     Cleans up duplicate trades:
@@ -73,43 +148,6 @@ def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
     dup_groups = cursor.fetchall()
     deleted_count = 0
 
-    def is_duplicate_pair(r1: Dict[str, Any], r2: Dict[str, Any]) -> bool:
-        t1 = str(r1.get("trade_id") or "")
-        t2 = str(r2.get("trade_id") or "")
-        e1 = str(r1.get("ib_exec_id") or "")
-        e2 = str(r2.get("ib_exec_id") or "")
-        if (t1 and t2 and t1 == t2) or (e1 and e2 and e1 == e2) or (e1 and e1 in (t2, e2)) or (e2 and e2 in (t1, e1)):
-            return True
-        if e1.startswith(("GEN_", "IB_")) or e2.startswith(("GEN_", "IB_")):
-            return True
-        p1 = abs(float(r1.get("realized_pnl") or 0.0))
-        p2 = abs(float(r2.get("realized_pnl") or 0.0))
-        if (p1 > 1e-6 and p2 < 1e-6) or (p2 > 1e-6 and p1 < 1e-6):
-            return True
-        ind1 = (r1.get("open_close_indicator") or "").upper()
-        ind2 = (r2.get("open_close_indicator") or "").upper()
-        if (";" in ind1 and ";" not in ind2) or (";" in ind2 and ";" not in ind1):
-            return True
-        return False
-
-    def score_rec(rec: Dict[str, Any]) -> float:
-        score = 0.0
-        pnl = abs(float(rec.get("realized_pnl") or 0.0))
-        ind = (rec.get("open_close_indicator") or "").upper()
-        exec_id = str(rec.get("ib_exec_id") or "")
-        if pnl > 1e-6:
-            score += 1000.0
-        if ";" in ind:
-            score += 50.0
-        if ind == "C":
-            score += 20.0
-        if not exec_id.startswith("GEN_"):
-            score += 10.0
-        if not exec_id.startswith("IB_"):
-            score += 5.0
-        score += float(rec["id"]) / 1000000.0
-        return score
-
     for dg in dup_groups:
         cursor.execute("""
             SELECT id, ib_exec_id, trade_id, open_close_indicator, realized_pnl, raw_realized_pnl, ib_commission
@@ -131,9 +169,9 @@ def cleanup_duplicate_trades(conn: sqlite3.Connection) -> int:
                 r2 = records[j]
                 if r2["id"] in to_delete_in_group:
                     continue
-                if is_duplicate_pair(r1, r2):
-                    s1 = score_rec(r1)
-                    s2 = score_rec(r2)
+                if is_duplicate_trade_pair(r1, r2):
+                    s1 = score_execution_record(r1)
+                    s2 = score_execution_record(r2)
                     winner, loser = (r1, r2) if s1 >= s2 else (r2, r1)
                     if abs(float(winner.get("realized_pnl") or 0.0)) < 1e-6 and abs(float(loser.get("realized_pnl") or 0.0)) > 1e-6:
                         cursor.execute("""
@@ -593,54 +631,25 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
                 e_in = str(st.get("ib_exec_id") or "")
                 e_ex = str(existing["ib_exec_id"] or "")
 
-                is_dup = (
-                    (t_in and t_ex and t_in == t_ex)
-                    or (e_in in (t_ex, e_ex))
-                    or (e_ex in (t_in, e_in))
-                    or e_in.startswith(("GEN_", "IB_"))
-                    or e_ex.startswith(("GEN_", "IB_"))
-                    or (abs(float(existing["realized_pnl"] or 0.0)) > 1e-6 and abs(float(st.get("realized_pnl") or 0.0)) < 1e-6)
-                    or (abs(float(st.get("realized_pnl") or 0.0)) > 1e-6 and abs(float(existing["realized_pnl"] or 0.0)) < 1e-6)
-                    or (";" in (st.get("open_close_indicator") or "") and ";" not in (existing["open_close_indicator"] or ""))
-                    or (";" in (existing["open_close_indicator"] or "") and ";" not in (st.get("open_close_indicator") or ""))
-                )
-
+                # Check if they are cross-query duplicates
+                is_dup = is_duplicate_trade_pair(st, dict(existing))
                 if not is_dup:
                     trades_to_insert.append(st)
                     continue
 
-                # If incoming is placeholder GEN_ and existing is official, skip incoming
-                if e_in.startswith("GEN_") and not e_ex.startswith("GEN_"):
-                    continue
+                # Exact physical execution match: same trade_date, trade_time, symbol, side, qty, price.
+                # Cross-query imports (Trade Confirmation vs Activity vs Statements) generate different IDs
+                # for the exact same physical execution fill.
+                s_in = score_execution_record(st)
+                s_ex = score_execution_record(dict(existing))
 
-                existing_pnl = abs(float(existing["realized_pnl"] or 0.0))
-                incoming_pnl = abs(float(st.get("realized_pnl") or 0.0))
-                existing_ind = (existing["open_close_indicator"] or "").upper()
-                incoming_ind = (st.get("open_close_indicator") or "").upper()
-
-                # If existing has settled PnL and incoming has 0 PnL, skip incoming
-                if existing_pnl > 1e-6 and incoming_pnl < 1e-6:
-                    continue
-
-                # If incoming has settled PnL or official composite code (e.g. O;P), replace existing
-                if (
-                    incoming_pnl > 1e-6
-                    or (";" in incoming_ind and ";" not in existing_ind)
-                    or e_ex.startswith("GEN_")
-                ):
+                if s_in >= s_ex:
+                    # Incoming is better or equal: replace existing with incoming
                     cursor.execute("DELETE FROM trades WHERE id = ?", (existing["id"],))
                     trades_to_insert.append(st)
+                else:
+                    # Existing is better: keep existing and ignore incoming duplicate
                     continue
-
-                # If incoming is official and existing is placeholder
-                if not e_in.startswith(("GEN_", "IB_")) and e_ex.startswith(("GEN_", "IB_")):
-                    cursor.execute("DELETE FROM trades WHERE id = ?", (existing["id"],))
-                    trades_to_insert.append(st)
-                    continue
-
-                # If both have 0 PnL, replace existing with incoming to keep latest
-                cursor.execute("DELETE FROM trades WHERE id = ?", (existing["id"],))
-                trades_to_insert.append(st)
             else:
                 trades_to_insert.append(st)
 

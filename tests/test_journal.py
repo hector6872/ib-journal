@@ -1600,6 +1600,93 @@ class TestNormalizationAndDeduplication(unittest.TestCase):
         day_trades_final = get_day_trades("2026-10-27")
         self.assertEqual(len(day_trades_final), 4)
 
+    def test_trade_confirmation_numeric_ids_deduplication(self):
+        """
+        Tests that when Trade Confirmation Flex Query uses 10-digit transaction IDs (e.g. 1641xxxxxx)
+        and Activity Statement uses 10-digit execution IDs (e.g. 6976xxxxxx),
+        duplicates with identical physical execution fill are recognized and superseded by the official records.
+        """
+        from backend.analytics import get_day_trades
+
+        intraday_tc_fills = [
+            {
+                "ib_exec_id": "1641199655",
+                "trade_id": "1641199655",
+                "symbol": "SPY 03NOV26 759 C",
+                "description": "SPY 03NOV26 759 C",
+                "asset_category": "OPT",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.51,
+                "ib_commission": 0.86,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-11-03",
+                "trade_time": "10:43:58",
+                "open_close_indicator": "O",
+            },
+            {
+                "ib_exec_id": "1641201713",
+                "trade_id": "1641201713",
+                "symbol": "SPY 03NOV26 759 C",
+                "description": "SPY 03NOV26 759 C",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.42,
+                "ib_commission": 0.86,
+                "realized_pnl": -10.72,
+                "trade_date": "2026-11-03",
+                "trade_time": "10:44:45",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(intraday_tc_fills)
+        self.assertEqual(len(get_day_trades("2026-11-03")), 2)
+
+        # Activity Statement arrives later with official execution IDs:
+        activity_eod_fills = [
+            {
+                "ib_exec_id": "6976452818",
+                "trade_id": "6976452818",
+                "symbol": "SPY 03NOV26 759 C",
+                "description": "SPY 03NOV26 759 C",
+                "asset_category": "OPT",
+                "buy_sell": "BUY",
+                "quantity": 1.0,
+                "trade_price": 0.51,
+                "ib_commission": 0.77,
+                "realized_pnl": 0.0,
+                "trade_date": "2026-11-03",
+                "trade_time": "10:43:58",
+                "open_close_indicator": "O;P",
+            },
+            {
+                "ib_exec_id": "6976454876",
+                "trade_id": "6976454876",
+                "symbol": "SPY 03NOV26 759 C",
+                "description": "SPY 03NOV26 759 C",
+                "asset_category": "OPT",
+                "buy_sell": "SELL",
+                "quantity": -1.0,
+                "trade_price": 0.42,
+                "ib_commission": 0.77,
+                "realized_pnl": -9.57,
+                "trade_date": "2026-11-03",
+                "trade_time": "10:44:45",
+                "open_close_indicator": "C",
+            },
+        ]
+        upsert_trades(activity_eod_fills)
+
+        # Count remains 2 (not duplicated to 4)
+        trades_after = get_day_trades("2026-11-03")
+        self.assertEqual(len(trades_after), 2)
+        exec_ids = [t["ib_exec_id"] for t in trades_after]
+        self.assertIn("6976452818", exec_ids)
+        self.assertIn("6976454876", exec_ids)
+        self.assertNotIn("1641199655", exec_ids)
+        self.assertNotIn("1641201713", exec_ids)
+
     def test_calendar_net_pnl_with_unsettled_intraday_trades(self):
         """
         Tests that month and year calendars calculate Net P&L even when trades

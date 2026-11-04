@@ -626,11 +626,6 @@ def upsert_trades(trades: List[Dict[str, Any]]) -> int:
                     trades_to_insert.append(st)
                     continue
 
-                t_in = str(st.get("trade_id") or "")
-                t_ex = str(existing["trade_id"] or "")
-                e_in = str(st.get("ib_exec_id") or "")
-                e_ex = str(existing["ib_exec_id"] or "")
-
                 # Check if they are cross-query duplicates
                 is_dup = is_duplicate_trade_pair(st, dict(existing))
                 if not is_dup:

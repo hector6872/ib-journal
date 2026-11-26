@@ -152,7 +152,7 @@ const CalendarPage = {
         </span>`;
     },
 
-    buildDockHtml(sectionId, stats) {
+    buildDockHtml(sectionId, stats, equityBase = 0, pnlMode = 'nominal') {
         const hasTrades = stats.totalTrades > 0;
         let pnlColorVar = 'var(--text-muted)';
         if (hasTrades) {
@@ -160,17 +160,22 @@ const CalendarPage = {
             else if (stats.totalNetPnl < 0) pnlColorVar = 'var(--color-loss)';
         }
 
+        const isPercent = (sectionId === 'week' || sectionId === 'month') && pnlMode === 'percent';
+        const fmtVal = (val, showPlus = true) => isPercent
+            ? State.formatPercent(val, equityBase, showPlus)
+            : `${val > 0 && showPlus ? '+' : (val < 0 ? '-' : '')}${State.currency}${Math.abs(val).toFixed(2)}`;
+
         const expClass = State.getPnlClass(stats.expectancy);
         const winRateClass = State.getWinRateClass(parseFloat(stats.winRate), stats.totalTrades);
         const pfClass = State.getRatioClass(parseFloat(stats.profitFactor), stats.totalTrades);
 
         const avgWinDisplay = stats.avgWin > 0
-            ? `<span class="pnl-positive">+${State.currency}${stats.avgWin.toFixed(2)}</span>`
-            : `<span class="pnl-neutral">${State.currency}0.00</span>`;
+            ? `<span class="pnl-positive">${fmtVal(stats.avgWin, true)}</span>`
+            : `<span class="pnl-neutral">${isPercent ? '0.00%' : `${State.currency}0.00`}</span>`;
 
         const avgLossDisplay = stats.avgLoss > 0
-            ? `<span class="pnl-negative">-${State.currency}${stats.avgLoss.toFixed(2)}</span>`
-            : `<span class="pnl-neutral">${State.currency}0.00</span>`;
+            ? `<span class="pnl-negative">${fmtVal(-Math.abs(stats.avgLoss), false)}</span>`
+            : `<span class="pnl-neutral">${isPercent ? '0.00%' : `${State.currency}0.00`}</span>`;
 
         const sp = STRINGS.statsPage || {};
 
@@ -195,14 +200,12 @@ const CalendarPage = {
             const worstLoss = stats.largestLoss || 0;
 
             const bestWinDisplay = bestWin > 0
-                ? `<span class="pnl-positive">+${State.currency}${bestWin.toFixed(2)}</span>`
-                : `<span class="pnl-neutral">${State.currency}0.00</span>`;
+                ? `<span class="pnl-positive">${fmtVal(bestWin, true)}</span>`
+                : `<span class="pnl-neutral">${isPercent ? '0.00%' : `${State.currency}0.00`}</span>`;
 
-            const worstLossDisplay = worstLoss < 0
-                ? `<span class="pnl-negative">-${State.currency}${Math.abs(worstLoss).toFixed(2)}</span>`
-                : (worstLoss > 0
-                    ? `<span class="pnl-negative">-${State.currency}${worstLoss.toFixed(2)}</span>`
-                    : `<span class="pnl-neutral">${State.currency}0.00</span>`);
+            const worstLossDisplay = worstLoss !== 0
+                ? `<span class="pnl-negative">${fmtVal(-Math.abs(worstLoss), false)}</span>`
+                : `<span class="pnl-neutral">${isPercent ? '0.00%' : `${State.currency}0.00`}</span>`;
 
             riskStatHtml = `
                 <div class="dock-stat-item">
@@ -216,6 +219,10 @@ const CalendarPage = {
                 </div>
             `;
         }
+
+        const expFormatted = isPercent
+            ? State.formatPercent(stats.expectancy, equityBase, true)
+            : State.formatCurrency(stats.expectancy);
 
         return `
             <div class="section-analytics-dock">
@@ -246,7 +253,7 @@ const CalendarPage = {
                                     <span class="dock-stat-label">${STRINGS.kpi.expectancy || "Expectancy"}</span>
                                     ${this.renderInfoIcon(sp.tipExpectancy || "Expected average return per trade: (Win % × Avg Win) - (Loss % × Avg Loss).")}
                                 </div>
-                                <span class="dock-stat-val mono ${expClass}">${State.formatCurrency(stats.expectancy)}</span>
+                                <span class="dock-stat-val mono ${expClass}">${expFormatted}</span>
                             </div>
                             <div class="dock-stat-item">
                                 <div class="dock-stat-label-row">
@@ -286,7 +293,7 @@ const CalendarPage = {
         `;
     },
 
-    renderDualAxisChart(canvasId, labels, cumPnlArray, tradesCountArray, totalPnl) {
+    renderDualAxisChart(canvasId, labels, cumPnlArray, tradesCountArray, totalPnl, pnlMode = 'nominal', equityBase = 0) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
 
@@ -382,7 +389,7 @@ const CalendarPage = {
                             label: function(context) {
                                 if (context.dataset.yAxisID === 'yPnl') {
                                     if (context.parsed.y === null || context.parsed.y === undefined) return null;
-                                    return ` ${STRINGS.calendar.cumPnlLabel || 'Cumulative P&L'}: ${State.formatCurrency(context.parsed.y)}`;
+                                    return ` ${STRINGS.calendar.cumPnlLabel || 'Cumulative P&L'}: ${State.formatPnl(context.parsed.y, equityBase, pnlMode)}`;
                                 } else {
                                     const count = context.parsed.y;
                                     return ` ${STRINGS.calendar.tradesLabel || 'Trades'}: ${count} ${count === 1 ? 'trade' : 'trades'}`;
@@ -410,7 +417,7 @@ const CalendarPage = {
                         ticks: {
                             color: textColor,
                             font: { family: 'ui-monospace, SFMono-Regular, monospace', size: 10 },
-                            callback: (val) => State.formatCurrency(val)
+                            callback: (val) => State.formatPnl(val, equityBase, pnlMode)
                         }
                     },
                     yTrades: {
@@ -476,6 +483,185 @@ const CalendarPage = {
     },
 
     // -------------------------------------------------------------
+    // SHARED SECTION TOOLBAR ($ / % + SCREENSHOT)
+    // -------------------------------------------------------------
+    getSectionEquityBase(data) {
+        if (data && data.equity_base && data.equity_base >= 10) {
+            return data.equity_base;
+        }
+        const cap = State.overviewStats && State.overviewStats.capital_base;
+        return cap && cap >= 10 ? cap : 0;
+    },
+
+    renderSectionToolbar(sectionId, equityBase) {
+        const isPercent = State.pnlDisplayMode === 'percent';
+        const toolbarLabel = sectionId === 'week'
+            ? (STRINGS.calendar.weekSectionTitle || 'Weekly Performance')
+            : (STRINGS.calendar.monthSectionTitle || 'Monthly Calendar Grid');
+        const percentTitle = (isPercent && equityBase < 10)
+            ? STRINGS.calendar.pnlPercentNoCapital
+            : STRINGS.calendar.pnlModePercentTitle;
+
+        return `
+            <div class="section-actions-wrap">
+                <div class="section-actions-toolbar" role="toolbar" focusgroup="toolbar wrap" aria-label="${toolbarLabel}">
+                    <div class="pnl-mode-toggle" role="group" aria-label="${STRINGS.calendar.pnlModeLabel}">
+                        <button type="button" class="pnl-mode-btn" data-pnl-mode="nominal" aria-pressed="${!isPercent}" title="${STRINGS.calendar.pnlModeNominalTitle}">${STRINGS.calendar.pnlModeNominal}</button>
+                        <button type="button" class="pnl-mode-btn" data-pnl-mode="percent" aria-pressed="${isPercent}" title="${percentTitle}">${STRINGS.calendar.pnlModePercent}</button>
+                    </div>
+                    <span class="toolbar-sep" role="separator" aria-orientation="vertical"></span>
+                    <button type="button" class="btn-ctrl btn-screenshot" id="btn-${sectionId}-screenshot" aria-label="${STRINGS.calendar.screenshotBtnLabel}" title="${STRINGS.calendar.screenshotBtnTitle}">
+                        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    </button>
+                </div>
+                <span class="sr-only" role="status" id="status-${sectionId}"></span>
+            </div>
+        `;
+    },
+
+    bindSectionToolbar(container, sectionId, filename) {
+        const toolbar = container.querySelector('.section-actions-toolbar');
+        const statusEl = document.getElementById(`status-${sectionId}`);
+
+        if (toolbar) {
+            toolbar.querySelectorAll('.pnl-mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const nextMode = btn.getAttribute('data-pnl-mode');
+                    if (!nextMode || nextMode === State.pnlDisplayMode) return;
+                    State.pnlDisplayMode = nextMode;
+                    if (this._weekData) {
+                        const weekEl = document.getElementById('sec-week-container');
+                        if (weekEl) this.renderWeek(this._weekData, weekEl);
+                    }
+                    if (this._monthData) {
+                        const monthEl = document.getElementById('sec-month-container');
+                        if (monthEl) this.renderMonth(this._monthData, monthEl, this._monthYear, this._monthMonth);
+                    }
+                });
+            });
+
+            if (!('focusGroup' in HTMLElement.prototype)) {
+                const items = Array.from(toolbar.querySelectorAll('button'));
+                items.forEach((b, i) => { b.tabIndex = i === 0 ? 0 : -1; });
+                toolbar.addEventListener('focusin', ({ target }) => {
+                    if (items.includes(target)) {
+                        items.forEach(b => { b.tabIndex = b === target ? 0 : -1; });
+                    }
+                });
+                toolbar.addEventListener('keydown', (e) => {
+                    const rtl = getComputedStyle(toolbar).direction === 'rtl';
+                    const step = e.key === 'ArrowRight' ? (rtl ? -1 : 1) : (e.key === 'ArrowLeft' ? (rtl ? 1 : -1) : 0);
+                    const currentIdx = items.indexOf(document.activeElement);
+                    if (currentIdx === -1) return;
+                    let nextIdx = -1;
+                    if (step !== 0) {
+                        nextIdx = (currentIdx + step + items.length) % items.length;
+                    } else if (e.key === 'Home') {
+                        nextIdx = 0;
+                    } else if (e.key === 'End') {
+                        nextIdx = items.length - 1;
+                    }
+                    if (nextIdx !== -1) {
+                        e.preventDefault();
+                        items[nextIdx].focus();
+                    }
+                });
+            }
+        }
+
+        const screenshotBtn = document.getElementById(`btn-${sectionId}-screenshot`);
+        if (screenshotBtn) {
+            screenshotBtn.addEventListener('click', () => {
+                this.captureSectionScreenshot(container, screenshotBtn, statusEl, filename);
+            });
+        }
+    },
+
+    showScreenshotToast(message, isError = false) {
+        let toast = document.getElementById('screenshot-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'screenshot-toast';
+            toast.className = 'screenshot-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.classList.toggle('is-error', isError);
+        toast.classList.add('is-visible');
+        if (this._toastTimer) clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => {
+            toast.classList.remove('is-visible');
+        }, 2800);
+    },
+
+    async captureSectionScreenshot(container, btnEl, statusEl, filename) {
+        if (!container || btnEl.getAttribute('aria-disabled') === 'true') return;
+        if (typeof html2canvas !== 'function') {
+            this.showScreenshotToast(STRINGS.calendar.screenshotFailed, true);
+            if (statusEl) statusEl.textContent = STRINGS.calendar.screenshotFailed;
+            return;
+        }
+
+        const originalHtml = btnEl.innerHTML;
+        btnEl.setAttribute('aria-disabled', 'true');
+        btnEl.classList.add('is-capturing');
+        if (statusEl) statusEl.textContent = STRINGS.calendar.screenshotCapturing;
+
+        try {
+            const bgColor = getComputedStyle(container).backgroundColor || '#ffffff';
+            const canvas = await html2canvas(container, {
+                backgroundColor: bgColor,
+                scale: Math.min(window.devicePixelRatio || 2, 2),
+                useCORS: true,
+                logging: false,
+                onclone: (_doc, clonedEl) => {
+                    clonedEl.querySelectorAll('.section-actions-wrap, .btn-ctrl, .btn-pill, .stat-info-icon').forEach(el => {
+                        el.style.display = 'none';
+                    });
+                }
+            });
+
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('Failed to create image blob');
+
+            let copied = false;
+            if (navigator.clipboard && typeof window.ClipboardItem === 'function') {
+                try {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    copied = true;
+                } catch (_clipErr) {
+                    copied = false;
+                }
+            }
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+            const msg = copied ? STRINGS.calendar.screenshotCopiedAndDownloaded : STRINGS.calendar.screenshotDownloaded;
+            this.showScreenshotToast(msg, false);
+            if (statusEl) statusEl.textContent = msg;
+
+            btnEl.innerHTML = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            setTimeout(() => {
+                btnEl.innerHTML = originalHtml;
+            }, 1800);
+        } catch (err) {
+            console.error('Screenshot capture failed:', err);
+            this.showScreenshotToast(STRINGS.calendar.screenshotFailed, true);
+            if (statusEl) statusEl.textContent = STRINGS.calendar.screenshotFailed;
+        } finally {
+            btnEl.removeAttribute('aria-disabled');
+            btnEl.classList.remove('is-capturing');
+        }
+    },
+
+    // -------------------------------------------------------------
     // 1. WEEK SECTION
     // -------------------------------------------------------------
     async loadWeek(dateStr) {
@@ -485,6 +671,7 @@ const CalendarPage = {
 
         try {
             const data = await API.fetchWeekCalendar(dateStr);
+            this._weekData = data;
             this.renderWeek(data, container);
         } catch (err) {
             console.error("Error loading week:", err);
@@ -493,9 +680,12 @@ const CalendarPage = {
     },
 
     renderWeek(data, container) {
+        this._weekData = data;
         const days = data.days || [];
         const totalNetPnl = data.total_net_pnl || 0;
         const totalTrades = data.total_trades || 0;
+        const pnlMode = State.pnlDisplayMode;
+        const equityBase = this.getSectionEquityBase(data);
 
         const startParts = (data.start_date || '').split('-');
         const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
@@ -528,7 +718,7 @@ const CalendarPage = {
 
             let bodyContent = hasTrades
                 ? `
-                    <div class="week-card-pnl mono ${pnlClass}">${State.formatCurrency(d.pnl)}</div>
+                    <div class="week-card-pnl mono ${pnlClass}">${State.formatPnl(d.pnl, equityBase, pnlMode)}</div>
                     <div class="week-card-count mono">${d.trades_count} ${d.trades_count === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}</div>
                   `
                 : '';
@@ -554,7 +744,7 @@ const CalendarPage = {
                 </div>
                 <div class="week-card-main">
                     <div class="week-card-pnl mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 16px;">
-                        ${State.formatCurrency(totalNetPnl)}
+                        ${State.formatPnl(totalNetPnl, equityBase, pnlMode)}
                     </div>
                     <div class="week-card-count mono" style="font-weight: 600;">
                         ${totalTrades} ${totalTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}
@@ -584,7 +774,8 @@ const CalendarPage = {
         });
 
         const weekStats = this.computePeriodStats(days, null, { largestWin: data.largest_win, largestLoss: data.largest_loss });
-        const dockHtml = this.buildDockHtml('week', weekStats);
+        const dockHtml = this.buildDockHtml('week', weekStats, equityBase, pnlMode);
+        const weekToolbarHtml = this.renderSectionToolbar('week', equityBase);
 
         container.innerHTML = `
             <div class="week-nav-bar">
@@ -598,6 +789,9 @@ const CalendarPage = {
                     </button>
                     <button class="btn-pill" id="btn-week-today" ${isCurrentWeek ? 'disabled' : ''}>${STRINGS.calendar.thisWeek}</button>
                 </div>
+                <div class="nav-right-group">
+                    ${weekToolbarHtml}
+                </div>
             </div>
             <div class="week-cards-row">
                 ${cardsHtml}
@@ -607,7 +801,8 @@ const CalendarPage = {
         `;
 
         // Render Chart.js
-        this.renderDualAxisChart('chart-cal-week', weekLabels, weekCumPnl, weekTrades, totalNetPnl);
+        this.renderDualAxisChart('chart-cal-week', weekLabels, weekCumPnl, weekTrades, totalNetPnl, pnlMode, equityBase);
+        this.bindSectionToolbar(container, 'week', `ibkr-journal-week-${data.start_date || State.currentWeekDate}.png`);
 
         // Event listeners
         document.getElementById('btn-week-prev')?.addEventListener('click', () => {
@@ -645,6 +840,9 @@ const CalendarPage = {
 
         try {
             const data = await API.fetchMonthCalendar(year, month);
+            this._monthData = data;
+            this._monthYear = year;
+            this._monthMonth = month;
             this.renderMonth(data, container, year, month);
         } catch (err) {
             console.error("Error loading month:", err);
@@ -653,10 +851,15 @@ const CalendarPage = {
     },
 
     renderMonth(data, container, year, month) {
+        this._monthData = data;
+        this._monthYear = year;
+        this._monthMonth = month;
         const monthName = STRINGS.months.long[month - 1];
         const dailyMap = data.daily_map || {};
         const totalNetPnl = data.total_net_pnl || 0;
         const totalTrades = data.total_trades || 0;
+        const pnlMode = State.pnlDisplayMode;
+        const equityBase = this.getSectionEquityBase(data);
         const todayStr = new Date().toISOString().split('T')[0];
 
         const bounds = this.getBounds();
@@ -721,7 +924,7 @@ const CalendarPage = {
                             cellTintClass = pnl > 0 ? 'cell-win' : (pnl < 0 ? 'cell-loss' : '');
                             const tradeCountText = `${dayData.count} ${dayData.count === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
                             badgeHtml = `<span class="cell-badge-count mono">${tradeCountText}</span>`;
-                            pnlHtml = `<span class="cell-pnl-val mono ${pnlClass}">${State.formatCurrency(pnl)}</span>`;
+                            pnlHtml = `<span class="cell-pnl-val mono ${pnlClass}">${State.formatPnl(pnl, equityBase, pnlMode)}</span>`;
                             rowNetPnl += pnl;
                             rowTradesCount += dayData.count;
                         }
@@ -744,7 +947,7 @@ const CalendarPage = {
 
             // 8th Cell: Weekly Total for this row (clickable to jump to Week view)
             const rowPnlClass = State.getPnlClass(rowNetPnl);
-            const rowPnlText = State.formatCurrency(rowNetPnl);
+            const rowPnlText = State.formatPnl(rowNetPnl, equityBase, pnlMode);
             const rowTradesBadge = `${rowTradesCount} ${rowTradesCount === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}`;
 
             const rowTotalCellHtml = `
@@ -794,7 +997,8 @@ const CalendarPage = {
         }
 
         const monthStats = this.computePeriodStats(monthItems.filter(item => item.count > 0 || item.pnl !== 0), null, { largestWin: data.largest_win, largestLoss: data.largest_loss });
-        const monthDockHtml = this.buildDockHtml('month', monthStats);
+        const monthDockHtml = this.buildDockHtml('month', monthStats, equityBase, pnlMode);
+        const monthToolbarHtml = this.renderSectionToolbar('month', equityBase);
 
         container.innerHTML = `
             <div class="week-nav-bar">
@@ -808,9 +1012,12 @@ const CalendarPage = {
                     </button>
                     <button class="btn-pill" id="btn-month-today" ${isCurrentMonth ? 'disabled' : ''}>${STRINGS.calendar.thisMonth}</button>
                 </div>
-                <div class="section-summary-badge">
-                    <span class="mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 15px; font-weight: 800;">${State.formatCurrency(totalNetPnl)}</span>
-                    <span class="mono" style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">· ${totalTrades} ${totalTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}</span>
+                <div class="nav-right-group">
+                    <div class="section-summary-badge">
+                        <span class="mono ${State.getPnlClass(totalNetPnl)}" style="font-size: 15px; font-weight: 800;">${State.formatPnl(totalNetPnl, equityBase, pnlMode)}</span>
+                        <span class="mono" style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">· ${totalTrades} ${totalTrades === 1 ? STRINGS.calendar.tradeSingleBadge : STRINGS.calendar.tradesBadge}</span>
+                    </div>
+                    ${monthToolbarHtml}
                 </div>
             </div>
             <div class="month-grid-wrapper">
@@ -826,7 +1033,8 @@ const CalendarPage = {
         `;
 
         // Render Chart.js
-        this.renderDualAxisChart('chart-cal-month', monthLabels, monthCumPnl, monthTrades, totalNetPnl);
+        this.renderDualAxisChart('chart-cal-month', monthLabels, monthCumPnl, monthTrades, totalNetPnl, pnlMode, equityBase);
+        this.bindSectionToolbar(container, 'month', `ibkr-journal-month-${year}-${String(month).padStart(2, '0')}.png`);
 
         document.getElementById('btn-month-prev')?.addEventListener('click', () => {
             if (!canPrevMonth) return;

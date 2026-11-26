@@ -135,7 +135,19 @@ const STRINGS = {
         maxDrawdownLabel: "Max Drawdown",
         activityLabel: "Activity Rate",
         tradesPerDayUnit: "trades/day",
-        noTradesPeriod: "No operations recorded for this period."
+        noTradesPeriod: "No operations recorded for this period.",
+        pnlModeLabel: "P&L Display Mode",
+        pnlModeNominal: "$",
+        pnlModePercent: "%",
+        pnlModeNominalTitle: "Show P&L in nominal currency ($)",
+        pnlModePercentTitle: "Show P&L as percentage (%)",
+        pnlPercentNoCapital: "Set starting capital or deposits to calculate %",
+        screenshotBtnLabel: "Share Screenshot",
+        screenshotBtnTitle: "Take screenshot to share",
+        screenshotCapturing: "Capturing screenshot...",
+        screenshotCopiedAndDownloaded: "Screenshot copied to clipboard & downloaded",
+        screenshotDownloaded: "Screenshot downloaded",
+        screenshotFailed: "Could not capture screenshot"
     },
 
     // Months & Days

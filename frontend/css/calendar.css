@@ -2377,3 +2377,169 @@
     }
 }
 
+/* ============================================================
+   Section Actions Toolbar ($ / % Toggle + Screenshot Button)
+   ============================================================ */
+.nav-right-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.section-actions-wrap {
+    display: inline-flex;
+    align-items: center;
+}
+
+.section-actions-toolbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pnl-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--bg-card-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    padding: 2px;
+    gap: 2px;
+}
+
+.pnl-mode-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    min-inline-size: 24px;
+    min-block-size: 24px;
+    padding: 0 7px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.pnl-mode-btn[aria-pressed="true"] {
+    background-color: var(--color-accent);
+    color: var(--text-inverse);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.toolbar-sep {
+    display: inline-block;
+    inline-size: 1px;
+    block-size: 16px;
+    border-inline-start: 1px solid var(--border-default);
+    margin: 0 2px;
+}
+
+.btn-screenshot {
+    min-inline-size: 28px;
+    min-block-size: 28px;
+}
+
+.btn-screenshot.is-capturing {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.pnl-mode-btn:focus-visible,
+.btn-screenshot:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .pnl-mode-btn:not([aria-pressed="true"]):hover {
+        color: var(--text-main);
+        background-color: var(--bg-hover);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .pnl-mode-btn,
+    .btn-screenshot,
+    .screenshot-toast {
+        transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+    }
+}
+
+@media (pointer: coarse) {
+    .pnl-mode-btn,
+    .btn-screenshot {
+        min-inline-size: 36px;
+        min-block-size: 36px;
+    }
+}
+
+@media (forced-colors: active) {
+    .pnl-mode-btn[aria-pressed="true"] {
+        background-color: Highlight;
+        color: HighlightText;
+        border-color: Highlight;
+    }
+    .toolbar-sep {
+        border-inline-start-color: ButtonText;
+    }
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.screenshot-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-active);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+}
+
+.screenshot-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.screenshot-toast.is-error {
+    border-color: var(--color-loss);
+    color: var(--color-loss);
+}
+
+@media (max-width: 720px) {
+    .week-nav-bar {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .nav-right-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+

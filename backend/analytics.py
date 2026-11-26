@@ -1739,7 +1739,6 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
             (start_date, end_date),
         )
         all_trades = [dict(r) for r in cursor.fetchall()]
-        capital_ctx = _get_period_capital_context(cursor, start_date, end_date)
 
     from collections import defaultdict
 

@@ -1796,6 +1796,47 @@ def get_year_calendar(year: int) -> Dict[str, Any]:
     }
 
 
+def _get_period_capital_context(cursor: Any, start_date: str, end_date: str) -> Dict[str, float]:
+    """Computes starting equity before start_date and cumulative capital base up to end_date."""
+    app_settings = get_all_settings()
+    starting_capital = float(app_settings.get("starting_capital", 0.0) or 0.0)
+
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount), 0.0) FROM cash_transactions WHERE transaction_date < ?",
+        (start_date,),
+    )
+    net_flow_before = float(cursor.fetchone()[0] or 0.0)
+
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(realized_pnl), 0.0)
+        FROM trades
+        WHERE trade_date < ? AND asset_category NOT IN ('CASH', 'FX') AND ABS(quantity) > 1e-5
+        """,
+        (start_date,),
+    )
+    net_pnl_before = float(cursor.fetchone()[0] or 0.0)
+    starting_equity = round(starting_capital + net_flow_before + net_pnl_before, 2)
+
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(amount), 0.0)
+        FROM cash_transactions
+        WHERE transaction_date <= ? AND amount > 0 AND type = 'DEPOSIT'
+        """,
+        (end_date,),
+    )
+    lifetime_deposits = float(cursor.fetchone()[0] or 0.0)
+    capital_base = round(starting_capital + lifetime_deposits, 2)
+    equity_base = starting_equity if starting_equity >= 10.0 else (capital_base if capital_base >= 10.0 else 0.0)
+
+    return {
+        "starting_equity": starting_equity,
+        "capital_base": capital_base,
+        "equity_base": equity_base,
+    }
+
+
 def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
     """
     Returns data for the Month Grid View:
@@ -1827,6 +1868,7 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
             (start_date, end_date),
         )
         all_trades = [dict(r) for r in cursor.fetchall()]
+        capital_ctx = _get_period_capital_context(cursor, start_date, end_date)
 
     from collections import defaultdict
 
@@ -1901,6 +1943,9 @@ def get_month_calendar(year: int, month: int) -> Dict[str, Any]:
         "win_rate": win_rate,
         "largest_win": round(largest_win, 2),
         "largest_loss": round(largest_loss, 2),
+        "starting_equity": capital_ctx["starting_equity"],
+        "capital_base": capital_ctx["capital_base"],
+        "equity_base": capital_ctx["equity_base"],
     }
 
 
@@ -1944,6 +1989,7 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
                 trades_by_date[d] = []
             trade_dict = dict(row)
             trades_by_date[d].append(trade_dict)
+        capital_ctx = _get_period_capital_context(cursor, monday.isoformat(), sunday.isoformat())
 
     days = []
     week_net_pnl = 0.0
@@ -2002,6 +2048,9 @@ def get_week_calendar(target_date_str: str) -> Dict[str, Any]:
         "total_trades": week_trades_count,
         "largest_win": round(largest_win, 2),
         "largest_loss": round(largest_loss, 2),
+        "starting_equity": capital_ctx["starting_equity"],
+        "capital_base": capital_ctx["capital_base"],
+        "equity_base": capital_ctx["equity_base"],
     }
 
 

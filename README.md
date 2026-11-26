@@ -28,8 +28,10 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 - **⏱️ Rate-Limit Guard**: Enforced cooldown protection on the manual *"Sync Now"* button with live UI countdown timers to protect your IBKR API rate limits.
 - **📅 Multi-Calendar Views**: 
   - **Year Matrix**: 12-month calendar heatmap with monthly totals and year-end summary ribbon.
-  - **Month Calendar**: Traditional monthly grid with daily Net P&L badges and round-trip trade counters.
-  - **Week Breakdown**: 7-day cards view (Monday–Sunday) with volume and executions.
+  - **Month Calendar**: Traditional monthly grid with daily Net P&L badges, weekly total column, and round-trip trade counters.
+  - **Week Breakdown**: Trading-day cards view with volume, executions, and weekly summary.
+  - **Nominal (`$`) / Percentage (`%`) P&L Toggle**: Instant switcher in Week and Month views to display daily/weekly/monthly P&L, dock metrics, and cumulative evolution charts in currency or percentage of period starting equity (`equity_base`).
+  - **Shareable Screenshots**: One-click camera button in Week and Month views that captures a clean, theme-aware PNG (hiding interactive controls), copies it to the clipboard, and downloads it for sharing.
 - **📊 In-Depth Trading Analytics**:
   - **Round-Trip Trade Aggregation**: Unified trade counting across Overview KPIs and Calendars reflecting complete round-trip positions (grouping partial entries/exits) with true Net P&L (opening + closing commissions deducted).
   - Executive KPIs (Win Rate `WR%`, Profit Factor `PF`, Risk/Reward `R:R`, Expectancy, Net Realized P&L, Total Trades, Commissions).
@@ -70,7 +72,7 @@ An ultra-lightweight, self-hosted **Interactive Brokers (IBKR) Trading Journal &
 </p>
 
 - **Executive KPI Bar**: Real-time Net Realized P&L, Win Rate %, Profit Factor, Expectancy, and Trade counts.
-- **Calendar Tab**: Week, Month, and Year calendar views with instant execution breakdown modals on any trading day.
+- **Calendar Tab**: Week, Month, and Year calendar views with `$` / `%` P&L mode switching, shareable Week/Month PNG screenshots, and instant execution breakdown modals on any trading day.
 - **Statistics Tab**: Portfolio equity overview, interactive equity curves, drawdown charts, rolling metrics, and breakdown tables.
 - **Capital & Cash Management Modal**: Manage starting capital, view automated and manual cash transfers, and review NAV equity.
 - **Day Execution Modal**: Detailed view of all trades (Time, Symbol, Side, Volume, Price, Commission, Realized P&L).
@@ -261,8 +263,8 @@ To change any wording, customize labels, or translate the entire interface into 
 | `/api/stats/overview` | `GET` | Global KPIs: Win Rate %, Profit Factor, Expectancy, Total Round-Trip Trades, Net Realized P&L, NAV Equity, ROI %. |
 | `/api/stats/detailed` | `GET` | Comprehensive trading analytics (drawdowns, rolling win rates, position sizing, metric evolution, breakdowns). |
 | `/api/calendar/year?year=2026` | `GET` | 12-month calendar matrix and monthly summary array. |
-| `/api/calendar/month?year=2026&month=10` | `GET` | Monthly calendar grid data with daily P&L and trade counts. |
-| `/api/calendar/week?date=2026-10-01` | `GET` | 7-day card data with individual execution breakdown. |
+| `/api/calendar/month?year=2026&month=10` | `GET` | Monthly calendar grid data with daily P&L, trade counts, and period equity context (`starting_equity`, `capital_base`, `equity_base`). |
+| `/api/calendar/week?date=2026-10-01` | `GET` | Trading-week card data with execution breakdown and period equity context (`starting_equity`, `capital_base`, `equity_base`). |
 | `/api/trades/day?date=2026-10-01` | `GET` | Detailed trade executions for a specific date. |
 | `/api/import/statement` | `POST` | Upload and import historical CSV / XML / JSON statement payloads. |
 | `/api/sync/status` | `GET` | Real-time sync status (last sync, next sync countdown, rate-limit cooldown). |

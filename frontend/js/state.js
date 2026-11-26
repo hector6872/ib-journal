@@ -13,6 +13,15 @@ const State = {
     // App Config & Symbols
     currency: "$",
 
+    get pnlDisplayMode() {
+        return SettingsManager.get('pnl_display_mode', 'nominal');
+    },
+
+    set pnlDisplayMode(mode) {
+        const normalized = mode === 'percent' ? 'percent' : 'nominal';
+        SettingsManager.set('pnl_display_mode', normalized);
+    },
+
     // Cached Data
     overviewStats: null,
     syncStatus: null,
@@ -29,6 +38,25 @@ const State = {
             maximumFractionDigits: 2
         });
         return includeSymbol ? `${sign}${this.currency}${formatted}` : `${sign}${formatted}`;
+    },
+
+    formatPercent(amount, equityBase, showPositiveSign = true) {
+        if (amount === undefined || amount === null || isNaN(amount)) amount = 0;
+        if (!equityBase || equityBase < 10) {
+            return Math.abs(amount) < 0.005 ? '0.00%' : '--%';
+        }
+        const pct = (amount / equityBase) * 100;
+        const rounded = Math.round(pct * 100) / 100;
+        const sign = rounded < 0 ? '-' : (showPositiveSign && rounded > 0 ? '+' : '');
+        return `${sign}${Math.abs(rounded).toFixed(2)}%`;
+    },
+
+    formatPnl(amount, equityBase = 0, mode = null, includeSymbol = true, showPositiveSign = true) {
+        const activeMode = mode || this.pnlDisplayMode;
+        if (activeMode === 'percent') {
+            return this.formatPercent(amount, equityBase, showPositiveSign);
+        }
+        return this.formatCurrency(amount, includeSymbol, showPositiveSign);
     },
 
     formatNumber(num) {
